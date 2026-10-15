@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backpack RPG — прототип</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app"></div>
+  <div class="portrait-warn">Прототип рассчитан на горизонтальный экран монитора.<br>Разверните окно браузера пошире.</div>
+
+  <!-- PeerJS: P2P-соединение между игроками (WebRTC) -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- Конфиг: числа, карты, оружие, герои, враги, тесты -->
+  <script src="config.js"></script>
+  <!-- Код прототипа -->
+  <script src="js/hex.js"></script>
+  <script src="js/cards.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/session.js"></script>
+  <script src="js/ui-game.js"></script>
+  <script src="js/ui-drag.js"></script>
+  <script src="js/ui.js"></script>
+  <script>BP.UI.init();</script>
+</body>
+</html>
