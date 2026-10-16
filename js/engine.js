@@ -13,7 +13,7 @@ BP.Engine = (function () {
       config: clone(config), phase: "lobby", seq: 1, turn: 0, fightIndex: 0,
       players: players || {}, heroes: [], enemies: [], log: [], fightLog: [],
       task: null, quests: [], pool: null, turnStats: null, fightStats: null,
-      actingEnemy: null, enemyQueue: [], banner: null, summary: null,
+      actingEnemy: null, actingTargets: [], enemyQueue: [], banner: null, summary: null, fx: [], fxSeq: 0,
     };
     state.config.heroes.forEach((hc) => {
       state.heroes.push({
@@ -35,11 +35,9 @@ BP.Engine = (function () {
       if (w) Object.entries(w.cards).forEach(([cid, n]) => add(cid, n, wid));
     });
     Object.entries(hc.cards || {}).forEach(([cid, n]) => add(cid, n));
-    ["sharedPool", "questCards"].forEach((tk) => {
-      const t = cfg.tests[tk];
-      if (t && t.enabled && t.cards && (t.heroes === "all" || (t.heroes || []).includes(hc.id)))
-        Object.entries(t.cards).forEach(([cid, n]) => add(cid, n));
-    });
+    const sp = cfg.tests.sharedPool;
+    if (sp && sp.enabled && sp.cards && (sp.heroes === "all" || (sp.heroes || []).includes(hc.id)))
+      Object.entries(sp.cards).forEach(([cid, n]) => add(cid, n));
     while (list.length < cfg.rules.minDeck) add(cfg.rules.fillerCard, 1);
     return list;
   }
@@ -52,11 +50,19 @@ BP.Engine = (function () {
     card.id = cardId;
     card.effects = card.effects || [];
     if (weapon) { card.weapon = weapon; card.weaponName = state.config.weapons[weapon].name; }
+    if (card.area === "shape") { const sh = (state.config.shapes || {})[card.shape]; card.shapeName = sh ? sh.name : card.shape; card.shapeSteps = sh ? sh.steps : [[]]; }
     card.text = C().text(card);
     const qe = card.effects.find((e) => e.type === "quest");
     const q = qe && state.config.quests[qe.id];
     if (q) card.text = `Квест ${q.scope === "turn" ? "на ход" : "на бой"}: ${q.text}. Награда: ${C().rewardText(q.reward)}`;
     return card;
+  }
+
+  // ---------- События для анимаций (цифры урона, шейк) ----------
+  function fx(state, ev) {
+    ev.id = ++state.fxSeq;
+    state.fx.push(ev);
+    if (state.fx.length > 40) state.fx.shift();
   }
 
   // ---------- Лог ----------
@@ -83,10 +89,20 @@ BP.Engine = (function () {
       h.startBlock = h.startBlockMax; h.block = 0; h.debuffs = []; h.bonusEnergy = 0;
       h.crit = {};
       (hc.weapons || []).forEach((w) => { if (cfg.weapons[w]) h.crit[w] = { every: cfg.weapons[w].critEvery, count: 0 }; });
-      h.draw = shuffle(deckList(state, hc).map((d) => makeCard(state, d.cardId, d.weapon)));
+      h.draw = deckList(state, hc).map((d) => makeCard(state, d.cardId, d.weapon));
       h.hand = []; h.discard = [];
       h.stats = { cards: 0, energy: 0, damage: 0, blockGiven: 0, merges: 0, taken: 0 };
     });
+    // Карты-квесты: perFight случайных карт из пула — в колоду случайному герою
+    const qc = cfg.tests.questCards;
+    if (qc && qc.enabled && (qc.pool || []).length) {
+      for (let i = 0; i < (qc.perFight || 0); i++) {
+        const cid = qc.pool[Math.floor(Math.random() * qc.pool.length)];
+        const h = state.heroes[Math.floor(Math.random() * state.heroes.length)];
+        if (cfg.cards[cid]) h.draw.push(makeCard(state, cid));
+      }
+    }
+    state.heroes.forEach((h) => shuffle(h.draw));
     state.fightStats = { collisions: 0, turns: 0, taskDone: false, questsDone: 0, questsFailed: 0 };
     state.quests = [];
     state.task = null;
@@ -125,9 +141,13 @@ BP.Engine = (function () {
     return [primary].concat(rest).slice(0, count).map((h) => h.id);
   }
 
+  function isMeleeEnemy(state, e) { return !!(state.config.enemies[e.type] || {}).melee; }
+
   function computeIntent(state, e) {
     if (e.stunned) { e.intent = { type: "stunned" }; return; }
     const a = e.actions[e.actionIndex % e.actions.length];
+    // враг-мили за чужой спиной не дотягивается до героев и ждёт
+    if (a.type === "attack" && isMeleeEnemy(state, e) && !C().isExposed(state, e)) { e.intent = { type: "covered", damage: a.damage, hits: a.hits }; return; }
     const it = Object.assign({}, a);
     if (a.type === "attack" || a.type === "curse") it.targets = pickTargets(state, e, a.targets || 1);
     e.intent = it;
@@ -147,11 +167,12 @@ BP.Engine = (function () {
   }
 
   // ---------- Урон ----------
-  function hurtEnemy(state, e, amount, heroId) {
+  function hurtEnemy(state, e, amount, heroId, crit) {
     if (!e.alive || amount <= 0) return 0;
     const absorbed = Math.min(e.block, amount);
     e.block -= absorbed;
     e.hp -= amount - absorbed;
+    fx(state, { k: "enemy", uid: e.uid, col: e.col, row: e.row, amount: Math.min(amount - absorbed, e.hp + amount - absorbed), blocked: absorbed, crit: !!crit });
     if (heroId) {
       const h = state.heroes.find((x) => x.id === heroId);
       if (h) h.stats.damage += amount - absorbed;
@@ -170,6 +191,7 @@ BP.Engine = (function () {
     const b = Math.min(h.block, left); h.block -= b; left -= b;
     const sb = Math.min(h.startBlock, left); h.startBlock -= sb; left -= sb;
     h.hp -= left; h.stats.taken += left;
+    fx(state, { k: "hero", hero: h.id, amount: Math.min(left, h.hp + left), blocked: amount - left });
     if (h.hp <= 0) {
       h.hp = 0; h.alive = false;
       h.discard = h.discard.concat(h.hand); h.hand = [];
@@ -244,7 +266,7 @@ BP.Engine = (function () {
       const per = {};
       hits.forEach((h) => {
         const e = state.enemies.find((x) => x.uid === h.enemy);
-        hurtEnemy(state, e, h.amount, hero.id);
+        hurtEnemy(state, e, h.amount, hero.id, h.crit);
         per[e.name] = (per[e.name] || []).concat(h.amount + (h.crit ? "!" : ""));
       });
       notes.push(Object.entries(per).map(([n, a]) => `${n}: ${a.join("+")}`).join(", "));
@@ -417,7 +439,7 @@ BP.Engine = (function () {
     const uid = state.enemyQueue.shift();
     if (uid) {
       const e = state.enemies.find((x) => x.uid === uid);
-      state.actingEnemy = uid;
+      state.actingEnemy = uid; state.actingTargets = [];
       if (e && e.alive) actEnemy(state, e);
       if (checkFightEnd(state)) return false;
       return true;
@@ -430,8 +452,13 @@ BP.Engine = (function () {
     if (e.stunned) { e.stunned = false; log(state, e.name, "оглушён — пропускает действие"); return; }
     e.block = 0;
     const it = e.intent || {};
+    if (it.type === "covered" || (it.type === "attack" && isMeleeEnemy(state, e) && !C().isExposed(state, e))) {
+      log(state, e.name, "закрыт своими — не дотягивается до героев");
+      return; // действие не тратится: попробует в следующий ход
+    }
     const targets = (it.targets || []).map((id) => state.heroes.find((h) => h.id === id)).filter((h) => h && h.alive);
     const actual = targets.length || !it.targets ? targets : pickTargets(state, e, it.targets.length).map((id) => state.heroes.find((h) => h.id === id));
+    if (it.type === "attack" || it.type === "curse") state.actingTargets = actual.map((h) => h.id);
     if (it.type === "attack") {
       actual.forEach((h) => { for (let i = 0; i < (it.hits || 1); i++) hurtHero(state, h, it.damage); });
       log(state, e.name, `атакует ${actual.map((h) => h.name).join(", ")}`, { detail: `${it.damage}${it.hits > 1 ? "×" + it.hits : ""} урона` });
@@ -450,7 +477,7 @@ BP.Engine = (function () {
   }
 
   function endEnemyPhase(state) {
-    state.actingEnemy = null;
+    state.actingEnemy = null; state.actingTargets = [];
     aliveHeroes(state).forEach((h) => {
       h.block = 0;
       h.debuffs.forEach((d) => d.turns--);

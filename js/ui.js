@@ -3,7 +3,7 @@ window.BP = window.BP || {};
 
 BP.UI = (function () {
   const esc = (s) => BP.UIGame.esc(s);
-  const ui = { activeHero: null, selected: null, dirPick: null, showLog: false, modal: null, lastBanner: null, menuMsg: "" };
+  const ui = { activeHero: null, selected: null, dirPick: null, aoeRot: 0, showLog: false, modal: null, lastBanner: null, menuMsg: "" };
   const app = () => document.getElementById("app");
 
   function lsGet(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
@@ -82,6 +82,7 @@ BP.UI = (function () {
         ${chk("tests.partyTask.enabled", "Задача пати на бой", t.partyTask.enabled)}
         ${chk("tests.sharedPool.enabled", "Общий пул энергии (карта «Единение»)", t.sharedPool.enabled)}
         ${chk("tests.questCards.enabled", "Карты-квесты", t.questCards.enabled)}
+        ${num("tests.questCards.perFight", "Карт-квестов на бой (случайному герою)", t.questCards.perFight || 0)}
       </div>
       <h3>Правила</h3>
       <div class="settings-grid">
@@ -89,6 +90,7 @@ BP.UI = (function () {
         ${num("rules.minDeck", "Минимум колоды", r.minDeck)}${num("rules.collisionDamage", "Урон столкновения", r.collisionDamage)}
         ${num("rules.critMultiplier", "Множитель крита", r.critMultiplier)}${num("rules.enemyStepDelayMs", "Пауза врагов, мс", r.enemyStepDelayMs)}
         ${chk("rules.conditionalCrit", "Условный крит (оглушён/толкнут)", r.conditionalCrit)}${chk("rules.enemyAdvance", "Враги шагают вперёд", r.enemyAdvance)}
+        <label>Кто прикрывает задний ряд <select data-cfg="rules.cover"><option value="any" ${r.cover !== "all" ? "selected" : ""}>любой из 2 врагов впереди</option><option value="all" ${r.cover === "all" ? "selected" : ""}>только оба врага впереди</option></select></label>
       </div>
       <details><summary>Весь конфиг (JSON) — для правки карт, оружия, врагов</summary>
         <textarea id="cfg-json" rows="18" style="width:100%;margin-top:8px">${esc(JSON.stringify(c, null, 2))}</textarea>
@@ -154,11 +156,12 @@ BP.UI = (function () {
   // ---------- Главный рендер ----------
   function render() {
     const s = BP.Session.state;
-    if (!s) { app().innerHTML = renderMenu(); return; }
+    if (!s) { app().innerHTML = renderMenu(); BP.FX.afterRender(null); return; }
     const me = BP.Session.myPid;
     if (s.banner && s.banner.id !== ui.lastBanner) { ui.lastBanner = s.banner.id; toast(s.banner.text, "good"); }
     if (s.phase === "lobby") {
       app().innerHTML = renderLobby(s) + (ui.modal === "settings" ? renderSettings(s) : "");
+      BP.FX.afterRender(s);
       return;
     }
     const mine = s.heroes.filter((h) => h.owner === me);
@@ -177,6 +180,7 @@ BP.UI = (function () {
     const nl = document.getElementById("log-entries");
     if (nl && logAtBottom) nl.scrollTop = nl.scrollHeight;
     BP.Drag.refresh();
+    BP.FX.afterRender(s);
   }
 
   // ---------- Действия кнопок ----------
@@ -266,6 +270,7 @@ BP.UI = (function () {
     BP.Session.onChange(() => { if (ui.modal !== "settings") render(); });
     BP.Session.onError((m) => toast(m, "bad"));
     BP.Drag.init();
+    BP.FX.init();
     render();
   }
 

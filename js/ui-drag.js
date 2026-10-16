@@ -20,7 +20,7 @@ BP.Drag = (function () {
   function targetFrom(el, card) {
     const kind = el.dataset.drop;
     if (kind === "enemy" && card.target === "enemy") return { enemy: el.dataset.enemy };
-    if ((kind === "enemy" || kind === "cell") && card.target === "cell") return { cell: { col: +el.dataset.col, row: +el.dataset.row } };
+    if ((kind === "enemy" || kind === "cell") && card.target === "cell") return { cell: { col: +el.dataset.col, row: +el.dataset.row }, rot: ui().aoeRot || 0 };
     if (kind === "hero") return { hero: el.dataset.hero };
     return {};
   }
@@ -58,10 +58,24 @@ BP.Drag = (function () {
     return el || null;
   }
 
+  function hint(cc) {
+    const box = document.getElementById("board-hint");
+    if (!box) return;
+    const c = cc && cc.card, parts = [];
+    if (c && c.attack === "melee") parts.push("Мили: только открытые враги (никто не стоит перед ними)");
+    if (c && BP.Cards.rotatable(c)) parts.push("🖱 Правая кнопка — повернуть фигуру");
+    if (c && (c.target === "hero" || c.target === "ally")) parts.push("Цель — герой (фишка на поле или его рука внизу)");
+    if (c && ui().selected && !drag) parts.push("Esc — отмена");
+    box.textContent = parts.join("  ·  ");
+    box.style.display = parts.length && !ui().dirPick ? "block" : "none";
+  }
+
   function refresh() {
     document.querySelectorAll("[data-drop]").forEach((el) => el.classList.remove("valid", "hover"));
+    document.querySelectorAll(".hex").forEach((h) => h.classList.remove("aoe"));
     document.querySelectorAll(".hex .preview").forEach((p) => { p.textContent = ""; p.classList.remove("crit"); });
     const cc = currentCard();
+    hint(cc);
     if (!cc) return;
     document.querySelectorAll("[data-drop]").forEach((el) => {
       if (el.dataset.drop !== "field" && isValid(el, cc.hero, cc.card)) el.classList.add("valid");
@@ -74,7 +88,15 @@ BP.Drag = (function () {
 
   function showPreview(cc, el) {
     if (!(el.dataset.drop === "enemy" || el.dataset.drop === "cell")) return;
-    const pv = BP.Cards.preview(st(), cc.hero, cc.card, targetFrom(el, cc.card));
+    const target = targetFrom(el, cc.card);
+    // массовки и «насквозь»: красным все задетые клетки
+    if (cc.card.area && cc.card.area !== "single") {
+      BP.Cards.areaCells(st(), cc.hero, cc.card, target).forEach((c) => {
+        const h = document.querySelector(`.hex[data-col="${c.col}"][data-row="${c.row}"]`);
+        if (h) h.classList.add("aoe");
+      });
+    }
+    const pv = BP.Cards.preview(st(), cc.hero, cc.card, target);
     if (!pv) return;
     Object.entries(pv).forEach(([uid, v]) => {
       const p = document.querySelector(`.hex[data-enemy="${uid}"] .preview`);
@@ -107,7 +129,7 @@ BP.Drag = (function () {
       drag.svg.innerHTML = `<defs><marker id="ah" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d4a94f"/></marker></defs><line stroke="#d4a94f" stroke-width="5" stroke-dasharray="12 8" marker-end="url(#ah)"/>`;
       document.body.appendChild(drag.svg);
     }
-    const heroEl = document.querySelector(`.hero[data-hero="${drag.heroId}"]`);
+    const heroEl = document.querySelector(`.hero.token[data-hero="${drag.heroId}"]`);
     if (!heroEl) return;
     const r = heroEl.getBoundingClientRect();
     const line = drag.svg.querySelector("line");
@@ -152,6 +174,11 @@ BP.Drag = (function () {
     const d = drag;
     if (!d.started) {
       drag = null;
+      // выбрана карта, клик по карте другого героя — мердж
+      if (ui().selected && d.heroId !== ui().activeHero) {
+        const cc = currentCard();
+        if (cc && isValid(d.el, cc.hero, cc.card)) { drop(d.el, cc.hero, cc.card); BP.UI.render(); return; }
+      }
       ui().selected = ui().selected === d.uid ? null : d.uid;
       ui().activeHero = d.heroId;
       BP.UI.render();
@@ -168,9 +195,15 @@ BP.Drag = (function () {
     if (drag) return;
     const u = ui();
     if (!u.selected) return;
-    if (ev.target.closest(".card") || ev.target.closest("button")) return;
-    const el = dropTargetAt(ev.target);
+    if (ev.target.closest("button")) return;
     const cc = currentCard();
+    const cardEl = ev.target.closest(".card");
+    if (cardEl) {
+      // клик по чужой (только для просмотра) карте при выбранной своей — мердж
+      if (cc && cardEl.dataset.hero !== cc.hero.id && (cardEl.classList.contains("readonly") || cardEl.classList.contains("unaffordable")) && isValid(cardEl, cc.hero, cc.card)) { ev.stopPropagation(); drop(cardEl, cc.hero, cc.card); BP.UI.render(); }
+      return;
+    }
+    const el = dropTargetAt(ev.target);
     if (!cc) { u.selected = null; return; }
     if (!el) return;
     ev.stopPropagation();
@@ -189,6 +222,14 @@ BP.Drag = (function () {
     document.addEventListener("pointermove", (e) => { onMove(e); onHover(e); });
     document.addEventListener("pointerup", onUp);
     document.addEventListener("click", onClick, true);
+    // Правая кнопка — повернуть фигуру массовки (по часовой стрелке)
+    document.addEventListener("contextmenu", (e) => {
+      const s = st();
+      if (!s || s.phase === "lobby" || e.target.closest("input, textarea")) return;
+      e.preventDefault();
+      const cc = currentCard();
+      if (cc && BP.Cards.rotatable(cc.card)) { ui().aoeRot = ((ui().aoeRot || 0) + 5) % 6; refresh(); if (BP.FX) BP.FX.refreshTip(); }
+    });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") { cleanup(); ui().selected = null; ui().dirPick = null; BP.UI.render(); }
     });

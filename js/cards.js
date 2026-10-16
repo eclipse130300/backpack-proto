@@ -4,14 +4,19 @@ window.BP = window.BP || {};
 BP.Cards = (function () {
   const TARGET_LABEL = { enemy: "враг", cell: "клетка", self: "себя", hero: "себя или союзника", ally: "союзник", none: "" };
   const ATTACK_LABEL = { melee: "Мили", ranged: "Дальний", aoe: "Массовая" };
-  const AREA_LABEL = { adjacent: "по клетке и соседям", row: "по всему ряду", line: "насквозь (цель и враг за ней)" };
+  const AREA_LABEL = { adjacent: "по клетке и всем соседям", row: "по всему ряду", line: "насквозь (цель и враг за ней)" };
+  // card.shapeName кладёт engine.makeCard из config.shapes
+  function areaLabel(card) {
+    if (card.area === "shape") return card.shapeName ? "по фигуре: " + card.shapeName : "";
+    return AREA_LABEL[card.area] || "";
+  }
 
   // Человекочитаемый текст карты из её эффектов — чтобы правки конфига сразу меняли описание.
   function text(card) {
     const parts = [];
     (card.effects || []).forEach((e) => {
       switch (e.type) {
-        case "damage": parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${card.area && AREA_LABEL[card.area] ? " " + AREA_LABEL[card.area] : ""}`); break;
+        case "damage": parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}`); break;
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
         case "blockSelf": parts.push(`себе ${e.amount} блока`); break;
         case "push": parts.push("толкнуть (выбор стороны)"); break;
@@ -56,8 +61,12 @@ BP.Cards = (function () {
     return state.enemies.find((e) => e.alive && e.col === col && e.row === row) || null;
   }
 
-  function frontRowEmpty(state) {
-    return !state.enemies.some((e) => e.alive && e.row === 0);
+  // РЕШЕНО: мили бьют только открытых. Враг закрыт, если перед ним (ближе к героям) стоит другой враг.
+  function isExposed(state, e) {
+    const r = state.config.rules;
+    const front = BP.Hex.frontCells(e.col, e.row, r.cols, r.rows).map((c) => !!enemyAt(state, c.col, c.row));
+    if (!front.length) return true;
+    return r.cover === "all" ? !front.every(Boolean) : !front.some(Boolean);
   }
 
   // Можно ли сыграть карту с этой целью. target: {enemy, cell:{col,row}, hero, dir}
@@ -74,8 +83,7 @@ BP.Cards = (function () {
       case "enemy": {
         const e = state.enemies.find((x) => x.uid === t.enemy && x.alive);
         if (!e) return "Нужна цель-враг";
-        if (card.attack === "melee" && e.row !== 0 && !(state.config.rules.meleeBackRowIfFrontEmpty && frontRowEmpty(state)))
-          return "Мили бьёт только передний ряд";
+        if (card.attack === "melee" && !isExposed(state, e)) return "Мили бьёт только открытых врагов: этого прикрывают спереди";
         if (has(card, "push") && (t.dir === undefined || t.dir === null)) return "NEED_DIR";
         return null;
       }
@@ -97,12 +105,16 @@ BP.Cards = (function () {
     return null;
   }
 
-  // Все враги, которых задевает карта (по зоне)
-  function areaEnemies(state, hero, card, target) {
-    const c = primaryCell(state, card, target);
+  // Все клетки, которые задевает карта (по зоне). target.rot — поворот фигуры (ПКМ).
+  function areaCells(state, hero, card, target) {
+    const c = primaryCell(state, card, target || {});
     if (!c) return [];
     const r = state.config.rules;
     let cells = [c];
+    if (card.area === "shape") {
+      const sh = (state.config.shapes || {})[card.shape];
+      cells = BP.Hex.shapeCells(c.col, c.row, sh ? sh.steps : [[]], (target && target.rot) || 0, r.cols, r.rows);
+    }
     if (card.area === "adjacent") cells = cells.concat(BP.Hex.neighbors(c.col, c.row, r.cols, r.rows));
     if (card.area === "row") { cells = []; for (let i = 0; i < r.cols; i++) cells.push({ col: i, row: c.row }); }
     if (card.area === "line") {
@@ -111,8 +123,13 @@ BP.Cards = (function () {
       const n = BP.Hex.neighbor(c.col, c.row, dir, r.cols, r.rows);
       if (n) cells.push(n);
     }
+    return cells;
+  }
+
+  // Все враги, которых задевает карта (по зоне)
+  function areaEnemies(state, hero, card, target) {
     const out = [];
-    cells.forEach((cc) => { const e = enemyAt(state, cc.col, cc.row); if (e && !out.includes(e)) out.push(e); });
+    areaCells(state, hero, card, target).forEach((cc) => { const e = enemyAt(state, cc.col, cc.row); if (e && !out.includes(e)) out.push(e); });
     return out;
   }
 
@@ -142,6 +159,17 @@ BP.Cards = (function () {
     if (commit && crit) crit.count = counter;
     return hits;
   }
+
+  // Сколько ударов этим оружием до крита (1 = следующий удар критует) и критует ли эта карта
+  function critInfo(hero, card) {
+    const dmg = (card.effects || []).find((e) => e.type === "damage");
+    const c = card.weapon && hero.crit ? hero.crit[card.weapon] : null;
+    if (!dmg || !c) return null;
+    const left = c.every - c.count;
+    return { left, every: c.every, willCrit: left <= (dmg.hits || 1) };
+  }
+
+  const rotatable = (card) => card.area === "shape";
 
   // Превью для UI: суммарный урон по каждому врагу
   function preview(state, hero, card, target) {
@@ -187,5 +215,5 @@ BP.Cards = (function () {
     return changed;
   }
 
-  return { text, rewardText, tags, has, checkTarget, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness };
+  return { text, rewardText, tags, has, checkTarget, areaCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
 })();
