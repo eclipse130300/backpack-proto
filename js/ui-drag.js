@@ -25,14 +25,17 @@ BP.Drag = (function () {
     return {};
   }
 
+  const avail = (s, hero) => (s.pool ? s.pool.amount : hero.energy);
+
   function isValid(el, hero, card) {
     const s = st(), kind = el.dataset.drop;
     if (kind === "merge") {
       if (!s.config.tests.merge.enabled || el.dataset.hero === hero.id) return false;
       const ally = s.heroes.find((h) => h.id === el.dataset.hero);
       const dst = ally && ally.hand.find((c) => c.uid === el.dataset.card);
-      return !!dst && BP.Cards.canMerge(s, card, dst);
+      return !!dst && BP.Cards.canMerge(s, card, dst) && BP.Cards.mergeCost(s, hero, card) <= avail(s, hero);
     }
+    if (card.cost > avail(s, hero)) return false;
     switch (card.target) {
       case "enemy": {
         if (kind !== "enemy") return false;
@@ -74,9 +77,11 @@ BP.Drag = (function () {
     document.querySelectorAll("[data-drop]").forEach((el) => el.classList.remove("valid", "hover"));
     document.querySelectorAll(".hex").forEach((h) => h.classList.remove("aoe"));
     document.querySelectorAll(".hex .preview").forEach((p) => { p.textContent = ""; p.classList.remove("crit"); });
+    document.querySelectorAll(".card .mcost").forEach((b) => b.remove());
     const cc = currentCard();
     hint(cc);
     if (!cc) return;
+    mergeBadges(cc);
     document.querySelectorAll("[data-drop]").forEach((el) => {
       if (el.dataset.drop !== "field" && isValid(el, cc.hero, cc.card)) el.classList.add("valid");
     });
@@ -84,6 +89,24 @@ BP.Drag = (function () {
       hoverEl.classList.add("hover");
       if (isValid(hoverEl, cc.hero, cc.card)) showPreview(cc, hoverEl);
     }
+  }
+
+  // Фиолетовый ромб со стоимостью мерджа на картах союзников, в которые можно смерджить взятую карту
+  function mergeBadges(cc) {
+    const s = st(), m = s.config.tests.merge;
+    if (!m.enabled || !m.payCost) return;
+    const cost = BP.Cards.mergeCost(s, cc.hero, cc.card), ok = cost <= avail(s, cc.hero);
+    document.querySelectorAll('.card[data-drop="merge"]').forEach((el) => {
+      if (el.dataset.hero === cc.hero.id) return;
+      const ally = s.heroes.find((h) => h.id === el.dataset.hero);
+      const dst = ally && ally.alive && ally.hand.find((c) => c.uid === el.dataset.card);
+      if (!dst || !BP.Cards.canMerge(s, cc.card, dst)) return;
+      const b = document.createElement("div");
+      b.className = "mcost" + (ok ? "" : " no");
+      b.title = ok ? `Мердж стоит ${cost} энергии` : `Мердж стоит ${cost} энергии — не хватает`;
+      b.innerHTML = `<span>${cost}</span>`;
+      el.appendChild(b);
+    });
   }
 
   function showPreview(cc, el) {
@@ -145,7 +168,9 @@ BP.Drag = (function () {
 
   function onDown(ev) {
     const cardEl = ev.target.closest(".card");
-    if (!cardEl || ev.target.closest("button") || cardEl.classList.contains("readonly") || cardEl.classList.contains("unaffordable")) return;
+    if (!cardEl || ev.target.closest("button") || cardEl.classList.contains("readonly")) return;
+    // серую карту (не хватает на розыгрыш) можно взять, если хватает на мердж
+    if (cardEl.classList.contains("unaffordable") && !cardEl.classList.contains("can-merge")) return;
     drag = { uid: cardEl.dataset.card, heroId: cardEl.dataset.hero, sx: ev.clientX, sy: ev.clientY, started: false, el: cardEl };
   }
 

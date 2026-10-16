@@ -5,14 +5,13 @@ window.BP = window.BP || {};
 BP.Engine = (function () {
   const C = () => BP.Cards;
   const clone = (o) => JSON.parse(JSON.stringify(o));
-  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
   // ---------- Создание забега ----------
   function createRun(config, players) {
     const state = {
       config: clone(config), phase: "lobby", seq: 1, turn: 0, fightIndex: 0,
       players: players || {}, heroes: [], enemies: [], log: [], fightLog: [],
-      task: null, quests: [], pool: null, turnStats: null, fightStats: null,
+      task: null, quests: [], pool: null, shared: null, turnStats: null, fightStats: null,
       actingEnemy: null, actingTargets: [], enemyQueue: [], banner: null, summary: null, fx: [], fxSeq: 0,
     };
     state.config.heroes.forEach((hc) => {
@@ -25,21 +24,6 @@ BP.Engine = (function () {
       });
     });
     return state;
-  }
-
-  function deckList(state, hc) {
-    const cfg = state.config, list = [];
-    const add = (cardId, n, weapon) => { for (let i = 0; i < n; i++) list.push({ cardId, weapon }); };
-    (hc.weapons || []).forEach((wid) => {
-      const w = cfg.weapons[wid];
-      if (w) Object.entries(w.cards).forEach(([cid, n]) => add(cid, n, wid));
-    });
-    Object.entries(hc.cards || {}).forEach(([cid, n]) => add(cid, n));
-    const sp = cfg.tests.sharedPool;
-    if (sp && sp.enabled && sp.cards && (sp.heroes === "all" || (sp.heroes || []).includes(hc.id)))
-      Object.entries(sp.cards).forEach(([cid, n]) => add(cid, n));
-    while (list.length < cfg.rules.minDeck) add(cfg.rules.fillerCard, 1);
-    return list;
   }
 
   function makeCard(state, cardId, weapon) {
@@ -88,21 +72,10 @@ BP.Engine = (function () {
       if (!cfg.rules.hpCarriesOver) h.hp = h.maxHp;
       h.startBlock = h.startBlockMax; h.block = 0; h.debuffs = []; h.bonusEnergy = 0;
       h.crit = {};
-      (hc.weapons || []).forEach((w) => { if (cfg.weapons[w]) h.crit[w] = { every: cfg.weapons[w].critEvery, count: 0 }; });
-      h.draw = deckList(state, hc).map((d) => makeCard(state, d.cardId, d.weapon));
-      h.hand = []; h.discard = [];
+      (hc.weapons || []).forEach((w) => { if (cfg.weapons[w] && cfg.weapons[w].critEvery > 0) h.crit[w] = { every: cfg.weapons[w].critEvery, count: 0 }; });
       h.stats = { cards: 0, energy: 0, damage: 0, blockGiven: 0, merges: 0, taken: 0 };
     });
-    // Карты-квесты: perFight случайных карт из пула — в колоду случайному герою
-    const qc = cfg.tests.questCards;
-    if (qc && qc.enabled && (qc.pool || []).length) {
-      for (let i = 0; i < (qc.perFight || 0); i++) {
-        const cid = qc.pool[Math.floor(Math.random() * qc.pool.length)];
-        const h = state.heroes[Math.floor(Math.random() * state.heroes.length)];
-        if (cfg.cards[cid]) h.draw.push(makeCard(state, cid));
-      }
-    }
-    state.heroes.forEach((h) => shuffle(h.draw));
+    BP.Deck.buildFight(state, makeCard); // колоды героев (и общая), особые карты — js/deck.js
     state.fightStats = { collisions: 0, turns: 0, taskDone: false, questsDone: 0, questsFailed: 0 };
     state.quests = [];
     state.task = null;
@@ -116,13 +89,7 @@ BP.Engine = (function () {
     startPlayerTurn(state);
   }
 
-  function drawCards(state, hero, n) {
-    for (let i = 0; i < n; i++) {
-      if (!hero.draw.length) { hero.draw = shuffle(hero.discard); hero.discard = []; }
-      if (!hero.draw.length) return;
-      hero.hand.push(hero.draw.pop());
-    }
-  }
+  function drawCards(state, hero, n) { BP.Deck.draw(state, hero, n); }
 
   function aliveHeroes(state) { return state.heroes.filter((h) => h.alive); }
 
@@ -157,7 +124,7 @@ BP.Engine = (function () {
     state.turn++;
     state.fightStats.turns = state.turn;
     state.phase = "players"; state.pool = null; state.actingEnemy = null;
-    state.turnStats = { played: [], damageBy: {}, kills: 0 };
+    state.turnStats = { played: [], damageBy: {}, kills: 0, merges: {}, mergesTotal: 0 };
     aliveHeroes(state).forEach((h) => {
       h.energy = state.config.rules.energy + h.bonusEnergy; h.bonusEnergy = 0;
       drawCards(state, h, Math.max(0, state.config.rules.handSize - h.hand.length));
@@ -194,7 +161,7 @@ BP.Engine = (function () {
     fx(state, { k: "hero", hero: h.id, amount: Math.min(left, h.hp + left), blocked: amount - left });
     if (h.hp <= 0) {
       h.hp = 0; h.alive = false;
-      h.discard = h.discard.concat(h.hand); h.hand = [];
+      BP.Deck.discardAll(state, h, h.hand); h.hand = [];
       log(state, h.name, "пал в бою");
     }
   }
@@ -299,7 +266,7 @@ BP.Engine = (function () {
       }
     });
 
-    hero.discard.push(card);
+    BP.Deck.discard(state, hero, card);
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
     entry.detail = notes.filter(Boolean).join("; ");
@@ -312,15 +279,18 @@ BP.Engine = (function () {
     if (!m.enabled) return "Мердж выключен";
     if (ally.id === hero.id) return "Мердж — только в карту союзника";
     if (!ally.alive) return "Союзник пал";
-    if (m.payCost && !canPay(state, hero, card.cost)) return "Не хватает энергии";
+    const cost = C().mergeCost(state, hero, card); // растущая стоимость — tests.merge.costGrowth
+    if (!canPay(state, hero, cost)) return `Мердж стоит ${cost} энергии — не хватает`;
     const before = clone(allyCard);
     if (!C().mergeInto(state, card, allyCard)) return "Эти карты не совмещаются (нет общего урона/блока)";
-    if (m.payCost) payCost(state, hero, card.cost);
+    payCost(state, hero, cost);
+    const ts = state.turnStats;
+    ts.merges[hero.id] = (ts.merges[hero.id] || 0) + 1; ts.mergesTotal++;
     hero.hand = hero.hand.filter((c) => c.uid !== card.uid);
-    hero.discard.push(card);
+    BP.Deck.discard(state, hero, card);
     hero.stats.merges++; hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id, merge: true });
-    log(state, hero.name, `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost: m.payCost ? card.cost : 0, merge: true, detail: `${before.text} ⇒ ${allyCard.text}` });
+    log(state, hero.name, `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost, merge: true, detail: `${before.text} ⇒ ${allyCard.text}` });
     afterChange(state, false);
     return null;
   }
@@ -419,7 +389,7 @@ BP.Engine = (function () {
   function endPlayerTurn(state) {
     aliveHeroes(state).forEach((h) => {
       const keep = h.hand.filter((c) => c.retain);
-      h.discard = h.discard.concat(h.hand.filter((c) => !c.retain));
+      BP.Deck.discardAll(state, h, h.hand.filter((c) => !c.retain));
       h.hand = keep;
     });
     afterChange(state, true);

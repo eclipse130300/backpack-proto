@@ -7,11 +7,13 @@
 //  Быстрые правки во время сессии — кнопка «Настройки» в игре (у хоста).
 // =====================================================================
 window.GAME_CONFIG = {
+  // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
+  version: 3,
 
   // ---------- Базовые правила боя ----------
   rules: {
     cols: 6, rows: 2,            // поле врагов 6×2
-    handSize: 5,                 // добор руки до N карт в начале хода
+    handSize: 4,                 // добор руки до N карт в начале хода (рука рассчитана на 4 карты, больше — карты накладываются)
     energy: 3,                   // энергия героя каждый ход
     minDeck: 10,                 // минимум карт в колоде; недобор = слабые удары
     fillerCard: "weak_strike",   // какой картой добивать колоду до минимума
@@ -39,16 +41,31 @@ window.GAME_CONFIG = {
     // mode "add"  — карта союзника получает урон/блок твоей карты;
     // mode "flat" — карта союзника получает +flatBonus к урону и блоку.
     // payCost — платишь ли ты энергию своей карты за мердж.
-    merge: { enabled: true, mode: "add", payCost: true, flatBonus: 3 },
+    // costGrowth — растущая стоимость мерджа за ход (сбрасывается каждый ход, работает при payCost: true):
+    //   "off"   — мердж стоит как карта;
+    //   "hero"  — у каждого героя свой счётчик: n-й мердж героя за ход = стоимость карты + (n − 1);
+    //   "party" — общий счётчик пати: n-й мердж за ход стоит n энергии (1, 2, 3…), стоимость карты не важна.
+    // Стоимость мерджа видна фиолетовым ромбом в правом верхнем углу карт союзника, когда берёшь карту.
+    merge: { enabled: true, mode: "add", payCost: true, flatBonus: 3, costGrowth: "off" },
+
+    // Общая колода: карты оружия и щита остаются у своего героя, все остальные (кооп-карты, слабые удары,
+    // особые карты) лежат в одной общей колоде. Герой добирает руку случайно из «своё + общее» (шанс по количеству).
+    // Сыгранная общая карта уходит в общий сброс. minDeck — минимум общей колоды, недобор = слабые удары.
+    // Карты героя подсвечены его цветом, общие — бирюзовой полосой «общая».
+    sharedDeck: { enabled: false, minDeck: 12 },
+
+    // Особые карты («Единение», «Клятвы»): perFight разных карт за бой на всю пати, без копий,
+    // каждая — случайному герою (или в общую колоду). Берутся из pool, только те, чей тест включён.
+    specialCards: { perFight: 1, pool: ["unity", "oath_hunt", "oath_wall"] },
 
     // Задача пати на бой: у каждого боя есть задача (см. tasks и encounters), бонус всем.
     partyTask: { enabled: true },
 
-    // Общий пул энергии — только как эффект карты (карта "Единение").
-    sharedPool: { enabled: true, cards: { unity: 1 }, heroes: "all" },
+    // Общий пул энергии — только как эффект карты «Единение» (раздаётся как особая карта, см. specialCards).
+    sharedPool: { enabled: true },
 
-    // Карты-квесты: в начале каждого боя perFight случайных карт из pool кладутся в колоду случайному герою.
-    questCards: { enabled: true, perFight: 1, pool: ["oath_hunt", "oath_wall"] }
+    // Карты-квесты «Клятва…» (раздаются как особые карты, см. specialCards).
+    questCards: { enabled: true }
   },
 
   // ---------- Фигуры массовых атак ----------
@@ -65,20 +82,25 @@ window.GAME_CONFIG = {
   // target: "enemy" — враг | "cell" — любая клетка поля | "self" — себя
   //         "hero" — себя или союзника | "ally" — только союзника | "none" — без цели
   // attack: "melee" (только открытые враги) | "ranged" | "aoe"
-  // area:   "single" | "adjacent" (клетка + все соседи) | "line" (цель + враг за ней) | "shape" (фигура из shapes, крутится ПКМ)
+  // area:   "single" | "adjacent" (клетка + все соседи) | "shape" (фигура из shapes, крутится ПКМ)
+  //         "line" — цель + враг за ней; если за целью край поля — рикошет вбок по ряду
+  //                  (стрелок справа — влево, слева — вправо, ровно напротив — в обе стороны)
   // shape:  id фигуры из shapes (для area: "shape")
-  // icon:   картинка на карте (см. js/icons.js)
+  // icon:   картинка на карте (см. js/icons.js). Цвет картинки — по типу карты: мили красный, дальний зелёный,
+  //         массовка оранжевый, блок синий, кооп золотой, особые фиолетовый, слабый удар серый.
   // effects: damage {amount, hits} | block {amount} | push | stun | taunt | cleanse
   //          blockSelf {amount} (блок себе) | draw {amount} | energy {amount} | sharedPool | quest {id}
   cards: {
     weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 3 }] },
 
-    // Меч и щит
+    // Меч
     cleave:        { name: "Рубящий удар",      cost: 1, icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
-    shield_bash:   { name: "Удар щитом",        cost: 1, icon: "bash",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 4 }, { type: "push" }] },
-    shield_wall:   { name: "Стена щитов",       cost: 1, icon: "shield", target: "self",  effects: [{ type: "block", amount: 7 }] },
     sweep:         { name: "Размах",            cost: 2, icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", effects: [{ type: "damage", amount: 8 }] },
     crush:         { name: "Сокрушение",        cost: 2, icon: "crush",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 13 }] },
+
+    // Щит
+    shield_bash:   { name: "Удар щитом",        cost: 1, icon: "bash",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 4 }, { type: "push" }] },
+    shield_wall:   { name: "Стена щитов",       cost: 1, icon: "shield", target: "self",  effects: [{ type: "block", amount: 7 }] },
 
     // Посох
     bolt:          { name: "Разряд",            cost: 1, icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
@@ -106,22 +128,27 @@ window.GAME_CONFIG = {
     oath_wall:     { name: "Клятва стены",      cost: 0, icon: "oath",  target: "none",  effects: [{ type: "quest", id: "block_all_turn" }] }
   },
 
-  // ---------- Оружие (главный источник карт) ----------
-  // critEvery — крит раз в N ударов этим героем; счётчик живёт весь бой. Сколько осталось — пишется на карте.
+  // ---------- Оружие и щиты (главный источник карт) ----------
+  // РЕШЕНО: щит — отдельный тип снаряжения. Оружием наносишь урон, щитом защищаешься.
+  // kind: "weapon" — оружие | "shield" — щит. icon — значок у героя (см. js/icons.js).
+  // critEvery — крит раз в N ударов этим оружием; счётчик живёт весь бой. Сколько осталось — пишется на карте. 0 — без крита.
+  // Пока щит только у милишника (щиты разберём позже).
   weapons: {
-    sword_shield: { name: "Меч и щит", critEvery: 3, cards: { cleave: 2, shield_bash: 1, shield_wall: 1, sweep: 1, crush: 1 } },
-    staff:        { name: "Посох",     critEvery: 4, cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, nova: 1 } },
-    bow:          { name: "Лук",       critEvery: 4, cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1 } }
+    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, cards: { cleave: 2, sweep: 1, crush: 1 } },
+    shield: { name: "Щит",   kind: "shield", icon: "w_shield", critEvery: 0, cards: { shield_bash: 1, shield_wall: 1 } },
+    staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, nova: 1 } },
+    bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1 } }
   },
 
   // ---------- Герои ----------
-  // Классов нет: колода = карты оружия + доп. карты + слабые удары до минимума.
+  // Классов нет: колода = карты оружия и щита + доп. карты (cards) + слабые удары до минимума.
+  // В режиме общей колоды (tests.sharedDeck) доп. карты героя уходят в общую колоду.
   // hp — макс. ХП (переносится между боями, лечения нет).
   // startBlock — запас блока на бой: тратится после обычного блока, между ходами не восстанавливается, обновляется в начале боя.
   // icon — портрет (см. js/icons.js)
   // Баланс (ХП героев и врагов, состав боёв) подобран симулятором: node tools/balance-sim.js — см. README.
   heroes: [
-    { id: "melee",  name: "Милишник", icon: "helm", hp: 85, startBlock: 4, weapons: ["sword_shield"], cards: { cover: 1, challenge: 1 } },
+    { id: "melee",  name: "Милишник", icon: "helm", hp: 85, startBlock: 4, weapons: ["sword", "shield"], cards: { cover: 1, challenge: 1 } },
     { id: "mage",   name: "Маг",      icon: "hat",  hp: 60, startBlock: 2, weapons: ["staff"],        cards: { purify: 1, barrier: 1 } },
     { id: "ranger", name: "Стрелок",  icon: "hood", hp: 68, startBlock: 2, weapons: ["bow"],          cards: { cover: 1 } }
   ],

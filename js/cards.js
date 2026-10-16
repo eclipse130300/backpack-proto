@@ -4,7 +4,7 @@ window.BP = window.BP || {};
 BP.Cards = (function () {
   const TARGET_LABEL = { enemy: "враг", cell: "клетка", self: "себя", hero: "себя или союзника", ally: "союзник", none: "" };
   const ATTACK_LABEL = { melee: "Мили", ranged: "Дальний", aoe: "Массовая" };
-  const AREA_LABEL = { adjacent: "по клетке и всем соседям", row: "по всему ряду", line: "насквозь (цель и враг за ней)" };
+  const AREA_LABEL = { adjacent: "по клетке и всем соседям", row: "по всему ряду", line: "насквозь (цель и враг за ней; у края поля — рикошет вбок)" };
   // card.shapeName кладёт engine.makeCard из config.shapes
   function areaLabel(card) {
     if (card.area === "shape") return card.shapeName ? "по фигуре: " + card.shapeName : "";
@@ -117,13 +117,21 @@ BP.Cards = (function () {
     }
     if (card.area === "adjacent") cells = cells.concat(BP.Hex.neighbors(c.col, c.row, r.cols, r.rows));
     if (card.area === "row") { cells = []; for (let i = 0; i < r.cols; i++) cells.push({ col: i, row: c.row }); }
-    if (card.area === "line") {
-      const hi = state.heroes.indexOf(hero);
-      const dir = BP.Hex.dirFromPoint(BP.Hex.heroPos(hi, r.cols), c.col, c.row);
-      const n = BP.Hex.neighbor(c.col, c.row, dir, r.cols, r.rows);
-      if (n) cells.push(n);
-    }
+    if (card.area === "line") cells = cells.concat(lineCells(state, hero, c));
     return cells;
+  }
+
+  // «Насквозь»: клетка за целью по линии от героя. Если за целью край поля — рикошет вбок по ряду цели:
+  // герой справа от цели — влево, слева — вправо, ровно напротив — в обе стороны.
+  function lineCells(state, hero, c) {
+    const r = state.config.rules;
+    const from = BP.Hex.heroPos(state.heroes.indexOf(hero), r.cols);
+    const dir = BP.Hex.dirFromPoint(from, c.col, c.row);
+    const n = BP.Hex.neighbor(c.col, c.row, dir, r.cols, r.rows);
+    if (n) return [n];
+    const dx = BP.Hex.center(c.col, c.row).x - from.x;
+    const dirs = Math.abs(dx) < 0.25 ? [3, 0] : dx < 0 ? [3] : [0]; // 3 — влево, 0 — вправо
+    return dirs.map((d) => BP.Hex.neighbor(c.col, c.row, d, r.cols, r.rows)).filter(Boolean);
   }
 
   // Все враги, которых задевает карта (по зоне)
@@ -215,5 +223,27 @@ BP.Cards = (function () {
     return changed;
   }
 
-  return { text, rewardText, tags, has, checkTarget, areaCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
+  // Стоимость мерджа этой карты сейчас (tests.merge.costGrowth, счётчики сбрасываются каждый ход)
+  function mergeCost(state, hero, card) {
+    const m = state.config.tests.merge;
+    if (!m.payCost) return 0;
+    const ts = state.turnStats || { merges: {}, mergesTotal: 0 };
+    if (m.costGrowth === "hero") return card.cost + ((ts.merges || {})[hero.id] || 0);
+    if (m.costGrowth === "party") return (ts.mergesTotal || 0) + 1;
+    return card.cost;
+  }
+
+  // Тип карты для цвета картинки: melee | ranged | aoe | block | coop | special | filler
+  function kind(card) {
+    const t = (card.effects || []).map((e) => e.type);
+    if (t.includes("sharedPool") || t.includes("quest")) return "special";
+    if (card.id === "weak_strike") return "filler";
+    if (card.target === "hero" || card.target === "ally" || t.includes("taunt") || t.includes("cleanse")) return "coop";
+    if (card.attack === "aoe") return "aoe";
+    if (card.attack) return card.attack;
+    if (t.includes("block") || t.includes("blockSelf")) return "block";
+    return "coop";
+  }
+
+  return { mergeCost, kind, text, rewardText, tags, has, checkTarget, areaCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
 })();

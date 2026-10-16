@@ -37,6 +37,11 @@ BP.Icons = (function () {
     barrier: `<path d="M6 54 C6 24 58 24 58 54" ${S}/><path d="M16 54 C16 34 48 34 48 54" ${S} stroke-dasharray="4 5"/><path d="M2 56 H62" ${S}/>`,
     unity: `<circle cx="22" cy="24" r="12" ${S}/><circle cx="42" cy="24" r="12" ${S}/><circle cx="32" cy="42" r="12" ${S}/>`,
     oath: `<path d="M14 8 H46 C52 8 52 18 46 18 H44 V56 H16 C10 56 10 46 16 46 H18 V18" ${S}/><path d="M24 26 H38 M24 34 H38" ${S}/>`,
+    // Оружие и щиты (значки у героя)
+    w_sword: `<path d="M50 6 L58 6 L58 14 L24 48 L16 40 Z" ${F}/><path d="M10 38 L26 54" ${S}/><path d="M16 48 L6 58" ${S}/>`,
+    w_shield: `${shield(0, 0, 1)}<path d="M32 14 V50" stroke="#2a0d0a" stroke-width="4"/>`,
+    w_staff: `<path d="M20 60 L42 18" ${S} stroke-width="6"/><circle cx="45" cy="13" r="9" ${F}/><path d="M45 0 V4 M58 13 H54 M36 13 H32" ${S}/>`,
+    w_bow: `<path d="M18 6 C50 14 50 50 18 58" ${S} stroke-width="5"/><path d="M18 6 V58" stroke="currentColor" stroke-width="2"/>` + arrow(10, 32, 58, 32),
     // Портреты героев
     helm: `<path d="M12 56 V28 C12 12 52 12 52 28 V56 L40 56 V40 H24 V56 Z" ${F}/><path d="M18 32 H46" stroke="#2a0d0a" stroke-width="5"/><path d="M32 6 V14" ${S}/>`,
     hat: `<path d="M32 2 L44 40 H20 Z" ${F}/><path d="M6 42 H58" ${S}/><circle cx="32" cy="52" r="8" ${F}/>`,
@@ -44,9 +49,13 @@ BP.Icons = (function () {
     enemy: `<circle cx="32" cy="26" r="16" ${F}/><path d="M16 60 C16 44 48 44 48 60" ${F}/><circle cx="26" cy="24" r="3" fill="#2a0d0a"/><circle cx="38" cy="24" r="3" fill="#2a0d0a"/>`,
   };
 
-  function svg(name, cls) {
+  // Цвета по типу карты (см. BP.Cards.kind)
+  const KIND_COLOR = { melee: "#ff6a4d", ranged: "#7fd65a", aoe: "#ffa53a", block: "#5cb4ff", coop: "#f2cf4a", special: "#c08cff", filler: "#b8aa98" };
+  const KIND_LABEL = { melee: "мили", ranged: "дальний", aoe: "массовка", block: "блок", coop: "кооп", special: "особая", filler: "слабый удар" };
+
+  function svg(name, cls, color) {
     const body = I[name] || I.fist;
-    return `<svg class="${cls || "icon"}" viewBox="0 0 64 64" aria-hidden="true">${body}</svg>`;
+    return `<svg class="${cls || "icon"}" viewBox="0 0 64 64" aria-hidden="true"${color ? ` style="color:${color}"` : ""}>${body}</svg>`;
   }
 
   // Мини-схема фигуры массовки: шестиугольники в клетках фигуры (первая — клетка прицела)
@@ -65,5 +74,5 @@ BP.Icons = (function () {
     return `<svg class="shape-mini" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}">${pts.map((p, i) => hex(p.x, p.y, i === 0)).join("")}</svg>`;
   }
 
-  return { svg, shapeSvg, list: () => Object.keys(I) };
+  return { svg, shapeSvg, KIND_COLOR, KIND_LABEL, list: () => Object.keys(I) };
 })();

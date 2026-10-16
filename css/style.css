@@ -151,16 +151,23 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 
 .card { width: 112px; height: 170px; flex-shrink: 0; background: linear-gradient(#4a1915, #210a08); color: #f0e0c4; border-radius: 9px; padding: 6px 6px 5px; position: relative;
   border: 2px solid #7a3a2c; box-shadow: 0 4px 10px #000a; cursor: grab; display: flex; flex-direction: column; align-items: center; transition: transform .08s; }
-.card:hover { transform: translateY(-10px); z-index: 10; }
-.card.selected { border-color: var(--gold); transform: translateY(-16px); box-shadow: 0 0 16px var(--gold); z-index: 11; }
+.card { transform-origin: 50% 100%; transition: transform .12s, translate .12s; border-color: color-mix(in srgb, var(--kc, #7a3a2c) 55%, #3a1510); }
+/* Рука как в Hearthstone: наведённая карта выезжает вверх и увеличивается поверх соседних */
+.card:hover { transform: translateY(-44px) scale(1.2); z-index: 20; }
+.card.selected { border-color: var(--gold); transform: translateY(-30px) scale(1.08); box-shadow: 0 0 16px var(--gold); z-index: 19; }
+.card.selected:hover { transform: translateY(-44px) scale(1.2); }
+/* при наложении соседи чуть раздвигаются */
+.hand.overlap .card:hover ~ .card { translate: 22px 0; }
+.hand.overlap .card:has(~ .card:hover) { translate: -22px 0; }
 .card.unaffordable { filter: grayscale(.9) brightness(.7); cursor: not-allowed; }
 .card.readonly { cursor: default; }
 .card.valid { border-color: var(--gold); box-shadow: 0 0 12px var(--gold); }
 .card.hover { border-color: #fff2c2; }
 .card .cost { position: absolute; top: -9px; left: -9px; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(#f3e3c0, #b99a62); color: #2a0d0a;
   font-weight: 800; font-size: 17px; display: flex; align-items: center; justify-content: center; border: 2px solid #2a0d0a; z-index: 2; }
-.card .cart { width: 100%; height: 62px; display: flex; align-items: center; justify-content: center; color: #e8d6b5; position: relative;
-  background: radial-gradient(circle, #6a2a22 0%, #2a0d0a 75%); border-radius: 6px; margin-top: 8px; }
+.card .cart { width: 100%; height: 62px; display: flex; align-items: center; justify-content: center; color: var(--kc, #e8d6b5); position: relative;
+  background: radial-gradient(circle, color-mix(in srgb, var(--kc, #6a2a22) 32%, #2a0d0a) 0%, #1a0806 78%); border-radius: 6px; margin-top: 8px; }
+.card .cart .icon { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--kc, #000) 60%, transparent)); }
 .card .cart .icon { height: 52px; width: 52px; }
 .card .cart .shape-mini { position: absolute; right: 3px; top: 3px; height: 20px; width: 24px; }
 .card .cname { font-weight: 800; font-size: 13px; text-align: center; line-height: 1.1; margin-top: 5px; min-height: 29px; display: flex; align-items: center; }
@@ -170,6 +177,28 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 .card .cmerged { position: absolute; bottom: 4px; right: 6px; color: #d6b0f5; font-weight: 800; }
 .card .play-btn { position: absolute; bottom: 6px; left: 6px; right: 6px; padding: 4px; font-size: 13px; }
 .card.test { border-color: #9a72c9; }
+/* Режим общей колоды: чья карта */
+.card .cowner { position: absolute; top: -2px; left: 24px; right: 6px; height: 15px; border-radius: 0 0 6px 6px; font-size: 10px; font-weight: 800;
+  text-align: center; line-height: 15px; color: #1a0c08; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; z-index: 1; }
+.card .cowner.shared { background: #3fc4b2; }
+.card .cowner.hc0, .portrait.hc0 { --hcol: var(--lane0); } .card .cowner.hc1, .portrait.hc1 { --hcol: var(--lane1); } .card .cowner.hc2, .portrait.hc2 { --hcol: var(--lane2); }
+.card .cowner[class*="hc"] { background: var(--hcol); }
+.card.is-shared { border-color: #3fc4b2; }
+.hsec:nth-child(1) .card.is-own { border-color: var(--lane0); }
+.hsec:nth-child(2) .card.is-own { border-color: var(--lane1); }
+.hsec:nth-child(3) .card.is-own { border-color: var(--lane2); }
+/* Стоимость мерджа — фиолетовый ромб в правом верхнем углу карты союзника */
+.card .mcost { position: absolute; top: -10px; right: -10px; width: 30px; height: 30px; transform: rotate(45deg); background: linear-gradient(135deg, #d9a6ff, #8a3fd6);
+  border: 2px solid #2a0d3a; z-index: 3; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px #b46cff; }
+.card .mcost span { transform: rotate(-45deg); font-weight: 900; font-size: 16px; color: #fff; text-shadow: 0 1px 2px #000; }
+.card .mcost.no { filter: grayscale(.8) brightness(.7); box-shadow: none; }
+/* Значки оружия и щита у героя */
+.wicons { display: inline-flex; gap: 3px; vertical-align: middle; }
+.wicon { width: 20px; height: 20px; display: inline-block; color: #e8c98a; border-radius: 4px; background: #2a1510; padding: 2px; }
+.wicon.shield { color: #9cc8ff; }
+.wicon svg { width: 100%; height: 100%; display: block; }
+.portrait[class*="hc"] { color: var(--hcol); border-color: var(--hcol); }
+.chip.shared { border-color: #3fc4b2; color: #9ff0e2; }
 .readybtn { font-size: 22px; padding: 16px 10px; }
 
 .ghost { position: fixed; z-index: 100; pointer-events: none; transform: translate(24px, -105%) rotate(4deg); transform-origin: left bottom; opacity: .9; }
@@ -217,6 +246,21 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 .modal table { border-collapse: collapse; width: 100%; margin: 10px 0; }
 .modal td, .modal th { border-bottom: 1px solid var(--line); padding: 6px 10px; text-align: left; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin: 12px 0; }
+/* Настройки: группы с цветом, подсказки «i» */
+.modal.settings { max-width: 1100px; width: 94vw; }
+.set-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.set-group { border: 1px solid color-mix(in srgb, var(--gc) 55%, #000); border-left: 6px solid var(--gc); border-radius: 8px; padding: 8px 12px 10px;
+  background: color-mix(in srgb, var(--gc) 9%, #1d1712); }
+.set-group h3 { margin: 0 0 6px; color: var(--gc); font-size: 17px; }
+.set-items { display: flex; flex-direction: column; gap: 6px; }
+.set-item label { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.set-item input[type=number] { width: 90px; }
+.set-label { display: inline-flex; align-items: center; gap: 6px; }
+.info { width: 20px; height: 20px; padding: 0; border-radius: 50%; font: italic 700 13px Georgia, serif; line-height: 18px; text-align: center;
+  background: color-mix(in srgb, var(--gc) 35%, #1d1712); border-color: var(--gc); color: #fff; position: relative; flex-shrink: 0; }
+.info:hover::after { content: attr(data-help); position: absolute; left: 26px; top: -6px; width: 300px; z-index: 50; background: #0e0b08; color: var(--text);
+  border: 1px solid var(--gc); border-radius: 6px; padding: 8px 10px; font: 400 13px/1.35 "Segoe UI", Arial, sans-serif; text-align: left; white-space: normal; box-shadow: 0 6px 16px #000c; }
+.set-help { margin: 4px 0 2px; padding: 6px 10px; border-left: 3px solid var(--gc); background: #0e0b0899; font-size: 13px; line-height: 1.35; color: #d9ccb4; }
 .settings-grid label { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .settings-grid input[type=number] { width: 90px; }
 

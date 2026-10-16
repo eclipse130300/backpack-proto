@@ -29,6 +29,16 @@ BP.UIGame = (function () {
 
   function heroName(state, id) { const h = state.heroes.find((x) => x.id === id); return h ? h.name : "?"; }
   function heroIcon(state, h) { const hc = state.config.heroes.find((x) => x.id === h.id); return (hc && hc.icon) || "helm"; }
+  // Цвет героя = цвет его коридора (lane0..2) — им же подсвечены его карты в режиме общей колоды
+  const heroIdx = (state, id) => state.heroes.findIndex((x) => x.id === id);
+  function portrait(state, h, sm) {
+    return `<div class="portrait hc${heroIdx(state, h.id)} ${sm ? "sm" : ""}">${icon(heroIcon(state, h))}</div>`;
+  }
+  // Значки оружия и щита героя
+  function weaponsHtml(state, h) {
+    const hc = state.config.heroes[heroIdx(state, h.id)] || {};
+    return `<span class="wicons">${(hc.weapons || []).map((wid) => { const w = state.config.weapons[wid] || {}; return `<span class="wicon ${w.kind || ""}" title="${esc((w.kind === "shield" ? "Щит: " : "Оружие: ") + (w.name || wid))}">${icon(w.icon || "w_sword")}</span>`; }).join("")}</span>`;
+  }
 
   function intentHtml(state, e) {
     const it = e.intent;
@@ -93,9 +103,9 @@ BP.UIGame = (function () {
       const weak = (h.debuffs || []).map((d) => `☠ −${d.amount} урона (${d.turns} х.)`).join(" ");
       const tgt = state.actingTargets && state.actingTargets.includes(h.id) ? "targeted" : "";
       html += `<div class="hero token ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"} ${tgt}" data-drop="hero" data-tip="hero" data-hero="${h.id}" style="width:${g.hw * 2 - 14}px">
-        <div class="portrait">${icon(heroIcon(state, h))}</div>
+        ${portrait(state, h)}
         <div class="tinfo">
-          <div class="hname">${esc(h.name)} ${state.phase === "players" && owner ? `<span class="readytag">${owner.ready ? "✅" : "⏳"}</span>` : ""}</div>
+          <div class="hname">${esc(h.name)} ${weaponsHtml(state, h)} ${state.phase === "players" && owner ? `<span class="readytag">${owner.ready ? "✅" : "⏳"}</span>` : ""}</div>
           ${hpBar(h)}
           <div class="stats"><span title="Блок (сгорает после хода врагов)">🛡 ${h.block}</span>${h.startBlock ? `<span title="Стартовый блок — как доп. ХП на бой">⛨ ${h.startBlock}</span>` : ""}${inc ? `<span class="incoming">⚔ ${inc}</span>` : ""}${weak ? `<span class="debuff">${weak}</span>` : ""}</div>
         </div>
@@ -112,13 +122,21 @@ BP.UIGame = (function () {
 
   function cardHtml(state, hero, c, ui, readonly, ml) {
     const avail = state.pool ? state.pool.amount : hero.energy;
-    const cls = ["card", readonly ? "readonly" : "", !readonly && c.cost > avail ? "unaffordable" : "", ui.selected === c.uid ? "selected" : "", c.id && /^(unity|oath_)/.test(c.id) ? "test" : ""].join(" ");
+    const kind = BP.Cards.kind(c), kc = BP.Icons.KIND_COLOR[kind];
+    // Режим общей колоды: полоса сверху — чья карта (цвет героя) или «общая»
+    let owner = "";
+    if (state.shared) {
+      const oi = c.shared ? -1 : heroIdx(state, c.owner || hero.id);
+      owner = c.shared ? `<div class="cowner shared">общая</div>` : `<div class="cowner hc${oi}">${esc((state.heroes[oi] || hero).name)}</div>`;
+    }
+    const mergeOk = !readonly && state.config.tests.merge.enabled && BP.Cards.mergeCost(state, hero, c) <= avail;
+    const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", !readonly && c.cost > avail ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^(unity|oath_)/.test(c.id) ? "test" : ""].join(" ");
     const needsBtn = !readonly && ui.selected === c.uid && (c.target === "none" || c.target === "self");
     const ci = BP.Cards.critInfo(hero, c);
     const crit = ci ? `<div class="crit ${ci.willCrit ? "on" : ""}">${ci.willCrit ? "💥 КРИТ" : `💥 через ${ci.left}`}</div>` : "";
-    return `<div class="${cls}" data-card="${c.uid}" data-hero="${hero.id}" data-drop="merge" data-tip="card" style="${ml ? `margin-left:${ml}px` : ""}">
-      <div class="cost">${c.cost}</div>
-      <div class="cart">${icon(c.icon)}${c.area === "shape" ? BP.Icons.shapeSvg(c.shapeSteps, 0) : ""}${crit}</div>
+    return `<div class="${cls}" data-card="${c.uid}" data-hero="${hero.id}" data-drop="merge" data-tip="card" style="--kc:${kc};${ml ? `margin-left:${ml}px` : ""}">
+      <div class="cost">${c.cost}</div>${owner}
+      <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${c.area === "shape" ? BP.Icons.shapeSvg(c.shapeSteps, 0) : ""}${crit}</div>
       <div class="cname">${esc(c.name)}</div>
       <div class="ctext">${esc(shortText(state, c))}</div>
       ${c.merged ? `<div class="cmerged">★${c.merged > 1 ? c.merged : ""}</div>` : ""}
@@ -133,19 +151,21 @@ BP.UIGame = (function () {
     const html = state.heroes.map((h, i) => {
       const owner = state.players[h.owner];
       const readonly = h.owner !== myPid || state.phase !== "players" || !h.alive;
-      const n = h.hand.length, gap = 8;
-      const over = n > 1 ? Math.min(gap, (secW - n * z.cardW) / (n - 1)) : gap;
+      // Рука рассчитана на handSize карт. Больше — карты накладываются (как в Hearthstone), ширина не растёт.
+      const n = h.hand.length, gap = 8, hs = state.config.rules.handSize || 4;
+      const handW = Math.min(secW, Math.max(hs, 1) * z.cardW + (hs - 1) * gap);
+      const over = n > 1 ? Math.min(gap, (handW - n * z.cardW) / (n - 1)) : gap;
       const cards = h.alive ? (h.hand.map((c, k) => cardHtml(state, h, c, ui, readonly, k ? over : 0)).join("") || `<span class="muted small">Рука пуста</span>`) : `<span class="muted">пал в бою</span>`;
       const maxE = state.config.rules.energy;
       const en = state.pool ? `<span class="pool">⚡ пул ${state.pool.amount}</span>` : `<span class="pips">${Array.from({ length: Math.max(maxE, h.energy) }, (_, k) => `<i class="${k < h.energy ? "on" : ""}"></i>`).join("")}</span>`;
       return `<div class="hsec ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"}" data-drop="hero" data-hero="${h.id}">
         <div class="hsec-head">
-          <div class="portrait sm">${icon(heroIcon(state, h))}</div>
-          <div class="hs-name"><b>${esc(h.name)}</b><span class="muted small">${owner ? esc(owner.name) : "без игрока"}${h.owner !== myPid ? " · смотреть" : ""}</span></div>
+          ${portrait(state, h, true)}
+          <div class="hs-name"><b>${esc(h.name)} ${weaponsHtml(state, h)}</b><span class="muted small">${owner ? esc(owner.name) : "без игрока"}${h.owner !== myPid ? " · смотреть" : ""}</span></div>
           ${hpBar(h)}${en}
-          <span class="pile" title="Колода / сброс">🂠 ${h.draw.length} · ♻ ${h.discard.length}</span>
+          <span class="pile" title="${state.shared ? "Своя колода (оружие и щит) / свой сброс" : "Колода / сброс"}">🂠 ${h.draw.length} · ♻ ${h.discard.length}</span>
         </div>
-        <div class="hand">${cards}</div>
+        <div class="hand ${over < 0 ? "overlap" : ""}">${cards}</div>
       </div>`;
     }).join("");
     return `<div class="handbar">${html}</div>`;
@@ -170,12 +190,13 @@ BP.UIGame = (function () {
     const task = state.task ? `<span class="chip task ${state.task.done ? "done" : ""}" data-tip="task">🎯 Задача пати${state.task.done ? " ✔" : ""}</span>` : "";
     const quests = state.quests.map((q, i) => `<span class="chip quest ${q.done ? "done" : ""}" data-tip="quest" data-idx="${i}">📜 ${esc(q.text)}${q.done ? " ✔" : ""}</span>`).join("");
     const pool = state.pool ? `<span class="chip pool">⚡ Общий пул: ${state.pool.amount}</span>` : "";
+    const shared = state.shared ? `<span class="chip shared" title="Общая колода / общий сброс">🂠 Общая колода ${state.shared.draw.length} · ♻ ${state.shared.discard.length}</span>` : "";
     const req = BP.Engine.requiredPlayers(state);
     const ready = state.phase === "players" ? `<span class="ready-list row">${req.map((pid) => { const p = state.players[pid]; return p ? `<span class="chip ${p.ready ? "ok" : ""}">${p.ready ? "✅" : "⏳"} ${esc(p.name)}</span>` : ""; }).join("")}</span>` : (state.phase === "enemies" ? `<span class="chip enemy-line">👹 ${esc(lastEnemyLine(state))}</span>` : "");
     const roomInfo = BP.Session.code ? `<span class="chip" title="Код комнаты">🔑 ${esc(BP.Session.code)}</span>` : `<span class="chip">локально</span>`;
     return `<div class="topbar">
       <span class="title">Бой ${state.fightIndex + 1}/${state.config.encounters.length}: ${esc(enc.name || "")}</span>
-      <span class="chip">Ход ${state.turn}</span>${task}${quests}${pool}
+      <span class="chip">Ход ${state.turn}</span>${task}${quests}${pool}${shared}
       <span class="grow"></span>${ready}${roomInfo}
       <span class="chip" data-tip="targeting">Цели врагов: ${corridors(state) ? "коридоры" : "любой"}</span>
       ${BP.Session.isHost() ? `<button data-act="settings">⚙</button>` : ""}

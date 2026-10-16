@@ -64,61 +64,9 @@ BP.UI = (function () {
     </div></div>`;
   }
 
-  // ---------- Модалка настроек (хост) ----------
-  function renderSettings(s) {
-    const c = s.config, t = c.tests, r = c.rules;
-    const num = (path, label, val) => `<label>${label}<input type="number" data-cfg="${path}" value="${val}"></label>`;
-    const chk = (path, label, val) => `<label>${label}<input type="checkbox" data-cfg="${path}" ${val ? "checked" : ""}></label>`;
-    return `<div class="modal-back"><div class="modal">
-      <h2>Настройки и тесты</h2>
-      <div class="muted small">Применение перезапускает забег. Настройки сохраняются в этом браузере и перекрывают config.js, пока не нажать «Вернуть config.js».</div>
-      <h3 style="margin-top:14px">Тесты</h3>
-      <div class="settings-grid">
-        <label>Цели врагов <select data-cfg="tests.enemyTargeting"><option value="A" ${t.enemyTargeting === "A" ? "selected" : ""}>A — герой перед собой</option><option value="B" ${t.enemyTargeting === "B" ? "selected" : ""}>B — любой герой</option></select></label>
-        ${chk("tests.merge.enabled", "Мердж = передача", t.merge.enabled)}
-        <label>Мердж: режим <select data-cfg="tests.merge.mode"><option value="add" ${t.merge.mode === "add" ? "selected" : ""}>add — передать урон/блок</option><option value="flat" ${t.merge.mode === "flat" ? "selected" : ""}>flat — +бонус</option></select></label>
-        ${chk("tests.merge.payCost", "Мердж стоит энергию", t.merge.payCost)}
-        ${num("tests.merge.flatBonus", "Мердж flat: бонус", t.merge.flatBonus)}
-        ${chk("tests.partyTask.enabled", "Задача пати на бой", t.partyTask.enabled)}
-        ${chk("tests.sharedPool.enabled", "Общий пул энергии (карта «Единение»)", t.sharedPool.enabled)}
-        ${chk("tests.questCards.enabled", "Карты-квесты", t.questCards.enabled)}
-        ${num("tests.questCards.perFight", "Карт-квестов на бой (случайному герою)", t.questCards.perFight || 0)}
-      </div>
-      <h3>Правила</h3>
-      <div class="settings-grid">
-        ${num("rules.energy", "Энергия за ход", r.energy)}${num("rules.handSize", "Добор до N карт", r.handSize)}
-        ${num("rules.minDeck", "Минимум колоды", r.minDeck)}${num("rules.collisionDamage", "Урон столкновения", r.collisionDamage)}
-        ${num("rules.critMultiplier", "Множитель крита", r.critMultiplier)}${num("rules.enemyStepDelayMs", "Пауза врагов, мс", r.enemyStepDelayMs)}
-        ${chk("rules.conditionalCrit", "Условный крит (оглушён/толкнут)", r.conditionalCrit)}${chk("rules.enemyAdvance", "Враги шагают вперёд", r.enemyAdvance)}
-        <label>Кто прикрывает задний ряд <select data-cfg="rules.cover"><option value="any" ${r.cover !== "all" ? "selected" : ""}>любой из 2 врагов впереди</option><option value="all" ${r.cover === "all" ? "selected" : ""}>только оба врага впереди</option></select></label>
-      </div>
-      <details><summary>Весь конфиг (JSON) — для правки карт, оружия, врагов</summary>
-        <textarea id="cfg-json" rows="18" style="width:100%;margin-top:8px">${esc(JSON.stringify(c, null, 2))}</textarea>
-        <div class="muted small">Если правили JSON здесь — применится он (поля выше игнорируются).</div></details>
-      <div class="row" style="margin-top:14px">
-        <button class="primary" data-act="cfg-apply">Применить и начать заново</button>
-        <button data-act="cfg-download">Скачать config.js</button>
-        <button data-act="reset-config">Вернуть config.js</button><span class="grow"></span>
-        <button data-act="modal-close">Закрыть</button></div>
-    </div></div>`;
-  }
-
-  function collectSettings(s) {
-    const ta = document.getElementById("cfg-json");
-    const original = JSON.stringify(s.config, null, 2);
-    if (ta && ta.value !== original) {
-      try { return JSON.parse(ta.value); } catch (e) { toast("Ошибка в JSON: " + e.message, "bad"); return null; }
-    }
-    const cfg = JSON.parse(JSON.stringify(s.config));
-    document.querySelectorAll("[data-cfg]").forEach((el) => {
-      const path = el.dataset.cfg.split(".");
-      let o = cfg;
-      for (let i = 0; i < path.length - 1; i++) o = o[path[i]];
-      const k = path[path.length - 1];
-      o[k] = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
-    });
-    return cfg;
-  }
+  // ---------- Модалка настроек (хост) — js/ui-settings.js ----------
+  const renderSettings = (s) => BP.UISettings.render(s);
+  const collectSettings = (s) => BP.UISettings.collect(s, toast);
 
   // ---------- Итоги боя ----------
   function renderSummary(s) {
@@ -225,6 +173,7 @@ BP.UI = (function () {
       case "toggle-log": ui.showLog = !ui.showLog; if (ui.showLog && s && s.summary && ui.modal !== "settings") ui.modal = "hide-summary"; render(); break;
       case "show-summary": ui.modal = null; render(); break;
       case "settings": ui.modal = "settings"; render(); break;
+      case "set-help": BP.UISettings.toggleHelp(el); break;
       case "modal-close": ui.modal = null; render(); break;
       case "cfg-apply": { const cfg = collectSettings(s); if (cfg) { ui.modal = null; BP.Session.applyConfig(cfg); toast("Конфиг применён, забег перезапущен", "good"); } break; }
       case "cfg-download": {

@@ -13,7 +13,13 @@ BP.Session = (function () {
 
   // ---------- Конфиг ----------
   function getOverride() {
-    try { const raw = localStorage.getItem(OVERRIDE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+    try {
+      const raw = localStorage.getItem(OVERRIDE_KEY);
+      const o = raw ? JSON.parse(raw) : null;
+      // Настройки от старой версии config.js не применяем: в них нет новых полей (иконки, щиты, тесты)
+      if (o && (!o.config || o.config.version !== window.GAME_CONFIG.version)) { clearOverride(); return null; }
+      return o;
+    } catch (e) { return null; }
   }
   function activeConfig() {
     const o = getOverride();
