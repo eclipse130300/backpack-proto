@@ -4,7 +4,7 @@ window.BP = window.BP || {};
 
 BP.Catalog = (function () {
   // Доска заявок на новые карты (страница в Claude). Пусто — кнопка скрыта.
-  const BOARD_URL = "";
+  const BOARD_URL = "https://claude.ai/artifact/1LYsvgGYij3UPPchKTmKJE";
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
   const store = {
