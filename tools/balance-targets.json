@@ -1,0 +1,7 @@
+{
+  "winRate": { "sloppy": 0.40, "medium": 0.70, "smart": 0.90 },
+  "winRateTolerance": 0.05,
+  "turnsPerFight": [4, 7],
+  "maxChangePerStep": 0.3,
+  "locked": []
+}

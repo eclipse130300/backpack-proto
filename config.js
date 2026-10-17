@@ -164,12 +164,13 @@ window.GAME_CONFIG = {
   // Роли: Упырь — основной мили; Гончая — слабая, но их много (цель для массовых атак);
   //       Культист и Костяной лучник — дальники заднего ряда (мили до них не достать, пока их прикрывают);
   //       Громила — танк с блоком и ударом по всей пати; Падший жрец — минибосс, самый опасный.
+  // Баланс прототипа (17.10, бот medium, цель 70% побед): ХП обычных врагов +10% (Упырь 50→55, Гончая 30→33, Культист 34→37, Лучник 28→31, Громила 80→88).
   enemies: {
-    ghoul:   { name: "Упырь",        hp: 50, melee: true,  actions: [{ type: "attack", damage: 8 }, { type: "attack", damage: 4, targets: 2 }] },
-    hound:   { name: "Гончая",       hp: 30, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 7 }] },
-    cultist: { name: "Культист",     hp: 34, melee: false, actions: [{ type: "curse", amount: 2, turns: 2 }, { type: "attack", damage: 9 }] },
-    archer:  { name: "Костяной лучник", hp: 28, melee: false, actions: [{ type: "attack", damage: 3, targets: 3 }, { type: "attack", damage: 6 }] },
-    brute:   { name: "Громила",      hp: 80, melee: true,  actions: [{ type: "block", amount: 8 }, { type: "attack", damage: 9, targets: 3 }] },
+    ghoul:   { name: "Упырь",        hp: 55, melee: true,  actions: [{ type: "attack", damage: 8 }, { type: "attack", damage: 4, targets: 2 }] },
+    hound:   { name: "Гончая",       hp: 33, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 7 }] },
+    cultist: { name: "Культист",     hp: 37, melee: false, actions: [{ type: "curse", amount: 2, turns: 2 }, { type: "attack", damage: 9 }] },
+    archer:  { name: "Костяной лучник", hp: 31, melee: false, actions: [{ type: "attack", damage: 3, targets: 3 }, { type: "attack", damage: 6 }] },
+    brute:   { name: "Громила",      hp: 88, melee: true,  actions: [{ type: "block", amount: 8 }, { type: "attack", damage: 9, targets: 3 }] },
     priest:  { name: "Падший жрец",  hp: 150, melee: false, actions: [{ type: "attack", damage: 17 }, { type: "attack", damage: 10, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
   },
 
