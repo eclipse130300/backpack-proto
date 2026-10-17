@@ -26,6 +26,7 @@ BP.UI = (function () {
     return `<div class="screen-center"><div class="box">
       <h1>Backpack RPG — прототип механик</h1>
       <div class="muted">Кооп-бой: 3 героя, враги на поле 6×2. Только для монитора.</div>
+      ${window.BP_versionLine ? window.BP_versionLine() : ""}
       <div class="menu-block">
         <label class="row">Ваше имя <input id="name" class="grow" maxlength="20" value="${esc(lsGet("bprpg-name", ""))}" placeholder="Например, Дима"></label>
         <div class="row"><button class="primary grow" data-act="host">Создать комнату (по сети)</button></div>

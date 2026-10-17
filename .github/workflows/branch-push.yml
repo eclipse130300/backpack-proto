@@ -1,0 +1,10 @@
+# Пуш в любую ветку, кроме main, — только сигнал для pages.yml пересобрать сайт со всеми ветками.
+name: Ветка обновилась
+on:
+  push:
+    branches-ignore: [main]
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Ветка ${{ github.ref_name }} обновлена — сайт пересоберёт «Выкладка всех версий»"

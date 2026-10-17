@@ -6,7 +6,8 @@
 window.BP = window.BP || {};
 
 BP.Net = (function () {
-  const PREFIX = "bprpg-room-";
+  // У каждой версии (ветки) свои комнаты: игроки с разных ссылок не попадут в одну игру
+  const PREFIX = "bprpg-room-" + (window.BP_BRANCH ? window.BP_BRANCH + "-" : "");
 
   function randomCode() {
     const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
