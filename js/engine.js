@@ -130,7 +130,7 @@ BP.Engine = (function () {
     state.turnStats = { played: [], damageBy: {}, kills: 0, merges: {}, mergesTotal: 0 };
     aliveHeroes(state).forEach((h) => {
       h.energy = state.config.rules.energy + h.bonusEnergy; h.bonusEnergy = 0;
-      drawCards(state, h, Math.max(0, state.config.rules.handSize - h.hand.length));
+      drawCards(state, h, state.config.rules.drawPerTurn); // фиксированный добор, не «до N»
     });
     state.enemies.forEach((e) => { if (e.alive) { e.pushedThisTurn = false; computeIntent(state, e); } });
     Object.values(state.players).forEach((p) => (p.ready = false));

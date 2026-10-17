@@ -88,7 +88,7 @@ BP.Drag = (function () {
     box.style.display = parts.length ? "block" : "none";
   }
 
-  // Пока своя карта поднята — стоимость карт союзников приглушена (энергия союзников не отвлекает)
+  // Пока своя карта поднята — обычная стоимость карт союзников скрыта (на её месте ромб мерджа, см. mergeBadges)
   function dimAllyCosts(cc) {
     document.querySelectorAll(".hsec").forEach((sec) => sec.classList.toggle("dim-costs", !!cc && sec.dataset.hero !== cc.hero.id));
   }
@@ -113,7 +113,7 @@ BP.Drag = (function () {
     }
   }
 
-  // Фиолетовый ромб со стоимостью мерджа на картах союзников, в которые можно смерджить взятую карту
+  // Фиолетовый пульсирующий ромб со стоимостью мерджа на месте стоимости карт союзников, в которые можно смерджить взятую карту
   function mergeBadges(cc) {
     const s = st(), m = s.config.tests.merge;
     if (!m.enabled || !m.payCost) return;

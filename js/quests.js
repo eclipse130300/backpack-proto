@@ -16,7 +16,6 @@ BP.Quests = (function () {
   function rewardAllowed(cfg, cid) {
     const c = cfg.cards[cid];
     if (!c) return false;
-    if ((c.effects || []).some((e) => e.type === "sharedPool")) return !!(cfg.tests.sharedPool && cfg.tests.sharedPool.enabled);
     return true;
   }
 

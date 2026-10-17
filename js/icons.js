@@ -15,7 +15,7 @@ BP.Icons = (function () {
   const flame = (x, y, s) => `<path transform="translate(${x} ${y}) scale(${s})" d="M32 4 C36 16 48 22 48 38 C48 50 40 58 32 58 C24 58 16 50 16 38 C16 30 22 26 24 18 C28 24 28 28 30 30 C32 22 30 12 32 4 Z" ${F}/>`;
 
   const I = {
-    fist: `<rect x="16" y="22" width="32" height="26" rx="6" ${F}/><path d="M24 22 V16 M32 22 V14 M40 22 V16" ${S}/><path d="M8 40 H14 M6 32 H14 M50 30 L58 24 M50 40 L58 44" ${S}/>`,
+    fist: `<g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="12" width="9" height="15" rx="4.5"/><rect x="24" y="10" width="9" height="16" rx="4.5"/><rect x="33" y="10" width="9" height="16" rx="4.5"/><rect x="42" y="13" width="8" height="14" rx="4"/><path d="M15 23 V40 C15 46 20 50 26 50 H40 C46 50 50 46 50 40 V24"/><rect x="11" y="28" width="27" height="10" rx="5"/><path d="M23 50 V58 M43 50 V58"/></g><path d="M55 8 L60 3 M57 16 H63 M47 5 L49 0" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>`,
     slash: `${sword}<path d="M6 30 C18 10 40 4 58 10" ${S} stroke-dasharray="2 6"/>`,
     bash: `${shield(6, 6, 0.8)}<path d="M50 20 H60 M48 32 H62 M50 44 H60" ${S}/>`,
     shield: `${shield(0, 0, 1)}<path d="M32 16 V48 M20 28 H44" stroke="#2a0d0a" stroke-width="4"/>`,

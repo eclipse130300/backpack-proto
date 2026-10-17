@@ -191,11 +191,12 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 .hsec:nth-child(1) .card.is-own { border-color: var(--lane0); }
 .hsec:nth-child(2) .card.is-own { border-color: var(--lane1); }
 .hsec:nth-child(3) .card.is-own { border-color: var(--lane2); }
-/* Стоимость мерджа — фиолетовый ромб в правом верхнем углу карты союзника */
-.card .mcost { position: absolute; top: -10px; right: -10px; width: 30px; height: 30px; transform: rotate(45deg); background: linear-gradient(135deg, #d9a6ff, #8a3fd6);
-  border: 2px solid #2a0d3a; z-index: 3; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px #b46cff; }
+/* Стоимость мерджа — фиолетовый ромб на месте обычной стоимости карты союзника, пульсирует */
+.card .mcost { position: absolute; top: -10px; left: -10px; width: 30px; height: 30px; transform: rotate(45deg); background: linear-gradient(135deg, #d9a6ff, #8a3fd6);
+  border: 2px solid #2a0d3a; z-index: 3; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px #b46cff; animation: mcostGlow 1.1s ease-in-out infinite alternate; }
+@keyframes mcostGlow { from { box-shadow: 0 0 4px 1px #b46cff; filter: brightness(1); } to { box-shadow: 0 0 18px 6px #c98bff; filter: brightness(1.25); } }
 .card .mcost span { transform: rotate(-45deg); font-weight: 900; font-size: 16px; color: #fff; text-shadow: 0 1px 2px #000; }
-.card .mcost.no { filter: grayscale(.8) brightness(.7); box-shadow: none; }
+.card .mcost.no { filter: grayscale(.8) brightness(.7); box-shadow: none; animation: none; }
 /* Значки оружия и щита у героя */
 .wicons { display: inline-flex; gap: 3px; vertical-align: middle; }
 .wicon { width: 20px; height: 20px; display: inline-block; color: #e8c98a; border-radius: 4px; background: #2a1510; padding: 2px; }
@@ -329,8 +330,8 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 .card.quest-card { border-color: #ffd84a; box-shadow: 0 0 10px #ffc82a88; }
 .card .qbadge { position: absolute; top: -9px; right: -7px; width: 24px; height: 24px; border-radius: 50%; background: #3a2a08; color: #ffd84a;
   border: 2px solid #ffd84a; font: 900 16px/20px Georgia, serif; text-align: center; z-index: 2; }
-/* Своя карта поднята — стоимость карт союзников приглушена */
-.hsec.dim-costs .card .cost { opacity: .3; filter: grayscale(.7); }
+/* Своя карта поднята — обычная стоимость карт союзников скрыта (где можно смерджить, на её месте ромб мерджа) */
+.hsec.dim-costs .card .cost { visibility: hidden; }
 /* Наведение на врага: герои, которых он бьёт, мерцают и вздрагивают */
 .flash-target { animation: flashTarget 2s ease-out both; }
 @keyframes flashTarget {

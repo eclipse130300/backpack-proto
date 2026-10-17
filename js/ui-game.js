@@ -158,8 +158,8 @@ BP.UIGame = (function () {
     const html = state.heroes.map((h, i) => {
       const owner = state.players[h.owner];
       const readonly = h.owner !== myPid || state.phase !== "players" || !h.alive;
-      // Рука рассчитана на handSize карт. Больше — карты накладываются (как в Hearthstone), ширина не растёт.
-      const n = h.hand.length, gap = 8, hs = state.config.rules.handSize || 4;
+      // Рука рассчитана на drawPerTurn карт. Больше — карты накладываются (как в Hearthstone), ширина не растёт.
+      const n = h.hand.length, gap = 8, hs = state.config.rules.drawPerTurn || 4;
       const handW = Math.min(secW, Math.max(hs, 1) * z.cardW + (hs - 1) * gap);
       const over = n > 1 ? Math.min(gap, (handW - n * z.cardW) / (n - 1)) : gap;
       const cards = h.alive ? (h.hand.map((c, k) => cardHtml(state, h, c, ui, readonly, k ? over : 0)).join("") || `<span class="muted small">Рука пуста</span>`) : `<span class="muted">пал в бою</span>`;
