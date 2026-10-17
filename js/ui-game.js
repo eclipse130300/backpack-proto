@@ -146,6 +146,7 @@ BP.UIGame = (function () {
       <div class="cname">${esc(c.name)}</div>
       <div class="ctext">${esc(shortText(state, c))}</div>
       ${c.merged ? `<div class="cmerged">★${c.merged > 1 ? c.merged : ""}</div>` : ""}
+      ${BP.Gifts.isOn(state) && c.gift ? `<div class="cgift">🎁 ${esc(BP.Gifts.labels(state, c).own)}</div>` : ""}
       ${needsBtn ? `<button class="play-btn primary" data-act="play-self">▶ Сыграть</button>` : ""}
     </div>`;
   }

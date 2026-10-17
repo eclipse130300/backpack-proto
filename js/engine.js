@@ -261,6 +261,7 @@ BP.Engine = (function () {
       switch (ef.type) {
         case "block": { const to = tHero || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; }
         case "blockSelf": hero.block += ef.amount; notes.push(`+${ef.amount} блока себе`); break;
+        case "blockHero": { const to = state.heroes.find((x) => x.id === ef.hero && x.alive) || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; } // дар «Прикрытие»
         case "push": if (primary && primary.alive) notes.push(push(state, primary, t.dir, hero.id)); break;
         case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a, hero.id))); break;
         case "stun": if (primary && primary.alive) { primary.stunned = true; primary.intent = { type: "stunned" }; notes.push(`${primary.name} оглушён`); } break;
@@ -305,7 +306,7 @@ BP.Engine = (function () {
     const cost = C().mergeCost(state, hero, card); // растущая стоимость — tests.merge.costGrowth
     if (!canPay(state, hero, cost)) return `Мердж стоит ${cost} энергии — не хватает`;
     const before = clone(allyCard);
-    if (!C().mergeInto(state, card, allyCard)) return "Эти карты не совмещаются (нет общего урона/блока)";
+    if (!C().mergeInto(state, card, allyCard, hero.id)) return m.mode === "gift" ? "Этот дар карте союзника не подходит (или на ней уже 2 дара)" : "Эти карты не совмещаются (нет общего урона/блока)";
     payCost(state, hero, cost);
     const ts = state.turnStats;
     ts.merges[hero.id] = (ts.merges[hero.id] || 0) + 1; ts.mergesTotal++;

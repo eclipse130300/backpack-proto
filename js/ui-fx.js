@@ -127,6 +127,15 @@ BP.FX = (function () {
     return a.type;
   }
 
+  // Мердж «дар»: что карта отдаст союзнику и какие дары уже получила
+  function giftTip(s, c) {
+    if (!BP.Gifts.isOn(s)) return c.merged ? `<div class="tip-note">★ Усилена мерджем ×${c.merged}</div>` : "";
+    const g = BP.Gifts.labels(s, c), max = s.config.tests.merge.maxGifts || 2;
+    let out = g.own ? `<div class="tip-note">🎁 Дар союзнику: <b>${esc(g.own)}</b> — ${esc(g.ownText)}</div>` : `<div class="tip-note">🎁 У этой карты нет дара — союзнику её не отдать.</div>`;
+    if (g.got.length) out += `<div class="tip-note good">★ Получены дары (${g.got.length}/${max}): ${esc(g.got.join(", "))}</div>`;
+    return out;
+  }
+
   function tipHtml(s, el) {
     const kind = el.dataset.tip;
     if (kind === "card") {
@@ -142,7 +151,7 @@ BP.FX = (function () {
         ${c.questCard ? `<div class="tip-note good">Квестовая карта: одноразовая (после розыгрыша пропадает), в конце хода не сгорает.</div>` : ""}
         ${c.area === "adjacent" ? `<div class="tip-note">Бьёт клетку и все соседние (до 7 клеток).</div>` : ""}
         ${ci ? `<div class="tip-note ${ci.willCrit ? "good" : ""}">Крит ×${s.config.rules.critMultiplier} каждый ${ci.every}-й удар оружием «${esc(c.weaponName)}». ${ci.willCrit ? "<b>Эта карта критует!</b>" : `До крита: ${ci.left} уд.`}</div>` : ""}
-        ${c.merged ? `<div class="tip-note">★ Усилена мерджем ×${c.merged}</div>` : ""}`;
+        ${giftTip(s, c)}`;
     }
     if (kind === "enemy") {
       const e = s.enemies.find((x) => x.uid === el.dataset.enemy);

@@ -19,6 +19,7 @@ BP.Cards = (function () {
         case "damage": parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}`); break;
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
         case "blockSelf": parts.push(`себе ${e.amount} блока`); break;
+        case "blockHero": parts.push(`отдавшему дар ${e.amount} блока`); break;
         case "push": parts.push("толкнуть (выбор стороны)"); break;
         case "sparks": parts.push(`${e.count} искры по ${e.amount} в случайных соседних врагов (не в цель)`); break;
         case "stun": parts.push("оглушить (пропустит действие)"); break;
@@ -31,6 +32,7 @@ BP.Cards = (function () {
         case "damageAllEnemies": parts.push(`всем врагам ${e.amount} урона`); break;
       }
     });
+    if (BP.Gifts) parts.push(...BP.Gifts.textExtra(card)); // взрыв / повтор от даров (js/gifts.js)
     let t = parts.join(", ");
     t = t.charAt(0).toUpperCase() + t.slice(1);
     if (card.note) t += (t ? ". " : "") + card.note;
@@ -167,6 +169,7 @@ BP.Cards = (function () {
         hits.push({ enemy: e.uid, amount: base * mult, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "" });
       });
     }
+    if (BP.Gifts && (card.blast || card.repeat)) BP.Gifts.extraHits(state, hero, card, target, enemies, Math.max(0, dmgEff.amount - weakness(hero)), hits);
     if (commit && crit) crit.count = counter;
     return hits;
   }
@@ -197,6 +200,7 @@ BP.Cards = (function () {
   // ---------- Мердж ----------
   function canMerge(state, src, dst) {
     const m = state.config.tests.merge;
+    if (m.mode === "gift") return BP.Gifts.canMerge(state, src, dst); // дары — js/gifts.js
     const types = (c) => c.effects.map((e) => (e.type === "blockSelf" ? "block" : e.type));
     const d = types(dst);
     if (m.mode === "flat") return d.includes("damage") || d.includes("block");
@@ -204,8 +208,9 @@ BP.Cards = (function () {
     return (s.includes("damage") && d.includes("damage")) || (s.includes("block") && d.includes("block"));
   }
 
-  function mergeInto(state, src, dst) {
+  function mergeInto(state, src, dst, giverId) {
     const m = state.config.tests.merge;
+    if (m.mode === "gift") return BP.Gifts.mergeInto(state, src, dst, giverId);
     let changed = false;
     const srcDmg = src.effects.find((e) => e.type === "damage");
     const srcBlk = src.effects.find((e) => e.type === "block" || e.type === "blockSelf");

@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 8,
+  version: 9,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -40,14 +40,16 @@ window.GAME_CONFIG = {
 
     // Мердж = передача: перетащить свою карту на карту в руке союзника.
     // mode "add"  — карта союзника получает урон/блок твоей карты;
-    // mode "flat" — карта союзника получает +flatBonus к урону и блоку.
+    // mode "flat" — карта союзника получает +flatBonus к урону и блоку;
+    // mode "gift" — (по умолчанию, 18.10) «дар»: отданная карта передаёт карте союзника ОДНО свойство — свой родной дар
+    //   (поле gift у карты, список даров — gifts ниже). Полученные дары дальше не передаются. На карте максимум maxGifts даров.
     // payCost — платишь ли ты энергию своей карты за мердж.
     // costGrowth — растущая стоимость мерджа за ход (сбрасывается каждый ход, работает при payCost: true):
     //   "off"   — мердж стоит как карта;
     //   "hero"  — у каждого героя свой счётчик: n-й мердж героя за ход = стоимость карты + (n − 1);
     //   "party" — общий счётчик пати: n-й мердж за ход стоит n энергии (1, 2, 3…), стоимость карты не важна.
     // Стоимость мерджа видна пульсирующим фиолетовым ромбом на месте стоимости карт союзника, когда берёшь карту (их обычная стоимость в этот момент скрыта).
-    merge: { enabled: true, mode: "add", payCost: true, flatBonus: 3, costGrowth: "off" },
+    merge: { enabled: true, mode: "gift", maxGifts: 2, payCost: true, flatBonus: 3, costGrowth: "off" },
 
     // Общая колода: карты оружия и щита остаются у своего героя, все остальные (кооп-карты, слабые удары,
     // особые карты) лежат в одной общей колоде. Герой добирает руку случайно из «своё + общее» (шанс по количеству).
@@ -64,6 +66,23 @@ window.GAME_CONFIG = {
     // Фигуры массовок без поворота (17.10): у каждой массовки своя фигура (fixedShape у карты), ПКМ не крутит.
     // Фигуры из 3+ клеток симметричные и «смотрят» на героев. false — старый режим: фигуры shape, поворот ПКМ.
     fixedShapes: { enabled: true }
+  },
+
+  // ---------- Дары (мердж в режиме tests.merge.mode = "gift") ----------
+  // У карты поле gift — что она даст карте союзника, если её отдать. Нет поля — карту отдать нельзя (напр. оглушение).
+  // РЕШЕНО (18.10): бусты — только простые числа (50%, ×1.5, ×2, +1). Дробное округляем вверх.
+  // Мощь, Взрыв, Повтор, Броня, Прикрытие складываются по 50% (две Мощи = ×2). Остальные дары — только один раз на карту.
+  gifts: {
+    power:  { name: "Мощь",       text: "урон ×1.5" },
+    blast:  { name: "Взрыв",      text: "соседние с зоной клетки получают 50% урона" },
+    pierce: { name: "Пробой",     text: "враг за целью тоже получает 100% урона" },
+    repeat: { name: "Повтор",     text: "ещё один удар на 50% урона" },
+    push:   { name: "Толчок",     text: "толкнуть цель" },
+    sparks: { name: "Искры",      text: "+2 искры по 1 в соседних врагов" },
+    armor:  { name: "Броня",      text: "блок себе = 50% урона карты (у карты блока — блок ×1.5)" },
+    cover:  { name: "Прикрытие",  text: "блок отдавшему дар = 50% урона карты (у карты блока — блок ×1.5)" },
+    taunt:  { name: "Вызов",      text: "цель атакует тебя" },
+    range:  { name: "Дальность",  text: "мили-удар достаёт и закрытых врагов" }
   },
 
   // ---------- Фигуры массовых атак ----------
@@ -93,11 +112,13 @@ window.GAME_CONFIG = {
   // fixedShape: id фигуры из shapes, когда включён tests.fixedShapes (не крутится)
   // icon:   картинка на карте (см. js/icons.js). Цвет картинки — по типу карты: мили красный, дальний зелёный,
   //         массовка оранжевый, блок синий, кооп золотой, особые фиолетовый, слабый удар серый.
+  // gift:   дар карты для мерджа в режиме «дар» (id из gifts выше): что получит карта союзника, если отдать ему эту карту
   // weak:   true — слабый удар (серая картинка); у каждого оружия свой (weapons.*.weakCard)
   // effects: damage {amount, hits} | block {amount} | push | stun | taunt | cleanse
   //          sparks {count, amount} — после удара count искр по amount урона в случайных врагов на соседних с целью клетках
   //                 (не в саму цель; всегда ровно amount: без крита, мерджа и проклятия; нет соседей — искры пропадают)
   //          blockSelf {amount} (блок себе) | draw {amount} | energy {amount} (цели-герою или себе) | sharedPool
+  //          blockHero {amount, hero} — блок конкретному герою (так работает дар «Прикрытие»)
   //          blockParty {amount} (блок всем героям) | damageAllEnemies {amount} (урон всем врагам, без крита)
   // isNew:  true — значок 🆕 на странице «Карты» (cards.html): карта добавлена по заявке и ещё тестируется
   // added:  "17.10.2026" — когда добавлена (видно в подробностях карты на странице «Карты»)
@@ -106,37 +127,37 @@ window.GAME_CONFIG = {
     // Слабые удары оружия (17.10, эксперимент): ими добивается колода до minDeck. Двигают счётчик крита своего оружия.
     weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee",  weak: true, effects: [{ type: "damage", amount: 3 }] },
     weak_shot:     { name: "Слабый выстрел",    cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 2 }], isNew: true, added: "17.10.2026" },
-    sparks:        { name: "Искры",             cost: 1, icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 1 }, { type: "sparks", count: 2, amount: 1 }], isNew: true, added: "17.10.2026" },
+    sparks:        { name: "Искры",             cost: 1, gift: "sparks", icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 1 }, { type: "sparks", count: 2, amount: 1 }], isNew: true, added: "17.10.2026" },
 
     // Меч
-    cleave:        { name: "Рубящий удар",      cost: 1, icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
-    sweep:         { name: "Размах",            cost: 2, icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "across2", effects: [{ type: "damage", amount: 8 }] },
-    great_sweep:   { name: "Мощный размах",     cost: 2, icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "arc5", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
-    crush:         { name: "Сокрушение",        cost: 2, icon: "crush",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 13 }] },
+    cleave:        { name: "Рубящий удар",      cost: 1, gift: "range", icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
+    sweep:         { name: "Размах",            cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "across2", effects: [{ type: "damage", amount: 8 }] },
+    great_sweep:   { name: "Мощный размах",     cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "arc5", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
+    crush:         { name: "Сокрушение",        cost: 2, gift: "power", icon: "crush",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 13 }] },
 
     // Щит
-    shield_bash:   { name: "Удар щитом",        cost: 1, icon: "bash",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 4 }, { type: "push" }] },
-    shield_wall:   { name: "Стена щитов",       cost: 1, icon: "shield", target: "self",  effects: [{ type: "block", amount: 7 }] },
+    shield_bash:   { name: "Удар щитом",        cost: 1, gift: "push", icon: "bash",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 4 }, { type: "push" }] },
+    shield_wall:   { name: "Стена щитов",       cost: 1, gift: "armor", icon: "shield", target: "self",  effects: [{ type: "block", amount: 7 }] },
 
     // Посох
-    bolt:          { name: "Разряд",            cost: 1, icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
-    fireball:      { name: "Огненный шар",      cost: 2, icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
+    bolt:          { name: "Разряд",            cost: 1, gift: "range", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
+    fireball:      { name: "Огненный шар",      cost: 2, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
     stun_bolt:     { name: "Оглушающий разряд", cost: 2, icon: "stun",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
-    flame_wall:    { name: "Стена огня",        cost: 2, icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
-    nova:          { name: "Огненное кольцо",   cost: 2, icon: "nova",   target: "cell",  attack: "aoe", area: "adjacent", effects: [{ type: "damage", amount: 6 }] },
+    flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
+    nova:          { name: "Огненное кольцо",   cost: 2, gift: "blast", icon: "nova",   target: "cell",  attack: "aoe", area: "adjacent", effects: [{ type: "damage", amount: 6 }] },
 
     // Лук
-    double_shot:   { name: "Двойной выстрел",   cost: 1, icon: "arrows", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3, hits: 2 }] },
-    pierce_arrow:  { name: "Пробивающая стрела", cost: 2, icon: "pierce", target: "enemy", attack: "ranged", area: "line", effects: [{ type: "damage", amount: 7 }] },
-    knock_arrow:   { name: "Отбрасывающая стрела", cost: 1, icon: "knock", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "push" }] },
-    arrow_rain:    { name: "Град стрел",        cost: 2, icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
-    aimed_shot:    { name: "Прицельный выстрел", cost: 2, icon: "aim",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 10 }] },
+    double_shot:   { name: "Двойной выстрел",   cost: 1, gift: "repeat", icon: "arrows", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3, hits: 2 }] },
+    pierce_arrow:  { name: "Пробивающая стрела", cost: 2, gift: "pierce", icon: "pierce", target: "enemy", attack: "ranged", area: "line", effects: [{ type: "damage", amount: 7 }] },
+    knock_arrow:   { name: "Отбрасывающая стрела", cost: 1, gift: "push", icon: "knock", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "push" }] },
+    arrow_rain:    { name: "Град стрел",        cost: 2, gift: "blast", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
+    aimed_shot:    { name: "Прицельный выстрел", cost: 2, gift: "power", icon: "aim",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 10 }] },
 
     // Кооп-сейвы
-    cover:         { name: "Прикрыть",          cost: 1, icon: "cover",   target: "hero",  effects: [{ type: "block", amount: 6 }] },
-    challenge:     { name: "Вызов",             cost: 1, icon: "taunt",   target: "enemy", attack: "ranged", effects: [{ type: "taunt" }, { type: "blockSelf", amount: 4 }] },
+    cover:         { name: "Прикрыть",          cost: 1, gift: "cover", icon: "cover",   target: "hero",  effects: [{ type: "block", amount: 6 }] },
+    challenge:     { name: "Вызов",             cost: 1, gift: "taunt", icon: "taunt",   target: "enemy", attack: "ranged", effects: [{ type: "taunt" }, { type: "blockSelf", amount: 4 }] },
     purify:        { name: "Очищение",          cost: 1, icon: "purify",  target: "hero",  effects: [{ type: "cleanse" }, { type: "block", amount: 3 }] },
-    barrier:       { name: "Барьер",            cost: 1, icon: "barrier", target: "hero",  effects: [{ type: "block", amount: 5 }] },
+    barrier:       { name: "Барьер",            cost: 1, gift: "armor", icon: "barrier", target: "hero",  effects: [{ type: "block", amount: 5 }] },
 
     // «Единение» — только награда квеста (см. questRewards), отдельной настройки нет.
     unity:         { name: "Единение",          cost: 0, icon: "unity", target: "none",  effects: [{ type: "sharedPool" }], note: "Остаток энергии всех героев складывается, любой тратит из пула" },
