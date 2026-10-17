@@ -20,6 +20,7 @@ BP.Cards = (function () {
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
         case "blockSelf": parts.push(`себе ${e.amount} блока`); break;
         case "push": parts.push("толкнуть (выбор стороны)"); break;
+        case "sparks": parts.push(`${e.count} искры по ${e.amount} в случайных соседних врагов (не в цель)`); break;
         case "stun": parts.push("оглушить (пропустит действие)"); break;
         case "taunt": parts.push("враг атакует тебя"); break;
         case "cleanse": parts.push("снять проклятия"); break;
@@ -249,7 +250,7 @@ BP.Cards = (function () {
   function kind(card) {
     const t = (card.effects || []).map((e) => e.type);
     if (t.includes("sharedPool") || card.questCard || /^q_/.test(card.id || "")) return "special";
-    if (card.id === "weak_strike") return "filler";
+    if (card.weak || card.adaptive) return "filler";
     if (card.target === "hero" || card.target === "ally" || t.includes("taunt") || t.includes("cleanse")) return "coop";
     if (card.attack === "aoe") return "aoe";
     if (card.attack) return card.attack;

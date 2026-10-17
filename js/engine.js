@@ -77,9 +77,8 @@ BP.Engine = (function () {
       (hc.weapons || []).forEach((w) => { if (cfg.weapons[w] && cfg.weapons[w].critEvery > 0) h.crit[w] = { every: cfg.weapons[w].critEvery, count: 0 }; });
       h.stats = { cards: 0, energy: 0, damage: 0, blockGiven: 0, merges: 0, taken: 0 };
     });
-    BP.Deck.buildFight(state, makeCard); // колоды героев (и общая), особые карты — js/deck.js
+    BP.Deck.buildFight(state, makeCard); // колоды героев (и общая) — js/deck.js
     state.fightStats = { collisions: 0, turns: 0, taskDone: false, crits: 0, aoeBest: 0 };
-    BP.Quests.setup(state); // квест боя (tests.fightQuest) — js/quests.js
     state.task = null;
     if (cfg.tests.partyTask.enabled && enc.task) {
       const ids = Object.keys(cfg.tasks);
@@ -88,6 +87,8 @@ BP.Engine = (function () {
     }
     state.summary = null;
     log(state, "—", `Бой ${index + 1}: ${enc.name}`);
+    // квест боя (tests.fightQuest): сначала голосование за 1 из 3 — фаза questPick, бой начнётся после выбора (js/quests.js)
+    if (BP.Quests.offer(state)) { state.phase = "questPick"; return; }
     startPlayerTurn(state);
   }
 
@@ -149,6 +150,7 @@ BP.Engine = (function () {
     }
     if (e.hp <= 0) {
       e.hp = 0; e.alive = false; state.turnStats.kills++;
+      if (state.playKills) state.playKills.push(e.uid); // для квестов: кого убила текущая карта
       log(state, e.name, "погиб");
     }
     return amount;
@@ -242,6 +244,7 @@ BP.Engine = (function () {
     if (!payCost(state, hero, card.cost)) return "Не хватает энергии";
 
     hero.hand = hero.hand.filter((c) => c.uid !== card.uid);
+    state.playKills = [];
     log(state, hero.name, `сыграл «${card.name}»`, { card: card.id, cost: card.cost });
     const entry = state.log[state.log.length - 1];
     const notes = [];
@@ -265,6 +268,7 @@ BP.Engine = (function () {
         case "block": { const to = tHero || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; }
         case "blockSelf": hero.block += ef.amount; notes.push(`+${ef.amount} блока себе`); break;
         case "push": if (primary && primary.alive) notes.push(push(state, primary, t.dir, hero.id)); break;
+        case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a, hero.id))); break;
         case "stun": if (primary && primary.alive) { primary.stunned = true; primary.intent = { type: "stunned" }; notes.push(`${primary.name} оглушён`); } break;
         case "taunt": if (primary && primary.alive && retarget(state, primary, hero.id)) notes.push(`${primary.name} теперь целит в ${hero.name}`); break;
         case "cleanse": if (tHero) { tHero.debuffs = []; notes.push(`${tHero.name} очищен`); } break;
@@ -291,7 +295,8 @@ BP.Engine = (function () {
     BP.Deck.discard(state, hero, card); // квестовая (exhaust) карта не сбрасывается — пропадает
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
-    const qn = BP.Quests.afterPlay(state, hero, card, hits); // квест боя: прогресс и награда
+    const qn = BP.Quests.afterPlay(state, hero, card, hits, t); // квест боя: прогресс и награда
+    state.playKills = null;
     if (qn) notes.push(qn);
     entry.detail = notes.filter(Boolean).join("; ");
     afterChange(state, false);
@@ -381,7 +386,7 @@ BP.Engine = (function () {
 
   function makeSummary(state, win) {
     return {
-      win, fight: state.fightIndex + 1, name: state.config.encounters[state.fightIndex].name,
+      id: state.seq++, win, fight: state.fightIndex + 1, name: state.config.encounters[state.fightIndex].name,
       turns: state.turn, collisions: state.fightStats.collisions,
       task: state.task ? { text: state.task.text, done: state.task.done } : null,
       quest: state.quest ? { text: state.quest.text, done: state.quest.done } : null,
@@ -464,6 +469,7 @@ BP.Engine = (function () {
       h.debuffs.forEach((d) => d.turns--);
       h.debuffs = h.debuffs.filter((d) => d.turns > 0);
     });
+    BP.Quests.afterEnemies(state); // квест «ход врагов без потери ХП»
     if (!checkFightEnd(state)) startPlayerTurn(state);
   }
 
@@ -511,6 +517,14 @@ BP.Engine = (function () {
         if (allReady(state)) endPlayerTurn(state);
         return null;
       }
+      case "questVote": // голос за квест перед боем (js/quests.js)
+        if (state.phase !== "questPick") return "Сейчас не выбор квеста";
+        if (!requiredPlayers(state).includes(pid)) return "Вы не управляете героями";
+        return BP.Quests.vote(state, pid, act.idx);
+      case "questStart": // хост после анимации выбора начинает бой
+        if (!isHost || state.phase !== "questPick") return "Нельзя";
+        if (!BP.Quests.start(state)) return "Квест ещё не выбран";
+        startPlayerTurn(state); return null;
       case "forceEnd":
         if (!isHost || state.phase !== "players") return "Только хост";
         endPlayerTurn(state); return null;

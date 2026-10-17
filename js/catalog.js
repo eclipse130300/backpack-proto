@@ -51,15 +51,20 @@ BP.Catalog = (function () {
       Object.entries(w.cards || {}).forEach(([cid, n]) => add(cid, { type: "weapon", wid, label: w.name, n, heroes }));
     });
     cfg.heroes.forEach((h) => Object.entries(h.cards || {}).forEach(([cid, n]) => add(cid, { type: "hero", label: h.name, n, heroes: [h.name] })));
-    ((cfg.tests.specialCards || {}).pool || []).forEach((cid) => add(cid, { type: "special", label: "особая (тест)", n: 1, heroes: [] }));
     (cfg.questRewards || []).forEach((cid) => add(cid, { type: "quest", label: "награда квеста", n: 1, heroes: [] }));
-    if (cfg.rules.fillerCard) add(cfg.rules.fillerCard, { type: "filler", label: "добивка колоды", n: 0, heroes: [] });
+    // добивка колоды: слабый удар каждого оружия (у героев с этим оружием) и запасная rules.fillerCard
+    Object.entries(cfg.weapons || {}).forEach(([wid, w]) => {
+      if (!w.weakCard) return;
+      const heroes = cfg.heroes.filter((h) => (h.weapons || []).includes(wid)).map((h) => h.name);
+      add(w.weakCard, { type: "filler", label: "добивка: " + w.name, n: 0, heroes });
+    });
+    if (cfg.rules.fillerCard && !map[cfg.rules.fillerCard]) add(cfg.rules.fillerCard, { type: "filler", label: "добивка колоды", n: 0, heroes: [] });
     return map;
   }
 
   function srcText(c) {
     if (!c.src.length) return "не в колодах";
-    return c.src.map((s) => s.type === "filler" ? "добивка" : s.type === "special" ? "особая" : s.type === "quest" ? "награда квеста" : `${s.label}${s.n > 1 ? " ×" + s.n : ""}`).join(", ");
+    return c.src.map((s) => s.type === "filler" ? s.label : s.type === "special" ? "особая" : s.type === "quest" ? "награда квеста" : `${s.label}${s.n > 1 ? " ×" + s.n : ""}`).join(", ");
   }
 
   // Простая «сила» карты: урон / блок и сколько это на 1 энергию
@@ -89,9 +94,8 @@ BP.Catalog = (function () {
         out.push({ key: "w:" + wid, title: w.name, icon: w.icon, sub, cards: cards.filter((c) => c.src.some((s) => s.wid === wid)) });
       });
       out.push({ key: "hero", title: "Кооп-карты героев", sub: "доп. карты сверх оружия", cards: cards.filter((c) => c.src.some((s) => s.type === "hero")) });
-      out.push({ key: "special", title: "Особые карты", sub: "тесты: раздаются по одной за бой", cards: cards.filter((c) => c.src.some((s) => s.type === "special")) });
       out.push({ key: "quest", title: "Награды квеста боя", sub: "одноразовые, получает герой, выполнивший квест", cards: cards.filter((c) => c.src.some((s) => s.type === "quest")) });
-      out.push({ key: "filler", title: "Добивка колоды", sub: `до ${cfg.rules.minDeck} карт`, cards: cards.filter((c) => c.src.some((s) => s.type === "filler")) });
+      out.push({ key: "filler", title: "Добивка колоды", sub: `слабые удары оружия, до ${cfg.rules.minDeck} карт`, cards: cards.filter((c) => c.src.some((s) => s.type === "filler")) });
       out.push({ key: "none", title: "Не в колодах", sub: "есть в конфиге, но ни у кого не лежит", cards: cards.filter((c) => !c.src.length) });
     } else if (ui.group === "type") {
       ["melee", "ranged", "aoe", "block", "coop", "special", "filler"].forEach((k) =>

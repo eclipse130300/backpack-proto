@@ -22,6 +22,8 @@ BP.Icons = (function () {
     sweep: `<path d="M6 46 C12 16 52 16 58 46" ${S}/><polygon points="58,48 49,38 62,36" ${F}/><path d="M29 10 H35 V38 H29 Z" ${F}/><path d="M23 40 H41 M32 42 V56" ${S}/>`,
     crush: `<path d="M27 4 H37 V36 H27 Z" ${F}/><path d="M18 36 H46 M32 38 V50" ${S}/><path d="M10 58 H54 M14 52 L6 46 M50 52 L58 46" ${S}/>`,
     bolt: `<path d="M36 4 L14 36 H30 L24 60 L50 24 H34 Z" ${F}/>`,
+    sparks: `<path d="M34 10 L20 34 H31 L26 54 L44 28 H33 Z" ${F}/><path d="M10 14 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z" ${F}/><path d="M54 40 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z" ${F}/>`,
+    arrow: arrow(8, 44, 56, 20),
     fire: flame(0, 0, 1),
     stun: `<path d="M32 32 m-4 0 a4 4 0 1 1 8 0 a9 9 0 1 1 -18 0 a14 14 0 1 1 28 0 a19 19 0 1 1 -38 0" ${S}/><path d="M50 8 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z" ${F}/>`,
     flames: `${flame(-2, 14, 0.55)}${flame(17, 8, 0.6)}${flame(36, 14, 0.55)}<path d="M4 60 H60" ${S}/>`,

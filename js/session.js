@@ -106,6 +106,19 @@ BP.Session = (function () {
       Object.values(S.conns).forEach((c) => c.send({ t: "state", state: pub }));
     }
     emit();
+    maybeStartQuestFight();
+  }
+
+  // Квест выбран — ждём, пока у всех доиграет анимация выбора (рулетка при ничьей), и начинаем бой
+  function maybeStartQuestFight() {
+    const s = S.state;
+    if (S.role === "client" || !s || s.phase !== "questPick" || !s.questPick || !s.questPick.result) return;
+    const res = s.questPick.result;
+    if (S.questTimer === res) return;
+    S.questTimer = res;
+    setTimeout(() => {
+      if (S.state === s && s.phase === "questPick" && s.questPick && s.questPick.result === res) hostApply(S.myPid, { a: "questStart" });
+    }, res.ms);
   }
 
   // Начать заново (с тем же составом игроков и героев) — после смены конфига или поражения

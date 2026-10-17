@@ -1,6 +1,7 @@
 // Колоды: сборка на бой, добор, сброс. Два режима:
-//  - обычный: у каждого героя своя колода (оружие + щит + его доп. карты + слабые удары до minDeck);
-//  - общая колода (tests.sharedDeck): у героя только карты оружия и щита, остальное — в state.shared.
+//  - обычный: у каждого героя своя колода (оружие + щит + его доп. карты + слабые удары его оружия до minDeck);
+//  - общая колода (tests.sharedDeck): у героя только карты оружия и щита, остальное — в state.shared
+//    (слабые удары там подстраиваются под героя, который их вытянул).
 // У каждой карты: owner = id героя (карта героя) или shared = true (общая).
 window.BP = window.BP || {};
 
@@ -23,45 +24,28 @@ BP.Deck = (function () {
     return list;
   }
 
-  // Особые карты на бой: perFight разных карт из пула (только с включённым тестом), без копий
-  function specialCards(cfg) {
-    const sc = cfg.tests.specialCards || {};
-    const allowed = (cid) => {
-      const c = cfg.cards[cid];
-      if (!c) return false;
-      const types = (c.effects || []).map((e) => e.type);
-      if (types.includes("sharedPool")) return !!(cfg.tests.sharedPool && cfg.tests.sharedPool.enabled);
-      return true;
-    };
-    const pool = shuffle([...new Set((sc.pool || []).filter(allowed))]);
-    return pool.slice(0, Math.max(0, sc.perFight || 0));
-  }
-
-  // Собрать колоды всех героев (и общую) в начале боя
+  // Собрать колоды всех героев (и общую) в начале боя.
+  // Добивка до минимума — слабые удары оружия героя (js/weak.js); в общей колоде — «слабый удар», который подстроится.
   function buildFight(state, makeCard) {
     const cfg = state.config, shared = isShared(state);
-    const fill = (list, min) => { while (list.length < min) list.push({ cardId: cfg.rules.fillerCard }); return list; };
-    const specials = specialCards(cfg);
     const pool = [];
     state.heroes.forEach((h, i) => {
       const hc = cfg.heroes[i];
       let own = weaponCards(cfg, hc);
       if (shared) pool.push(...extraCards(hc));
-      else own = fill(own.concat(extraCards(hc)), cfg.rules.minDeck);
+      else {
+        own = own.concat(extraCards(hc));
+        const f = BP.Weak.fillerFor(cfg, hc);
+        while (own.length < cfg.rules.minDeck) own.push(f);
+      }
       h.draw = own.map((d) => Object.assign(makeCard(state, d.cardId, d.weapon), { owner: h.id }));
       h.hand = []; h.discard = [];
     });
     if (shared) {
-      specials.forEach((cid) => pool.push({ cardId: cid }));
-      fill(pool, cfg.tests.sharedDeck.minDeck || 0);
-      state.shared = { draw: shuffle(pool.map((d) => Object.assign(makeCard(state, d.cardId), { shared: true }))), discard: [] };
-    } else {
-      state.shared = null;
-      specials.forEach((cid) => {
-        const h = state.heroes[Math.floor(Math.random() * state.heroes.length)];
-        h.draw.push(Object.assign(makeCard(state, cid), { owner: h.id }));
-      });
-    }
+      const cards = pool.map((d) => makeCard(state, d.cardId));
+      while (cards.length < (cfg.tests.sharedDeck.minDeck || 0)) cards.push(BP.Weak.placeholder(state, makeCard(state, cfg.rules.fillerCard)));
+      state.shared = { draw: shuffle(cards.map((c) => Object.assign(c, { shared: true }))), discard: [] };
+    } else state.shared = null;
     state.heroes.forEach((h) => shuffle(h.draw));
   }
 
@@ -83,7 +67,7 @@ BP.Deck = (function () {
       const total = hero.draw.length + sh.draw.length;
       if (!total) return;
       const fromOwn = Math.random() * total < hero.draw.length;
-      hero.hand.push(fromOwn ? hero.draw.pop() : sh.draw.pop());
+      hero.hand.push(fromOwn ? hero.draw.pop() : BP.Weak.adapt(state, hero, sh.draw.pop()));
     }
   }
 

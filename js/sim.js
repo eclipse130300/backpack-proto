@@ -196,6 +196,11 @@ BP.Sim = (function () {
     let cur = { hpStart: s.heroes.reduce((a, h) => a + h.hp, 0) };
     const turnFn = BOT_TURN[bot];
     for (let guard = 0; guard < 400; guard++) {
+      if (s.phase === "questPick") { // квест перед боем: бот выбирает случайно
+        act(s, { a: "questVote", idx: Math.floor(Math.random() * s.questPick.options.length) });
+        act(s, { a: "questStart" });
+        continue;
+      }
       if (s.phase === "players") {
         if (s.turn > 30) { s.phase = "lost"; continue; }
         s.heroes.forEach((h) => { if (h.alive) h.hand.forEach((c) => cc(c.id).seen++); });

@@ -8,15 +8,16 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 5,
+  version: 6,
 
   // ---------- Базовые правила боя ----------
   rules: {
     cols: 6, rows: 2,            // поле врагов 6×2: 6 колонок по 2 клетки (передняя и задняя строго друг за другом)
     handSize: 4,                 // добор руки до N карт в начале хода (рука рассчитана на 4 карты, больше — карты накладываются)
     energy: 3,                   // энергия героя каждый ход
-    minDeck: 10,                 // минимум карт в колоде; недобор = слабые удары
-    fillerCard: "weak_strike",   // какой картой добивать колоду до минимума
+    minDeck: 10,                 // минимум карт в колоде; недобор = слабые удары ОРУЖИЯ героя (weapons.*.weakCard)
+    fillerCard: "weak_strike",   // запасная добивка: герою без weakCard у оружия; в общей колоде — «слабый удар», который подстраивается под вытянувшего героя
+    endFightDelayMs: 2500,       // после конца боя экран ~2.5 с заблокирован (досмотреть цифры урона), потом окно итогов
     critMultiplier: 2,           // множитель крита
     conditionalCrit: true,       // x2 по оглушённому или вытолкнутому в этот ход
     collisionDamage: 3,          // урон при столкновении после толчка (обоим)
@@ -53,19 +54,16 @@ window.GAME_CONFIG = {
     // Карты героя подсвечены его цветом, общие — бирюзовой полосой «общая».
     sharedDeck: { enabled: false, minDeck: 12 },
 
-    // Особые карты («Единение»): perFight разных карт за бой на всю пати, без копий,
-    // каждая — случайному герою (или в общую колоду). Берутся из pool, только те, чей тест включён.
-    specialCards: { perFight: 1, pool: ["unity"] },
-
     // Задача пати на бой: у каждого боя есть задача (см. tasks и encounters), бонус всем.
     partyTask: { enabled: true },
 
-    // Общий пул энергии — только как эффект карты «Единение» (раздаётся как особая карта, см. specialCards).
+    // Общий пул энергии — только как эффект карты «Единение» (сейчас она бывает только наградой квеста, см. questRewards).
     sharedPool: { enabled: true },
 
-    // Квест боя (17.10, заменил «Клятвы»): над полем врагов висит «?». Серый — квест не выполнен, золотой — выполнен.
+    // Квест боя (17.10, заменил «Клятвы»): перед боем игроки голосуют за 1 из 3 случайных квестов (у каждого своя награда).
+    // Ничья — рулетка выбирает случайно. Во время боя над полем висит «?»: серый — не выполнен, золотой — выполнен.
     // Условие — на весь бой, с прогрессом. Герой, который закрыл условие, сразу получает в руку квестовую карту:
-    // одноразовую (сыграл — пропала) и не сгорающую в конце хода. Условие и награда случайные, см. questConditions/questRewards.
+    // одноразовую (сыграл — пропала) и не сгорающую в конце хода. Условия и награды — questConditions/questRewards.
     fightQuest: { enabled: true },
 
     // Фигуры массовок без поворота (17.10): у каждой массовки своя фигура (fixedShape у карты), ПКМ не крутит.
@@ -100,14 +98,20 @@ window.GAME_CONFIG = {
   // fixedShape: id фигуры из shapes, когда включён tests.fixedShapes (не крутится)
   // icon:   картинка на карте (см. js/icons.js). Цвет картинки — по типу карты: мили красный, дальний зелёный,
   //         массовка оранжевый, блок синий, кооп золотой, особые фиолетовый, слабый удар серый.
+  // weak:   true — слабый удар (серая картинка); у каждого оружия свой (weapons.*.weakCard)
   // effects: damage {amount, hits} | block {amount} | push | stun | taunt | cleanse
+  //          sparks {count, amount} — после удара count искр по amount урона в случайных врагов на соседних с целью клетках
+  //                 (не в саму цель; всегда ровно amount: без крита, мерджа и проклятия; нет соседей — искры пропадают)
   //          blockSelf {amount} (блок себе) | draw {amount} | energy {amount} (цели-герою или себе) | sharedPool
   //          blockParty {amount} (блок всем героям) | damageAllEnemies {amount} (урон всем врагам, без крита)
   // isNew:  true — значок 🆕 на странице «Карты» (cards.html): карта добавлена по заявке и ещё тестируется
   // added:  "17.10.2026" — когда добавлена (видно в подробностях карты на странице «Карты»)
   // Все карты удобно смотреть на странице «Карты»: https://eclipse130300.github.io/backpack-proto/cards.html
   cards: {
-    weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 3 }] },
+    // Слабые удары оружия (17.10, эксперимент): ими добивается колода до minDeck. Двигают счётчик крита своего оружия.
+    weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee",  weak: true, effects: [{ type: "damage", amount: 3 }] },
+    weak_shot:     { name: "Слабый выстрел",    cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 2 }], isNew: true, added: "17.10.2026" },
+    sparks:        { name: "Искры",             cost: 1, icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 1 }, { type: "sparks", count: 2, amount: 1 }], isNew: true, added: "17.10.2026" },
 
     // Меч
     cleave:        { name: "Рубящий удар",      cost: 1, icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
@@ -139,7 +143,7 @@ window.GAME_CONFIG = {
     purify:        { name: "Очищение",          cost: 1, icon: "purify",  target: "hero",  effects: [{ type: "cleanse" }, { type: "block", amount: 3 }] },
     barrier:       { name: "Барьер",            cost: 1, icon: "barrier", target: "hero",  effects: [{ type: "block", amount: 5 }] },
 
-    // Тестовые карты (попадают в колоды, только если тест включён). «Единение» ещё и одна из наград квеста.
+    // «Единение» — только награда квеста (tests.sharedPool должен быть включён).
     unity:         { name: "Единение",          cost: 0, icon: "unity", target: "none",  effects: [{ type: "sharedPool" }], note: "Остаток энергии всех героев складывается, любой тратит из пула" },
 
     // Награды квеста боя (tests.fightQuest): одноразовые карты, в колоды не попадают
@@ -154,16 +158,18 @@ window.GAME_CONFIG = {
   // РЕШЕНО: щит — отдельный тип снаряжения. Оружием наносишь урон, щитом защищаешься.
   // kind: "weapon" — оружие | "shield" — щит. icon — значок у героя (см. js/icons.js).
   // critEvery — крит раз в N ударов этим оружием; счётчик живёт весь бой. Сколько осталось — пишется на карте. 0 — без крита.
+  // weakCard — слабый удар этого оружия: им добивается колода героя до rules.minDeck (берётся первое оружие героя с weakCard).
+  // У щита слабого удара нет (щиты разберём позже).
   // Пока щит только у милишника (щиты разберём позже).
   weapons: {
-    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, cards: { cleave: 2, sweep: 1, great_sweep: 1, crush: 1 } },
+    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, weakCard: "weak_strike", cards: { cleave: 2, sweep: 1, great_sweep: 1, crush: 1 } },
     shield: { name: "Щит",   kind: "shield", icon: "w_shield", critEvery: 0, cards: { shield_bash: 1, shield_wall: 1 } },
-    staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, nova: 1 } },
-    bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1 } }
+    staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, weakCard: "sparks", cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, nova: 1 } },
+    bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, weakCard: "weak_shot", cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1 } }
   },
 
   // ---------- Герои ----------
-  // Классов нет: колода = карты оружия и щита + доп. карты (cards) + слабые удары до минимума.
+  // Классов нет: колода = карты оружия и щита + доп. карты (cards) + слабые удары своего оружия до минимума.
   // В режиме общей колоды (tests.sharedDeck) доп. карты героя уходят в общую колоду.
   // hp — макс. ХП (переносится между боями, лечения нет).
   // startBlock — запас блока на бой: тратится после обычного блока, между ходами не восстанавливается, обновляется в начале боя.
@@ -205,17 +211,28 @@ window.GAME_CONFIG = {
   },
 
   // ---------- Квест боя (tests.fightQuest) ----------
-  // В начале боя берутся случайное условие и случайная награда. Условие — на весь бой.
+  // Перед боем — 3 разных случайных условия, у каждого своя случайная награда; игроки голосуют. Условие — на весь бой.
   // condition: killMarked (убить отмеченного 🎯 врага) | aoeHits {count} (задеть N врагов одной массовкой)
   //            collisions {count} (столкновений толчками за бой) | focusTurn {count} (N героев бьют одного врага за ход)
-  //            crits {count} (критов за бой)
+  //            crits {count} (критов за бой) | stuns {count} (оглушений) | killsTurn {count} (убийств за один ход)
+  //            backKills {count} (убить заднего врага, пока передний его прикрывает) | pushes {count} (толчков)
+  //            cleanEnemyTurn (ход врагов, после которого ни у кого не убыло ХП; карту получает случайный живой герой)
+  //            mergeKills {count} (убийств картой с ★) | weakKills {count} (убийств слабым ударом)
   // Награда — id карты из cards: её получает в руку герой, закрывший условие. Карта одноразовая.
   questConditions: {
     marked:    { text: "Убейте отмеченного врага 🎯", condition: { type: "killMarked" } },
     aoe3:      { text: "Задейте 3 врагов одной массовкой", condition: { type: "aoeHits", count: 3 } },
     collision: { text: "Устройте столкновение толчком", condition: { type: "collisions", count: 1 } },
     focus2:    { text: "Два героя бьют одного врага за один ход", condition: { type: "focusTurn", count: 2 } },
-    crit2:     { text: "Нанесите 2 крита", condition: { type: "crits", count: 2 } }
+    crit2:     { text: "Нанесите 2 крита", condition: { type: "crits", count: 2 } },
+    // 17.10: новые условия
+    stun2:     { text: "Оглушите 2 врагов", condition: { type: "stuns", count: 2 } },
+    kills2:    { text: "Убейте 2 врагов за один ход", condition: { type: "killsTurn", count: 2 } },
+    backKill:  { text: "Убейте врага заднего ряда, пока его прикрывают", condition: { type: "backKills", count: 1 } },
+    push3:     { text: "Толкните врагов 3 раза", condition: { type: "pushes", count: 3 } },
+    noHit:     { text: "Переживите ход врагов: никто из героев не теряет ХП", condition: { type: "cleanEnemyTurn", count: 1 } },
+    mergeKill: { text: "Убейте врага усиленной (мердж ★) картой", condition: { type: "mergeKills", count: 1 } },
+    weakKill:  { text: "Добейте врага слабым ударом", condition: { type: "weakKills", count: 1 } }
   },
   questRewards: ["q_surge", "q_insight", "q_gift", "q_bulwark", "q_wave", "unity"],
 

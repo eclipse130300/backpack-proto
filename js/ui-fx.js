@@ -203,11 +203,19 @@ BP.FX = (function () {
     return null;
   }
 
-  // Тултип ставим рядом с курсором туда, где он меньше всего закрывает стрелки намерений
-  function placeTip() {
+  // Тултип карты в руке — всегда над блоком руки героя (не закрывает ни саму карту, ни соседние).
+  // Остальные тултипы — рядом с курсором, там, где они меньше всего закрывают стрелки намерений.
+  function placeTip(el) {
     if (!tip || tip.style.display === "none") return;
     const w = tip.offsetWidth, h = tip.offsetHeight, W = window.innerWidth, H = window.innerHeight;
     const clamp = (x, y) => ({ x: Math.max(8, Math.min(x, W - w - 8)), y: Math.max(8, Math.min(y, H - h - 8)) });
+    const sec = el && el.dataset.tip === "card" ? el.closest(".hsec") : null;
+    if (sec) {
+      const r = el.getBoundingClientRect(), sr = sec.getBoundingClientRect();
+      const p = clamp(r.left + r.width / 2 - w / 2, Math.min(sr.top, r.top) - h - 10); // карта при наведении приподнимается
+      tip.style.left = p.x + "px"; tip.style.top = p.y + "px";
+      return;
+    }
     const cands = [[mx + 18, my + 18], [mx - w - 18, my + 18], [mx + 18, my - h - 14], [mx - w - 18, my - h - 14], [mx + 24, my - h / 2], [mx - w - 24, my - h / 2]].map(([x, y]) => clamp(x, y));
     let best = cands[0], bestScore = Infinity;
     cands.forEach((c, i) => {
@@ -254,7 +262,7 @@ BP.FX = (function () {
       if (html) { tip.innerHTML = html; tip.style.display = "block"; } else tip.style.display = "none";
     }
     drawArrows(arrowPairs(s, el));
-    placeTip();
+    placeTip(el);
   }
 
   function afterRender(s) {

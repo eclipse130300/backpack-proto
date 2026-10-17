@@ -339,3 +339,39 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
   4% { translate: -5px 0; } 8% { translate: 5px 0; } 12% { translate: -3px 0; } 16% { translate: 0 0; }
   100% { box-shadow: 0 0 10px #ff3b2466; } }
 .hex-ghost.beyond-back span { font-size: calc(var(--hw) * 0.22); }
+
+/* ---------- Конец боя: короткая блокировка ввода перед итогами ---------- */
+.end-block { position: fixed; inset: 0; z-index: 190; cursor: wait; background: transparent; }
+
+/* ---------- Выбор квеста перед боем (на месте рук) ---------- */
+.handbar.qpick { grid-template-rows: auto 1fr; }
+.qpick-head { grid-column: 1 / -1; text-align: center; color: var(--gold); font-weight: 700; font-size: 15px; }
+.qopt { position: relative; border: 2px solid #6a3a2a; border-radius: 10px; background: #1d0e0bcc; padding: 8px 10px 8px 44px; display: flex; flex-direction: column; gap: 5px; min-width: 0; overflow: hidden; transition: background .12s, border-color .12s; }
+.qopt.mine { border-color: var(--gold); }
+.qopt .qnum { position: absolute; left: 8px; top: 8px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--gold); color: var(--gold); display: flex; align-items: center; justify-content: center; font-weight: 800; }
+.qopt .qtext { font-weight: 700; font-size: 15px; color: #f0e0c4; }
+.qopt .qreward { border-top: 1px dashed #6a3a2a; padding-top: 4px; color: #e3cfa8; }
+.qopt .qvotes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+.qopt button { align-self: flex-start; }
+.qopt.roll { background: #57401f; border-color: #ffd84a; box-shadow: 0 0 18px #ffc82a88; }
+.qopt.win { border-color: #ffd84a; animation: qwin .28s steps(2) infinite; }
+.qopt.lose { opacity: .45; }
+@keyframes qwin { 0% { background: #6a4d18; box-shadow: 0 0 22px #ffc82a; } 100% { background: #1d0e0bcc; box-shadow: none; } }
+
+/* ---------- Окно «Колода» / «Сброс» ---------- */
+.modal.deckview { max-width: 1500px; width: 94vw; display: flex; flex-direction: column; overflow: hidden; }
+.deckview h2 { margin: 0; }
+.dcols { display: grid; gap: 12px; margin-top: 10px; overflow-y: auto; max-height: calc(90vh - 130px); align-items: start; }
+.dcol { border: 2px solid #3f221c; border-top-width: 5px; border-radius: 10px; background: #1d0e0bcc; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dcol.lane0 { border-top-color: var(--lane0); } .dcol.lane1 { border-top-color: var(--lane1); } .dcol.lane2 { border-top-color: var(--lane2); }
+.dcol.shared { border-top-color: #4fc4b8; }
+.dhead { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.portrait.shared-ico { display: flex; align-items: center; justify-content: center; font-size: 22px; color: #4fc4b8; border-color: #4fc4b8; }
+.dcard { position: relative; display: flex; gap: 8px; align-items: flex-start; border: 1px solid #5a3426; border-left: 4px solid var(--kc); border-radius: 7px; padding: 5px 34px 5px 6px; background: #2a1510; }
+.dcard .dcost { width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: #2b5a9a; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.dcard .dart { width: 30px; height: 30px; flex-shrink: 0; color: var(--kc); }
+.dcard .dart svg { width: 100%; height: 100%; display: block; }
+.dcard .dname { font-weight: 700; font-size: 13px; }
+.dcard .dtext { font-size: 12px; color: #d8c4a0; }
+.dcard .dcount { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-weight: 800; color: var(--gold); font-size: 16px; }
+.gold { color: var(--gold); }

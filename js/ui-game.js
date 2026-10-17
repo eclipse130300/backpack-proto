@@ -70,7 +70,9 @@ BP.UIGame = (function () {
           const ed = state.config.enemies[e.type] || {};
           const covered = !BP.Cards.isExposed(state, e);
           const marked = state.quest && !state.quest.done && state.quest.mark === e.uid;
-          const badges = [marked ? "🎯 квест" : "", e.stunned ? "оглушён" : "", e.pushedThisTurn ? "толкнут" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
+          // на выборе квеста: какие варианты отмечают этого врага
+          const pickMarks = state.questPick ? state.questPick.options.map((q, i) => (q.mark === e.uid ? "🎯" + (i + 1) : "")).filter(Boolean).join(" ") : "";
+          const badges = [marked ? "🎯 квест" : "", pickMarks, e.stunned ? "оглушён" : "", e.pushedThisTurn ? "толкнут" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
           html += `<div class="hex enemy row${row}${lane} ${state.actingEnemy === e.uid ? "acting" : ""}" data-drop="enemy" data-tip="enemy" data-enemy="${e.uid}" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner"><div class="etype">${ed.melee ? "мили" : "дальн."}</div><div class="ename">${esc(e.name)}</div>
             <div class="bar"><i style="width:${(100 * e.hp) / e.maxHp}%"></i></div>
@@ -150,6 +152,7 @@ BP.UIGame = (function () {
 
   // Руки всех трёх героев внизу экрана — переключаться не нужно
   function renderHands(state, myPid, ui) {
+    if (state.phase === "questPick") return BP.UIQuest.renderBar(state, myPid); // руки ещё не набраны — на их месте выбор квеста
     const z = sizes(), lanes = corridors(state);
     const secW = (window.innerWidth - z.logW) / 3 - 22;
     const html = state.heroes.map((h, i) => {
@@ -203,6 +206,8 @@ BP.UIGame = (function () {
       <span class="grow"></span>${ready}${roomInfo}
       <span class="chip" data-tip="targeting">Цели врагов: ${corridors(state) ? "коридоры" : "любой"}</span>
       ${BP.Session.isHost() ? `<button data-act="settings">⚙</button>` : ""}
+      <button data-act="deck-view" title="Что лежит в колодах (порядок скрыт)">🂠 Колода</button>
+      <button data-act="discard-view" title="Что лежит в сбросах">♻ Сброс</button>
       ${state.summary ? `<button data-act="show-summary">Итоги боя</button>` : ""}
       <button data-act="toggle-log">📜 Лог</button>
     </div>`;

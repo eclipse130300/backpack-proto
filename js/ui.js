@@ -119,10 +119,21 @@ BP.UI = (function () {
     }
     const logEl = document.getElementById("log-entries");
     const logAtBottom = !logEl || logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30;
+    const deckEl = document.getElementById("deck-scroll");
+    const deckScroll = deckEl ? deckEl.scrollTop : 0;
     let html = BP.UIGame.render(s, me, ui);
-    if (["won", "lost", "victory"].includes(s.phase) && ui.modal !== "hide-summary") html += renderSummary(s);
+    if (["won", "lost", "victory"].includes(s.phase)) {
+      // Конец боя: ~2.5 с экран заблокирован (досмотреть цифры урона), потом окно итогов (rules.endFightDelayMs)
+      const delay = s.config.rules.endFightDelayMs || 0, sid = s.summary && s.summary.id;
+      if (ui.endId !== sid) { ui.endId = sid; ui.endAt = Date.now(); if (delay) setTimeout(render, delay + 30); }
+      if (Date.now() - ui.endAt < delay) html += `<div class="end-block"></div>`;
+      else if (ui.modal !== "hide-summary") html += renderSummary(s);
+    }
+    if (ui.modal === "deck" || ui.modal === "discard") html += BP.UIDeck.render(s, ui.modal);
     if (ui.modal === "settings") html += renderSettings(s);
     app().innerHTML = html;
+    const nd = document.getElementById("deck-scroll");
+    if (nd) nd.scrollTop = deckScroll;
     const board = document.getElementById("board");
     if (board) board.dataset.drop = "field";
     placeDirPick(s);
@@ -130,6 +141,7 @@ BP.UI = (function () {
     if (nl && logAtBottom) nl.scrollTop = nl.scrollHeight;
     BP.Drag.refresh();
     BP.FX.afterRender(s);
+    BP.UIQuest.afterRender(s);
   }
 
   // ---------- Действия кнопок ----------
@@ -173,6 +185,9 @@ BP.UI = (function () {
       case "hero-tab": ui.activeHero = el.dataset.hero; ui.selected = null; render(); break;
       case "toggle-log": ui.showLog = !ui.showLog; if (ui.showLog && s && s.summary && ui.modal !== "settings") ui.modal = "hide-summary"; render(); break;
       case "show-summary": ui.modal = null; render(); break;
+      case "deck-view": ui.modal = "deck"; render(); break;
+      case "discard-view": ui.modal = "discard"; render(); break;
+      case "quest-vote": BP.Session.dispatch({ a: "questVote", idx: +el.dataset.idx }); break;
       case "settings": ui.modal = "settings"; render(); break;
       case "set-help": BP.UISettings.toggleHelp(el); break;
       case "modal-close": ui.modal = null; render(); break;
@@ -200,6 +215,8 @@ BP.UI = (function () {
     document.addEventListener("click", (ev) => {
       const el = ev.target.closest("[data-act]");
       if (el && el.tagName !== "SELECT") { onAction(el); return; }
+      // клик по тёмному фону окна колоды — закрыть
+      if (ev.target.classList && ev.target.classList.contains("deck-back")) { ui.modal = null; render(); return; }
       // клик по своему герою (без выбранной карты) — сделать активным
       const heroEl = ev.target.closest(".hero[data-hero]");
       if (heroEl && !ui.selected) { ui.activeHero = heroEl.dataset.hero; render(); }
@@ -212,6 +229,7 @@ BP.UI = (function () {
       if (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA") return;
       const s = BP.Session.state;
       if (!s || s.phase === "lobby") return;
+      if (ev.key === "Escape" && (ui.modal === "deck" || ui.modal === "discard")) { ui.modal = null; render(); return; }
       const mine = s.heroes.filter((h) => h.owner === BP.Session.myPid);
       const n = parseInt(ev.key, 10);
       if (n >= 1 && n <= mine.length) { ui.activeHero = mine[n - 1].id; ui.selected = null; render(); }
