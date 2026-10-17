@@ -1,0 +1,92 @@
+/* Страница «Карты» (cards.html). Цвета и вид карт — из style.css. */
+body.catalog { overflow: auto; user-select: text; }
+body.catalog #app { height: auto; min-height: 100%; }
+.cat { min-height: 100vh; }
+.cat.with-drawer main { margin-right: 420px; }
+
+.cbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--bg2); border-bottom: 1px solid var(--line); }
+.cbar .title { font-weight: 800; color: var(--gold); font-size: 19px; }
+.cbar nav { display: flex; gap: 6px; }
+.cbar .tab { padding: 6px 14px; background: transparent; }
+.cbar .tab.on { background: var(--panel2); border-color: var(--gold); color: var(--gold); }
+.cbar .src { display: flex; align-items: center; gap: 6px; }
+.btn { display: inline-block; text-decoration: none; color: var(--text); border: 1px solid var(--line); background: var(--panel2); padding: 7px 14px; border-radius: 6px; white-space: nowrap; }
+.btn:hover { border-color: var(--gold); }
+.btn.primary { background: var(--gold); color: #1c150c; border-color: var(--gold); font-weight: 700; }
+a { color: var(--gold); }
+
+main { padding: 14px 20px 60px; }
+.toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.toolbar input[type="search"] { width: 300px; }
+.segs { display: flex; }
+.seg { border-radius: 0; padding: 6px 12px; margin-left: -1px; }
+.seg:first-child { border-radius: 6px 0 0 6px; } .seg:last-child { border-radius: 0 6px 6px 0; }
+.seg.on { background: var(--gold); color: #1c150c; border-color: var(--gold); font-weight: 700; position: relative; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.fchip { padding: 3px 11px; border-radius: 14px; font-size: 14px; background: var(--panel); }
+.fchip.on { background: #3b2a17; border-color: var(--gold); color: var(--gold); }
+.fchip.clear { border-style: dashed; }
+.simnote { margin: 6px 0 2px; }
+.empty { padding: 40px; text-align: center; }
+
+.groups { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; margin-top: 14px; }
+details.group { flex: 0 1 auto; min-width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+details.group > summary { cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: 10px; list-style: none; font-size: 18px; }
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::before { content: "▸"; color: var(--muted); transition: transform .1s; }
+details.group[open] > summary::before { transform: rotate(90deg); }
+.gicon { width: 26px; height: 26px; color: var(--gold); }
+.gdot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.grid { display: flex; flex-wrap: wrap; gap: 18px 16px; padding: 12px 18px 18px; }
+
+.ctile { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; width: 132px; }
+.ctile .card { cursor: pointer; }
+.cat .card:hover { transform: none; }
+.ctile:hover .card { border-color: var(--gold); }
+.ctile.open .card { border-color: var(--gold); box-shadow: 0 0 14px var(--gold); }
+.ctile .card .ctext { -webkit-line-clamp: 4; }
+.card .cnew { position: absolute; top: -10px; right: -8px; font-size: 20px; z-index: 3; }
+.ccap { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.25; }
+.pill { display: inline-block; font-size: 11px; font-weight: 800; padding: 0 6px; border-radius: 8px; color: #13100c; }
+.v-good { --vc: var(--green); } .v-ok { --vc: var(--gold); } .v-bad { --vc: #e0574c; }
+.pill[class*="v-"] { background: var(--vc); }
+
+/* Подробности карты — панель справа */
+.drawer { position: fixed; top: 55px; right: 0; bottom: 0; width: 420px; overflow: auto; background: var(--bg2); border-left: 1px solid var(--line); padding: 18px 20px 30px; z-index: 25; }
+.drawer .close { position: absolute; top: 10px; right: 12px; padding: 3px 10px; }
+.drawer h3 { margin: 16px 0 6px; font-size: 16px; color: var(--gold); }
+.dhead { display: flex; justify-content: center; margin-bottom: 10px; }
+.ctile.big { cursor: default; width: auto; }
+.ctile.big .card { transform: scale(1.25); transform-origin: 50% 0; margin-bottom: 46px; cursor: default; }
+.ctile.big .ccap { display: none; }
+.kv { border-collapse: collapse; width: 100%; font-size: 15px; }
+.kv th { text-align: left; color: var(--muted); font-weight: 400; padding: 3px 12px 3px 0; vertical-align: top; white-space: nowrap; }
+.kv td { padding: 3px 0; }
+.dshape svg { width: 40px; height: 30px; vertical-align: middle; position: static; }
+ul.fx { margin: 0; padding-left: 20px; font-size: 15px; }
+code { background: #110e0b; padding: 1px 6px; border-radius: 4px; }
+
+/* Симулятор */
+.sim { max-width: 1200px; }
+.simctl { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.simctl label { display: flex; align-items: center; gap: 6px; }
+.prog { position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-top: 12px; overflow: hidden; }
+.prog i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: color-mix(in srgb, var(--gold) 45%, transparent); transition: width .2s; }
+.prog span { position: relative; padding-left: 10px; line-height: 24px; font-size: 14px; }
+.sim h3 { margin-top: 22px; color: var(--gold); }
+.tiles { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; min-width: 170px; display: flex; flex-direction: column; }
+.tile b { font-size: 28px; color: var(--gold); }
+.tile span { font-size: 14px; }
+.tile em { font-style: normal; font-size: 12px; color: var(--muted); }
+.tbl { border-collapse: collapse; width: 100%; font-size: 15px; }
+.tbl th, .tbl td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); }
+.tbl th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.tbl th.sortable { cursor: pointer; } .tbl th.sortable.on { color: var(--gold); }
+.tbl td.bad { color: #ff8b80; font-weight: 700; }
+.tbl.cards td:nth-child(5) { white-space: nowrap; }
+.bar { display: inline-block; width: 120px; height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.bar i { display: block; height: 100%; background: var(--vc, var(--gold)); }
+.sim .warn { margin: 10px 0; }
+
+@media (max-width: 1500px) { .cat.with-drawer main { margin-right: 380px; } .drawer { width: 380px; } }

@@ -526,5 +526,5 @@ BP.Engine = (function () {
     return s;
   }
 
-  return { createRun, startFight, applyAction, enemyStep, playerLeft, publicState, requiredPlayers, canPay, log };
+  return { createRun, startFight, applyAction, enemyStep, playerLeft, publicState, requiredPlayers, canPay, log, makeCard };
 })();

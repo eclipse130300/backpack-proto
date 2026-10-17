@@ -31,6 +31,7 @@ BP.UI = (function () {
         <div class="row"><button class="primary grow" data-act="host">Создать комнату (по сети)</button></div>
         <div class="row"><input id="code" placeholder="КОД" maxlength="5" style="width:130px;text-transform:uppercase;letter-spacing:3px" value="${esc(room)}"><button class="${room ? "primary" : ""} grow" data-act="join">Войти по коду</button></div>
         <div class="row"><button class="grow" data-act="local">Играть локально (все герои у меня)</button></div>
+        <div class="row"><a class="grow" href="cards.html" style="text-align:center;color:var(--gold)">🃏 Все карты и симулятор ботов</a></div>
         ${ui.menuMsg ? `<div class="warn">${esc(ui.menuMsg)}</div>` : ""}
       </div></div></div>`;
   }

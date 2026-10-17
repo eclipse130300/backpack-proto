@@ -89,6 +89,9 @@ window.GAME_CONFIG = {
   //         массовка оранжевый, блок синий, кооп золотой, особые фиолетовый, слабый удар серый.
   // effects: damage {amount, hits} | block {amount} | push | stun | taunt | cleanse
   //          blockSelf {amount} (блок себе) | draw {amount} | energy {amount} | sharedPool | quest {id}
+  // isNew:  true — значок 🆕 на странице «Карты» (cards.html): карта добавлена по заявке и ещё тестируется
+  // added:  "17.10.2026" — когда добавлена (видно в подробностях карты на странице «Карты»)
+  // Все карты удобно смотреть на странице «Карты»: https://eclipse130300.github.io/backpack-proto/cards.html
   cards: {
     weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 3 }] },
 

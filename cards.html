@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backpack RPG — карты</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/catalog.css">
+</head>
+<body class="catalog">
+  <div id="app"></div>
+
+  <!-- Те же данные и правила, что в игре: каталог всегда показывает текущий config.js -->
+  <script src="config.js"></script>
+  <script src="js/hex.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/cards.js"></script>
+  <script src="js/deck.js"></script>
+  <script src="js/engine.js"></script>
+  <!-- Боты (общий код с tools/balance-sim.js) -->
+  <script src="js/sim.js"></script>
+  <!-- Страница каталога -->
+  <script src="js/catalog.js"></script>
+  <script src="js/catalog-sim.js"></script>
+  <script>BP.Catalog.init();</script>
+</body>
+</html>
