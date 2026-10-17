@@ -114,18 +114,12 @@ BP.Sim = (function () {
   }
 
   function smartStep(s) {
-    // квест-карты бесплатны и без штрафа за провал — играем сразу
-    for (const h of s.heroes) {
-      if (!h.alive) continue;
-      const q = h.hand.find((c) => BP.Cards.has(c, "quest") && BP.Engine.canPay(s, h, c.cost));
-      if (q) { act(s, { a: "play", hero: h.id, card: q.uid, target: {} }); return true; }
-    }
     const base = evaluate(s);
     let pick = null;
     for (const h of s.heroes) {
       const items = [];
       playable(s, h).forEach((card) => {
-        if (BP.Cards.has(card, "sharedPool") || BP.Cards.has(card, "quest")) return;
+        if (BP.Cards.has(card, "sharedPool")) return;
         let best = null;
         targetsFor(s, h, card, true).forEach((t) => {
           const after = tryPlay(s, h, card, t);

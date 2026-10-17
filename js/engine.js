@@ -11,7 +11,7 @@ BP.Engine = (function () {
     const state = {
       config: clone(config), phase: "lobby", seq: 1, turn: 0, fightIndex: 0,
       players: players || {}, heroes: [], enemies: [], log: [], fightLog: [],
-      task: null, quests: [], pool: null, shared: null, turnStats: null, fightStats: null,
+      task: null, quest: null, pool: null, shared: null, turnStats: null, fightStats: null,
       actingEnemy: null, actingTargets: [], enemyQueue: [], banner: null, summary: null, fx: [], fxSeq: 0,
     };
     state.config.heroes.forEach((hc) => {
@@ -34,11 +34,13 @@ BP.Engine = (function () {
     card.id = cardId;
     card.effects = card.effects || [];
     if (weapon) { card.weapon = weapon; card.weaponName = state.config.weapons[weapon].name; }
-    if (card.area === "shape") { const sh = (state.config.shapes || {})[card.shape]; card.shapeName = sh ? sh.name : card.shape; card.shapeSteps = sh ? sh.steps : [[]]; }
+    if (card.area === "shape") {
+      // tests.fixedShapes: у массовки своя фигура (fixedShape), не крутится
+      const fs = state.config.tests.fixedShapes;
+      if (fs && fs.enabled && card.fixedShape) { card.shape = card.fixedShape; card.fixed = true; }
+      const sh = (state.config.shapes || {})[card.shape]; card.shapeName = sh ? sh.name : card.shape; card.shapeSteps = sh ? sh.steps : [[]];
+    }
     card.text = C().text(card);
-    const qe = card.effects.find((e) => e.type === "quest");
-    const q = qe && state.config.quests[qe.id];
-    if (q) card.text = `Квест ${q.scope === "turn" ? "на ход" : "на бой"}: ${q.text}. Награда: ${C().rewardText(q.reward)}`;
     return card;
   }
 
@@ -76,8 +78,8 @@ BP.Engine = (function () {
       h.stats = { cards: 0, energy: 0, damage: 0, blockGiven: 0, merges: 0, taken: 0 };
     });
     BP.Deck.buildFight(state, makeCard); // колоды героев (и общая), особые карты — js/deck.js
-    state.fightStats = { collisions: 0, turns: 0, taskDone: false, questsDone: 0, questsFailed: 0 };
-    state.quests = [];
+    state.fightStats = { collisions: 0, turns: 0, taskDone: false, crits: 0, aoeBest: 0 };
+    BP.Quests.setup(state); // квест боя (tests.fightQuest) — js/quests.js
     state.task = null;
     if (cfg.tests.partyTask.enabled && enc.task) {
       const ids = Object.keys(cfg.tasks);
@@ -194,7 +196,26 @@ BP.Engine = (function () {
       return `${e.name} столкнулся с ${other.name} (оба −${r.collisionDamage})`;
     }
     e.col = n.col; e.row = n.row;
-    return `${e.name} отброшен ${BP.Hex.DIRS[dir].label}`;
+    // РЕШЕНО (17.10): толчок меняет цель — враг пересчитывает её по новому коридору (провокация «Вызов» сильнее).
+    // Прикрытие тоже пересчитывается у всех: вытолкнули переднего — задний мили открылся и будет бить, и наоборот.
+    const before = (e.intent && e.intent.targets || []).join(",");
+    state.enemies.forEach((x) => { if (x.alive) reintent(state, x, x === e); });
+    const after = (e.intent && e.intent.targets || []).join(",");
+    const now = after && after !== before ? `, теперь целит в ${e.intent.targets.map((id) => (state.heroes.find((h) => h.id === id) || {}).name).join(", ")}` : "";
+    return `${e.name} отброшен ${BP.Hex.DIRS[dir].label}${now}`;
+  }
+
+  // Пересчёт намерения после того, как поле изменилось (толчок). Действие то же, меняются цели и «закрыт/открыт».
+  // moved — враг сдвинулся: в режиме коридоров берёт цель по новому коридору. Провокация сохраняется.
+  function reintent(state, e, moved) {
+    if (e.stunned) return;
+    const old = e.intent || {};
+    computeIntent(state, e);
+    const it = e.intent;
+    if (!it.targets) return;
+    if (old.taunted) { it.targets = old.targets ? old.targets.slice() : it.targets; it.taunted = old.taunted; return; }
+    // режим B (случайные цели) и не сдвинутые враги — цели прежние, если были
+    if (old.targets && (!moved || state.config.tests.enemyTargeting === "B")) it.targets = old.targets.slice();
   }
 
   // ---------- Розыгрыш карты ----------
@@ -248,7 +269,13 @@ BP.Engine = (function () {
         case "taunt": if (primary && primary.alive && retarget(state, primary, hero.id)) notes.push(`${primary.name} теперь целит в ${hero.name}`); break;
         case "cleanse": if (tHero) { tHero.debuffs = []; notes.push(`${tHero.name} очищен`); } break;
         case "draw": drawCards(state, hero, ef.amount); break;
-        case "energy": hero.energy += ef.amount; break;
+        case "energy": {
+          const to = tHero || hero;
+          if (state.pool && to === hero) state.pool.amount += ef.amount; else to.energy += ef.amount;
+          notes.push(`${to.name} +${ef.amount} энергии`); break;
+        }
+        case "blockParty": aliveHeroes(state).forEach((h) => (h.block += ef.amount)); hero.stats.blockGiven += ef.amount * aliveHeroes(state).length; notes.push(`всем +${ef.amount} блока`); break;
+        case "damageAllEnemies": state.enemies.filter((e) => e.alive).forEach((e) => hurtEnemy(state, e, ef.amount, hero.id)); notes.push(`всем врагам ${ef.amount} урона`); break;
         case "sharedPool": {
           if (!state.pool) {
             const sum = aliveHeroes(state).reduce((s, h) => s + h.energy, 0);
@@ -258,17 +285,14 @@ BP.Engine = (function () {
           }
           break;
         }
-        case "quest": {
-          const q = state.config.quests[ef.id];
-          if (q && !state.quests.some((x) => x.id === ef.id && !x.done && !x.failed)) { state.quests.push(Object.assign({ id: ef.id, by: hero.name, done: false, failed: false }, clone(q))); notes.push(`квест: ${q.text}`); }
-          break;
-        }
       }
     });
 
-    BP.Deck.discard(state, hero, card);
+    BP.Deck.discard(state, hero, card); // квестовая (exhaust) карта не сбрасывается — пропадает
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
+    const qn = BP.Quests.afterPlay(state, hero, card, hits); // квест боя: прогресс и награда
+    if (qn) notes.push(qn);
     entry.detail = notes.filter(Boolean).join("; ");
     afterChange(state, false);
     return null;
@@ -329,15 +353,6 @@ BP.Engine = (function () {
       state.banner = { id: state.seq++, text: `Задача пати выполнена: ${r}` };
       log(state, "Пати", `выполнила задачу «${state.task.text}»`, { detail: r });
     }
-    state.quests.forEach((q) => {
-      if (q.done || q.failed) return;
-      if (condMet(state, q.condition, endOfTurn)) {
-        q.done = true; state.fightStats.questsDone++;
-        const r = giveReward(state, q.reward);
-        state.banner = { id: state.seq++, text: `Квест выполнен: ${r}` };
-        log(state, "Пати", `выполнила квест «${q.text}» (от ${q.by})`, { detail: r });
-      }
-    });
   }
 
   function afterChange(state, endOfTurn) {
@@ -369,7 +384,7 @@ BP.Engine = (function () {
       win, fight: state.fightIndex + 1, name: state.config.encounters[state.fightIndex].name,
       turns: state.turn, collisions: state.fightStats.collisions,
       task: state.task ? { text: state.task.text, done: state.task.done } : null,
-      quests: { done: state.fightStats.questsDone, failed: state.fightStats.questsFailed },
+      quest: state.quest ? { text: state.quest.text, done: state.quest.done } : null,
       heroes: state.heroes.map((h) => Object.assign({ name: h.name, hp: h.hp, maxHp: h.maxHp }, h.stats)),
     };
   }
@@ -393,10 +408,6 @@ BP.Engine = (function () {
       h.hand = keep;
     });
     afterChange(state, true);
-    state.quests.forEach((q) => {
-      if (q.scope === "turn" && !q.done && !q.failed) { q.failed = true; state.fightStats.questsFailed++; log(state, "Пати", `провалила квест «${q.text}»`); }
-    });
-    state.quests = state.quests.filter((q) => q.scope !== "turn");
     if (checkFightEnd(state)) return;
     state.phase = "enemies";
     state.enemyQueue = state.enemies.filter((e) => e.alive).sort((a, b) => a.col - b.col || a.row - b.row).map((e) => e.uid);

@@ -20,7 +20,7 @@ BP.Hex = (function () {
 
   const colX = (col) => col * 0.75;
   function center(col, row) {
-    return { x: colX(col), y: row * ROW_H + (col % 2 === 1 ? ROW_H / 2 : 0) };
+    return { x: colX(col), y: row * ROW_H + (Math.abs(col) % 2 === 1 ? ROW_H / 2 : 0) };
   }
 
   // Позиция героя i (0..2) под полем: каждый герой "стоит" под двумя колонками (своим коридором).
@@ -81,6 +81,27 @@ BP.Hex = (function () {
     return out;
   }
 
+  // Клетки фигуры за краем поля (для подсказки: хексы с красным ✕). Координаты «виртуальные»: col < 0, row ≥ rows и т.д.
+  function virtualAt(x, y) {
+    const col = Math.round(x / 0.75);
+    const row = Math.round((y - (Math.abs(col) % 2 === 1 ? ROW_H / 2 : 0)) / ROW_H);
+    return { col, row };
+  }
+  function shapeCellsOff(col, row, steps, rot, cols, rows) {
+    const out = [];
+    (steps || [[]]).forEach((path) => {
+      let p = center(col, row);
+      for (const s of path) {
+        const a = (DIRS[(((rot || 0) + s) % 6 + 6) % 6].angle * Math.PI) / 180;
+        p = { x: p.x + ROW_H * Math.cos(a), y: p.y + ROW_H * Math.sin(a) };
+      }
+      const v = virtualAt(p.x, p.y);
+      if (v.col >= 0 && v.col < cols && v.row >= 0 && v.row < rows) return;
+      if (!out.some((o) => o.col === v.col && o.row === v.row)) out.push(v);
+    });
+    return out;
+  }
+
   // Клетка «впереди» (ближе к героям): для заднего ряда — передняя клетка той же колонки.
   function frontCells(col, row) {
     return row === 0 ? [] : [{ col, row: row - 1 }];
@@ -89,5 +110,5 @@ BP.Hex = (function () {
   // Коридор (0..2) для колонки: по cols/3 колонки на героя
   function laneOf(col, cols) { return Math.min(2, Math.floor(col / (cols / 3))); }
 
-  return { DIRS, colX, center, heroPos, neighbor, neighbors, dirFromPoint, shapeCells, frontCells, laneOf, ROW_H };
+  return { DIRS, colX, center, heroPos, neighbor, neighbors, dirFromPoint, shapeCells, shapeCellsOff, frontCells, laneOf, ROW_H };
 })();

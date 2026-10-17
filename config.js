@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 4,
+  version: 5,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -53,9 +53,9 @@ window.GAME_CONFIG = {
     // Карты героя подсвечены его цветом, общие — бирюзовой полосой «общая».
     sharedDeck: { enabled: false, minDeck: 12 },
 
-    // Особые карты («Единение», «Клятвы»): perFight разных карт за бой на всю пати, без копий,
+    // Особые карты («Единение»): perFight разных карт за бой на всю пати, без копий,
     // каждая — случайному герою (или в общую колоду). Берутся из pool, только те, чей тест включён.
-    specialCards: { perFight: 1, pool: ["unity", "oath_hunt", "oath_wall"] },
+    specialCards: { perFight: 1, pool: ["unity"] },
 
     // Задача пати на бой: у каждого боя есть задача (см. tasks и encounters), бонус всем.
     partyTask: { enabled: true },
@@ -63,18 +63,30 @@ window.GAME_CONFIG = {
     // Общий пул энергии — только как эффект карты «Единение» (раздаётся как особая карта, см. specialCards).
     sharedPool: { enabled: true },
 
-    // Карты-квесты «Клятва…» (раздаются как особые карты, см. specialCards).
-    questCards: { enabled: true }
+    // Квест боя (17.10, заменил «Клятвы»): над полем врагов висит «?». Серый — квест не выполнен, золотой — выполнен.
+    // Условие — на весь бой, с прогрессом. Герой, который закрыл условие, сразу получает в руку квестовую карту:
+    // одноразовую (сыграл — пропала) и не сгорающую в конце хода. Условие и награда случайные, см. questConditions/questRewards.
+    fightQuest: { enabled: true },
+
+    // Фигуры массовок без поворота (17.10): у каждой массовки своя фигура (fixedShape у карты), ПКМ не крутит.
+    // Фигуры из 3+ клеток симметричные и «смотрят» на героев. false — старый режим: фигуры shape, поворот ПКМ.
+    fixedShapes: { enabled: true }
   },
 
   // ---------- Фигуры массовых атак ----------
   // Каждая фигура — список «шагов» от клетки прицела. [] — сама клетка, [0] — соседняя по направлению 0,
-  // [0,0] — через одну, [1] — соседняя, повёрнутая на 60°. Направления: 0 ↗, 1 ↑ (назад), 2 ↖, 3 ↙, 4 ↓ (вперёд), 5 ↘. Игрок крутит фигуру правой кнопкой мыши.
+  // [0,0] — через одну, [1] — соседняя, повёрнутая на 60°. Направления: 0 ↗, 1 ↑ (назад), 2 ↖, 3 ↙, 4 ↓ (вперёд), 5 ↘.
+  // Без теста fixedShapes игрок крутит фигуру правой кнопкой мыши. Клетки фигуры за краем поля видны как хексы с красным ✕ и никого не бьют.
   shapes: {
     line2: { name: "линия из 2 клеток", steps: [[], [0]] },
     line3: { name: "линия из 3 клеток", steps: [[], [0], [0, 0]] },
     tri:   { name: "треугольник из 3 клеток", steps: [[], [0], [1]] },
-    fan:   { name: "веер из 3 клеток", steps: [[], [5], [1]] }
+    fan:   { name: "веер из 3 клеток", steps: [[], [5], [1]] },
+    // Фигуры для tests.fixedShapes (не крутятся). Клетка прицела — передняя (ближняя к героям) клетка фигуры.
+    across2: { name: "2 клетки поперёк", steps: [[], [0]] },
+    arc3:    { name: "уголок из 3 клеток", steps: [[], [2], [0]] },          // уголок вниз, к героям
+    diamond4:{ name: "ромб из 4 клеток", steps: [[], [2], [0], [1]] },      // уголок + клетка за прицелом
+    arc5:    { name: "широкий уголок из 5 клеток", steps: [[], [2], [2, 2], [0], [0, 0]] }
   },
 
   // ---------- Карты ----------
@@ -84,11 +96,13 @@ window.GAME_CONFIG = {
   // area:   "single" | "adjacent" (клетка + все соседи) | "shape" (фигура из shapes, крутится ПКМ)
   //         "line" — цель + враг за ней; если за целью край поля — рикошет в тот же ряд соседней колонки
   //                  (стрелок справа — влево, слева — вправо, ровно напротив — в обе стороны)
-  // shape:  id фигуры из shapes (для area: "shape")
+  // shape:  id фигуры из shapes (для area: "shape"), крутится ПКМ
+  // fixedShape: id фигуры из shapes, когда включён tests.fixedShapes (не крутится)
   // icon:   картинка на карте (см. js/icons.js). Цвет картинки — по типу карты: мили красный, дальний зелёный,
   //         массовка оранжевый, блок синий, кооп золотой, особые фиолетовый, слабый удар серый.
   // effects: damage {amount, hits} | block {amount} | push | stun | taunt | cleanse
-  //          blockSelf {amount} (блок себе) | draw {amount} | energy {amount} | sharedPool | quest {id}
+  //          blockSelf {amount} (блок себе) | draw {amount} | energy {amount} (цели-герою или себе) | sharedPool
+  //          blockParty {amount} (блок всем героям) | damageAllEnemies {amount} (урон всем врагам, без крита)
   // isNew:  true — значок 🆕 на странице «Карты» (cards.html): карта добавлена по заявке и ещё тестируется
   // added:  "17.10.2026" — когда добавлена (видно в подробностях карты на странице «Карты»)
   // Все карты удобно смотреть на странице «Карты»: https://eclipse130300.github.io/backpack-proto/cards.html
@@ -97,7 +111,8 @@ window.GAME_CONFIG = {
 
     // Меч
     cleave:        { name: "Рубящий удар",      cost: 1, icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
-    sweep:         { name: "Размах",            cost: 2, icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", effects: [{ type: "damage", amount: 8 }] },
+    sweep:         { name: "Размах",            cost: 2, icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "across2", effects: [{ type: "damage", amount: 8 }] },
+    great_sweep:   { name: "Мощный размах",     cost: 2, icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "arc5", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
     crush:         { name: "Сокрушение",        cost: 2, icon: "crush",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 13 }] },
 
     // Щит
@@ -106,16 +121,16 @@ window.GAME_CONFIG = {
 
     // Посох
     bolt:          { name: "Разряд",            cost: 1, icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
-    fireball:      { name: "Огненный шар",      cost: 2, icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", effects: [{ type: "damage", amount: 6 }] },
+    fireball:      { name: "Огненный шар",      cost: 2, icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
     stun_bolt:     { name: "Оглушающий разряд", cost: 2, icon: "stun",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
-    flame_wall:    { name: "Стена огня",        cost: 2, icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", effects: [{ type: "damage", amount: 6 }] },
+    flame_wall:    { name: "Стена огня",        cost: 2, icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
     nova:          { name: "Огненное кольцо",   cost: 2, icon: "nova",   target: "cell",  attack: "aoe", area: "adjacent", effects: [{ type: "damage", amount: 6 }] },
 
     // Лук
     double_shot:   { name: "Двойной выстрел",   cost: 1, icon: "arrows", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3, hits: 2 }] },
     pierce_arrow:  { name: "Пробивающая стрела", cost: 2, icon: "pierce", target: "enemy", attack: "ranged", area: "line", effects: [{ type: "damage", amount: 7 }] },
     knock_arrow:   { name: "Отбрасывающая стрела", cost: 1, icon: "knock", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "push" }] },
-    arrow_rain:    { name: "Град стрел",        cost: 2, icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", effects: [{ type: "damage", amount: 6 }] },
+    arrow_rain:    { name: "Град стрел",        cost: 2, icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
     aimed_shot:    { name: "Прицельный выстрел", cost: 2, icon: "aim",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 10 }] },
 
     // Кооп-сейвы
@@ -124,10 +139,15 @@ window.GAME_CONFIG = {
     purify:        { name: "Очищение",          cost: 1, icon: "purify",  target: "hero",  effects: [{ type: "cleanse" }, { type: "block", amount: 3 }] },
     barrier:       { name: "Барьер",            cost: 1, icon: "barrier", target: "hero",  effects: [{ type: "block", amount: 5 }] },
 
-    // Тестовые карты (попадают в колоды, только если тест включён)
+    // Тестовые карты (попадают в колоды, только если тест включён). «Единение» ещё и одна из наград квеста.
     unity:         { name: "Единение",          cost: 0, icon: "unity", target: "none",  effects: [{ type: "sharedPool" }], note: "Остаток энергии всех героев складывается, любой тратит из пула" },
-    oath_hunt:     { name: "Клятва охотника",   cost: 0, icon: "oath",  target: "none",  effects: [{ type: "quest", id: "kill2_turn" }] },
-    oath_wall:     { name: "Клятва стены",      cost: 0, icon: "oath",  target: "none",  effects: [{ type: "quest", id: "block_all_turn" }] }
+
+    // Награды квеста боя (tests.fightQuest): одноразовые карты, в колоды не попадают
+    q_surge:       { name: "Прилив сил",        cost: 0, icon: "bolt",   target: "self", effects: [{ type: "energy", amount: 2 }], isNew: true, added: "17.10.2026" },
+    q_insight:     { name: "Озарение",          cost: 0, icon: "purify", target: "self", effects: [{ type: "draw", amount: 2 }], isNew: true, added: "17.10.2026" },
+    q_gift:        { name: "Дар силы",          cost: 0, icon: "unity",  target: "ally", effects: [{ type: "energy", amount: 2 }], isNew: true, added: "17.10.2026" },
+    q_bulwark:     { name: "Общий оплот",       cost: 1, icon: "barrier", target: "none", effects: [{ type: "blockParty", amount: 5 }], isNew: true, added: "17.10.2026" },
+    q_wave:        { name: "Ударная волна",     cost: 1, icon: "nova",   target: "none", effects: [{ type: "damageAllEnemies", amount: 5 }], isNew: true, added: "17.10.2026" }
   },
 
   // ---------- Оружие и щиты (главный источник карт) ----------
@@ -136,7 +156,7 @@ window.GAME_CONFIG = {
   // critEvery — крит раз в N ударов этим оружием; счётчик живёт весь бой. Сколько осталось — пишется на карте. 0 — без крита.
   // Пока щит только у милишника (щиты разберём позже).
   weapons: {
-    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, cards: { cleave: 2, sweep: 1, crush: 1 } },
+    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, cards: { cleave: 2, sweep: 1, great_sweep: 1, crush: 1 } },
     shield: { name: "Щит",   kind: "shield", icon: "w_shield", critEvery: 0, cards: { shield_bash: 1, shield_wall: 1 } },
     staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, nova: 1 } },
     bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1 } }
@@ -184,12 +204,20 @@ window.GAME_CONFIG = {
     crush:       { text: "Устройте 2 столкновения толчками за бой", condition: { type: "collisions", count: 2 }, reward: { type: "blockAll", amount: 6 } }
   },
 
-  // ---------- Квесты от карт-квестов ----------
-  // scope: "turn" — на этот ход | "fight" — до конца боя
-  quests: {
-    kill2_turn:     { text: "Убейте 2 врагов в этот ход", scope: "turn", condition: { type: "killsInTurn", count: 2 }, reward: { type: "energyNextTurn", amount: 1 } },
-    block_all_turn: { text: "К концу хода у всех героев ≥5 блока", scope: "turn", condition: { type: "blockAll", amount: 5 }, reward: { type: "damageAllEnemies", amount: 4 } }
+  // ---------- Квест боя (tests.fightQuest) ----------
+  // В начале боя берутся случайное условие и случайная награда. Условие — на весь бой.
+  // condition: killMarked (убить отмеченного 🎯 врага) | aoeHits {count} (задеть N врагов одной массовкой)
+  //            collisions {count} (столкновений толчками за бой) | focusTurn {count} (N героев бьют одного врага за ход)
+  //            crits {count} (критов за бой)
+  // Награда — id карты из cards: её получает в руку герой, закрывший условие. Карта одноразовая.
+  questConditions: {
+    marked:    { text: "Убейте отмеченного врага 🎯", condition: { type: "killMarked" } },
+    aoe3:      { text: "Задейте 3 врагов одной массовкой", condition: { type: "aoeHits", count: 3 } },
+    collision: { text: "Устройте столкновение толчком", condition: { type: "collisions", count: 1 } },
+    focus2:    { text: "Два героя бьют одного врага за один ход", condition: { type: "focusTurn", count: 2 } },
+    crit2:     { text: "Нанесите 2 крита", condition: { type: "crits", count: 2 } }
   },
+  questRewards: ["q_surge", "q_insight", "q_gift", "q_bulwark", "q_wave", "unity"],
 
   // ---------- Бои (идут по порядку) ----------
   // task: id задачи пати | "random" | null. Клетки: col 0–5 (слева направо), row 0 — передний ряд, 1 — задний.

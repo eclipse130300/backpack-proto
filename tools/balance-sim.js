@@ -37,7 +37,7 @@
 const path = require("path");
 global.window = global;
 const ROOT = path.join(__dirname, "..");
-["config.js", "js/hex.js", "js/cards.js", "js/deck.js", "js/engine.js", "js/sim.js"].forEach((f) => require(path.join(ROOT, f)));
+["config.js", "js/hex.js", "js/cards.js", "js/deck.js", "js/engine.js", "js/quests.js", "js/sim.js"].forEach((f) => require(path.join(ROOT, f)));
 const BP = global.BP, CFG = global.GAME_CONFIG;
 
 // ---------- аргументы ----------

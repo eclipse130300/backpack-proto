@@ -67,8 +67,12 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 :root { --lane0: #b8613f; --lane1: #8c9a46; --lane2: #5b85bd; }
 
 .board { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 46px 0 20px; }
-.board-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: #000c; border: 1px solid var(--gold); color: #f3e2b5;
-  padding: 5px 14px; border-radius: 8px; font-size: 15px; white-space: nowrap; z-index: 20; display: none; pointer-events: none; }
+/* Панель подсказок по ситуации — нижний левый угол поля */
+.board-hint { position: absolute; left: 14px; bottom: 14px; max-width: min(330px, calc(50vw - 375px)); min-width: 180px; box-sizing: border-box; background: #000a; border: 1px solid #a0663a88;
+  color: #e9d8b4; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.35; z-index: 20; display: none; pointer-events: none; }
+.board-hint b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); margin-bottom: 3px; }
+.board-hint div::before { content: "• "; color: var(--gold); }
+@media (max-height: 860px) { .board-hint { font-size: 12px; padding: 6px 10px; min-width: 170px; } }
 .board-side { position: absolute; right: 18px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; width: 170px; z-index: 5; }
 .field { position: relative; flex-shrink: 0; }
 .hex { position: absolute; width: var(--hw); height: calc(var(--hw) * 0.866);
@@ -220,7 +224,7 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 .shake { animation: shake .45s linear; }
 @keyframes shake { 0%,100% { translate: 0 0; filter: none; } 10% { translate: -9px 2px; filter: brightness(2) saturate(2); } 25% { translate: 8px -2px; }
   40% { translate: -6px 1px; filter: brightness(1.4); } 55% { translate: 5px 0; } 70% { translate: -3px 0; } 85% { translate: 2px 0; } }
-.tip { position: fixed; z-index: 400; display: none; max-width: 340px; background: #120807f2; border: 1px solid #a0663a; border-radius: 8px; padding: 10px 12px;
+.tip { position: fixed; z-index: 400; display: none; max-width: 340px; background: #120807b8; border: 1px solid #a0663a; backdrop-filter: blur(1px); border-radius: 8px; padding: 10px 12px;
   font-size: 14px; line-height: 1.35; pointer-events: none; box-shadow: 0 6px 20px #000c; }
 .tip .tip-title { font-weight: 800; font-size: 16px; color: var(--gold); margin-bottom: 4px; }
 .tip .tip-cost { color: #f0e0c4; font-size: 14px; }
@@ -258,8 +262,6 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 .set-label { display: inline-flex; align-items: center; gap: 6px; }
 .info { width: 20px; height: 20px; padding: 0; border-radius: 50%; font: italic 700 13px Georgia, serif; line-height: 18px; text-align: center;
   background: color-mix(in srgb, var(--gc) 35%, #1d1712); border-color: var(--gc); color: #fff; position: relative; flex-shrink: 0; }
-.info:hover::after { content: attr(data-help); position: absolute; left: 26px; top: -6px; width: 300px; z-index: 50; background: #0e0b08; color: var(--text);
-  border: 1px solid var(--gc); border-radius: 6px; padding: 8px 10px; font: 400 13px/1.35 "Segoe UI", Arial, sans-serif; text-align: left; white-space: normal; box-shadow: 0 6px 16px #000c; }
 .set-help { margin: 4px 0 2px; padding: 6px 10px; border-left: 3px solid var(--gc); background: #0e0b0899; font-size: 13px; line-height: 1.35; color: #d9ccb4; }
 .settings-grid label { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .settings-grid input[type=number] { width: 90px; }
@@ -311,3 +313,29 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 @media (max-aspect-ratio: 1/1), (max-width: 1000px) {
   .portrait-warn { display: flex; position: fixed; inset: 0; z-index: 999; background: var(--bg); align-items: center; justify-content: center; text-align: center; padding: 30px; font-size: 22px; }
 }
+
+/* Клетки фигуры за краем поля — призрачные хексы с красным ✕ */
+.hex-ghost { position: absolute; width: var(--hw); height: calc(var(--hw) * 0.866); pointer-events: none; z-index: 3;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: #ff3b24b0;
+  display: flex; align-items: center; justify-content: center; }
+.hex-ghost::before { content: ""; position: absolute; inset: 3px; clip-path: inherit; background: #1a0806cc; }
+.hex-ghost span { position: relative; color: #ff3b24; font-weight: 900; font-size: calc(var(--hw) * 0.32); line-height: 1; text-shadow: 0 0 8px #000; }
+.hex-ghost.beyond-back { align-items: flex-end; padding-bottom: 6%; }
+/* Квест боя: «?» над полем. Серый — не выполнен, золотой — выполнен */
+.fquest { position: absolute; top: -44px; transform: translateX(-50%); width: 40px; height: 40px; border-radius: 50%; z-index: 6;
+  display: flex; align-items: center; justify-content: center; font: 900 30px/1 Georgia, serif; color: #b9b2a6; background: #2a2420;
+  border: 2px solid #8a8378; box-shadow: 0 0 10px #0009; cursor: help; }
+.fquest.done { color: #ffd84a; border-color: #ffd84a; background: #3a2a08; box-shadow: 0 0 16px #ffc82a; text-shadow: 0 0 6px #ff9a00; }
+.card.quest-card { border-color: #ffd84a; box-shadow: 0 0 10px #ffc82a88; }
+.card .qbadge { position: absolute; top: -9px; right: -7px; width: 24px; height: 24px; border-radius: 50%; background: #3a2a08; color: #ffd84a;
+  border: 2px solid #ffd84a; font: 900 16px/20px Georgia, serif; text-align: center; z-index: 2; }
+/* Своя карта поднята — стоимость карт союзников приглушена */
+.hsec.dim-costs .card .cost { opacity: .3; filter: grayscale(.7); }
+/* Наведение на врага: герои, которых он бьёт, мерцают и вздрагивают */
+.flash-target { animation: flashTarget 2s ease-out both; }
+@keyframes flashTarget {
+  0%, 30%, 60% { box-shadow: 0 0 22px 4px #ff3b24; border-color: #ff3b24; }
+  15%, 45%, 75% { box-shadow: 0 0 4px 0 #ff3b2444; }
+  4% { translate: -5px 0; } 8% { translate: 5px 0; } 12% { translate: -3px 0; } 16% { translate: 0 0; }
+  100% { box-shadow: 0 0 10px #ff3b2466; } }
+.hex-ghost.beyond-back span { font-size: calc(var(--hw) * 0.22); }

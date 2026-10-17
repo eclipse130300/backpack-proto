@@ -61,16 +61,36 @@ BP.Drag = (function () {
     return el || null;
   }
 
+  // Панель подсказок в нижнем левом углу поля: всегда видна в ход игроков, текст — по ситуации
   function hint(cc) {
     const box = document.getElementById("board-hint");
     if (!box) return;
-    const c = cc && cc.card, parts = [];
-    if (c && c.attack === "melee") parts.push("Мили: только открытые враги (никто не стоит перед ними)");
-    if (c && BP.Cards.rotatable(c)) parts.push("🖱 Правая кнопка — повернуть фигуру");
-    if (c && (c.target === "hero" || c.target === "ally")) parts.push("Цель — герой (фишка на поле или его рука внизу)");
-    if (c && ui().selected && !drag) parts.push("Esc — отмена");
-    box.textContent = parts.join("  ·  ");
-    box.style.display = parts.length && !ui().dirPick ? "block" : "none";
+    const s = st(), c = cc && cc.card, parts = [];
+    if (ui().dirPick) {
+      parts.push("Выбери стрелкой, куда толкнуть врага");
+      parts.push("Край поля или другой враг — столкновение");
+      parts.push("Esc — отмена");
+    } else if (c) {
+      if (c.attack === "melee") parts.push("Мили: только открытые враги (никто не стоит перед ними)");
+      if (BP.Cards.rotatable(c)) parts.push("🖱 Правая кнопка — повернуть фигуру");
+      else if (c.area === "shape") parts.push(`Фигура «${c.shapeName}» не крутится`);
+      if (c.area === "shape" || c.area === "adjacent") parts.push("Клетки с ✕ за краем поля никого не бьют");
+      if (c.target === "hero" || c.target === "ally") parts.push("Цель — герой (фишка на поле или его рука внизу)");
+      if (c.target === "none" || c.target === "self") parts.push("Отпусти на поле — карта сыграется");
+      if (s.config.tests.merge.enabled) parts.push("На карту союзника — мердж (цена в фиолетовом ромбе)");
+      parts.push(drag ? "Отпусти мимо цели — отмена" : "Esc — отмена");
+    } else if (s && s.phase === "players") {
+      parts.push("Перетащи карту на цель или кликни карту, потом цель");
+      parts.push("Наведи на врага — его план и цели");
+      if (s.quest) parts.push("«?» над полем — квест боя");
+    }
+    box.innerHTML = parts.length ? `<b>Подсказки</b>${parts.map((p) => `<div>${BP.UIGame.esc(p)}</div>`).join("")}` : "";
+    box.style.display = parts.length ? "block" : "none";
+  }
+
+  // Пока своя карта поднята — стоимость карт союзников приглушена (энергия союзников не отвлекает)
+  function dimAllyCosts(cc) {
+    document.querySelectorAll(".hsec").forEach((sec) => sec.classList.toggle("dim-costs", !!cc && sec.dataset.hero !== cc.hero.id));
   }
 
   function refresh() {
@@ -78,8 +98,10 @@ BP.Drag = (function () {
     document.querySelectorAll(".hex").forEach((h) => h.classList.remove("aoe"));
     document.querySelectorAll(".hex .preview").forEach((p) => { p.textContent = ""; p.classList.remove("crit"); });
     document.querySelectorAll(".card .mcost").forEach((b) => b.remove());
+    document.querySelectorAll(".hex-ghost").forEach((g) => g.remove());
     const cc = currentCard();
     hint(cc);
+    dimAllyCosts(cc);
     if (!cc) return;
     mergeBadges(cc);
     document.querySelectorAll("[data-drop]").forEach((el) => {
@@ -118,12 +140,28 @@ BP.Drag = (function () {
         const h = document.querySelector(`.hex[data-col="${c.col}"][data-row="${c.row}"]`);
         if (h) h.classList.add("aoe");
       });
+      ghostCells(cc, target);
     }
     const pv = BP.Cards.preview(st(), cc.hero, cc.card, target);
     if (!pv) return;
     Object.entries(pv).forEach(([uid, v]) => {
       const p = document.querySelector(`.hex[data-enemy="${uid}"] .preview`);
       if (p) { p.textContent = `−${v.amount}${v.crit ? "!" : ""}`; p.classList.toggle("crit", v.crit); }
+    });
+  }
+
+  // Клетки фигуры за краем поля — призрачные хексы с красным ✕, чтобы было видно всю фигуру
+  function ghostCells(cc, target) {
+    const s = st(), field = document.querySelector(".field");
+    if (!field) return;
+    const g = BP.UIGame.geometry(s);
+    BP.Cards.areaOffCells(s, cc.card, target).forEach((c) => {
+      const p = BP.UIGame.cellPos(g, c.col, c.row);
+      const d = document.createElement("div");
+      d.className = "hex-ghost" + (c.row >= g.rows ? " beyond-back" : "");
+      d.style.left = p.left + "px"; d.style.top = p.top + "px";
+      d.innerHTML = `<span>✕</span>`;
+      field.appendChild(d);
     });
   }
 

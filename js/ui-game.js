@@ -25,7 +25,7 @@ BP.UIGame = (function () {
 
   function cellPos(g, col, row) {
     // row 1 (задний) сверху, row 0 (передний) снизу; нечётные колонки выше на полхекса
-    const top = (g.rows - 1 - row) * g.hh + (col % 2 === 1 ? 0 : g.hh / 2);
+    const top = (g.rows - 1 - row) * g.hh + (Math.abs(col) % 2 === 1 ? 0 : g.hh / 2);
     const left = col * 0.75 * g.hw;
     return { left, top };
   }
@@ -69,7 +69,8 @@ BP.UIGame = (function () {
         if (e) {
           const ed = state.config.enemies[e.type] || {};
           const covered = !BP.Cards.isExposed(state, e);
-          const badges = [e.stunned ? "оглушён" : "", e.pushedThisTurn ? "толкнут" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
+          const marked = state.quest && !state.quest.done && state.quest.mark === e.uid;
+          const badges = [marked ? "🎯 квест" : "", e.stunned ? "оглушён" : "", e.pushedThisTurn ? "толкнут" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
           html += `<div class="hex enemy row${row}${lane} ${state.actingEnemy === e.uid ? "acting" : ""}" data-drop="enemy" data-tip="enemy" data-enemy="${e.uid}" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner"><div class="etype">${ed.melee ? "мили" : "дальн."}</div><div class="ename">${esc(e.name)}</div>
             <div class="bar"><i style="width:${(100 * e.hp) / e.maxHp}%"></i></div>
@@ -81,6 +82,8 @@ BP.UIGame = (function () {
         }
       }
     }
+    // Квест боя: «?» над полем. Серый — не выполнен, золотой — выполнен (как в WoW).
+    if (state.quest) html += `<div class="fquest ${state.quest.done ? "done" : ""}" data-tip="fquest" style="left:${g.width / 2}px">?</div>`;
     return html + `</div>`;
   }
 
@@ -118,8 +121,6 @@ BP.UIGame = (function () {
   }
 
   function shortText(state, c) {
-    const qe = (c.effects || []).find((e) => e.type === "quest");
-    if (qe && state.config.quests[qe.id]) return "📜 " + state.config.quests[qe.id].text;
     return c.text;
   }
 
@@ -133,12 +134,12 @@ BP.UIGame = (function () {
       owner = c.shared ? `<div class="cowner shared">общая</div>` : `<div class="cowner hc${oi}">${esc((state.heroes[oi] || hero).name)}</div>`;
     }
     const mergeOk = !readonly && state.config.tests.merge.enabled && BP.Cards.mergeCost(state, hero, c) <= avail;
-    const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", !readonly && c.cost > avail ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^(unity|oath_)/.test(c.id) ? "test" : ""].join(" ");
+    const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", !readonly && c.cost > avail ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : ""].join(" ");
     const needsBtn = !readonly && ui.selected === c.uid && (c.target === "none" || c.target === "self");
     const ci = BP.Cards.critInfo(hero, c);
     const crit = ci ? `<div class="crit ${ci.willCrit ? "on" : ""}">${ci.willCrit ? "💥 КРИТ" : `💥 через ${ci.left}`}</div>` : "";
     return `<div class="${cls}" data-card="${c.uid}" data-hero="${hero.id}" data-drop="merge" data-tip="card" style="--kc:${kc};${ml ? `margin-left:${ml}px` : ""}">
-      <div class="cost">${c.cost}</div>${owner}
+      <div class="cost">${c.cost}</div>${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
       <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${c.area === "shape" ? BP.Icons.shapeSvg(c.shapeSteps, 0) : ""}${crit}</div>
       <div class="cname">${esc(c.name)}</div>
       <div class="ctext">${esc(shortText(state, c))}</div>
@@ -191,7 +192,6 @@ BP.UIGame = (function () {
   function renderTop(state) {
     const enc = state.config.encounters[state.fightIndex] || {};
     const task = state.task ? `<span class="chip task ${state.task.done ? "done" : ""}" data-tip="task">🎯 Задача пати${state.task.done ? " ✔" : ""}</span>` : "";
-    const quests = state.quests.map((q, i) => `<span class="chip quest ${q.done ? "done" : ""}" data-tip="quest" data-idx="${i}">📜 ${esc(q.text)}${q.done ? " ✔" : ""}</span>`).join("");
     const pool = state.pool ? `<span class="chip pool">⚡ Общий пул: ${state.pool.amount}</span>` : "";
     const shared = state.shared ? `<span class="chip shared" title="Общая колода / общий сброс">🂠 Общая колода ${state.shared.draw.length} · ♻ ${state.shared.discard.length}</span>` : "";
     const req = BP.Engine.requiredPlayers(state);
@@ -199,7 +199,7 @@ BP.UIGame = (function () {
     const roomInfo = BP.Session.code ? `<span class="chip" title="Код комнаты">🔑 ${esc(BP.Session.code)}</span>` : `<span class="chip">локально</span>`;
     return `<div class="topbar">
       <span class="title">Бой ${state.fightIndex + 1}/${state.config.encounters.length}: ${esc(enc.name || "")}</span>
-      <span class="chip">Ход ${state.turn}</span>${task}${quests}${pool}${shared}
+      <span class="chip">Ход ${state.turn}</span>${task}${pool}${shared}
       <span class="grow"></span>${ready}${roomInfo}
       <span class="chip" data-tip="targeting">Цели врагов: ${corridors(state) ? "коридоры" : "любой"}</span>
       ${BP.Session.isHost() ? `<button data-act="settings">⚙</button>` : ""}

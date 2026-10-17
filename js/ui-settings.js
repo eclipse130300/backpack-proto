@@ -1,5 +1,5 @@
 // Модалка «Настройки и тесты» (у хоста): группы с цветами, у каждой настройки ⓘ —
-// подсказка при наведении и развёрнутое пояснение по клику.
+// развёрнутое пояснение по клику (подсказки при наведении нет — она закрывала соседние поля).
 window.BP = window.BP || {};
 
 BP.UISettings = (function () {
@@ -13,7 +13,7 @@ BP.UISettings = (function () {
       { path: "rules.minDeck", type: "num", label: "Минимум колоды героя", help: "Если у героя меньше карт, колоду добивают «Слабые удары». В режиме общей колоды не используется — там свой минимум ниже." },
       { path: "tests.sharedDeck.enabled", type: "chk", label: "Общая колода", help: "Карты оружия и щита остаются у своего героя, все остальные (кооп-карты, слабые удары, особые) — в одной общей колоде. Герой добирает руку случайно из своего и общего. Карты героя подсвечены его цветом, общие — бирюзовой полосой «общая»." },
       { path: "tests.sharedDeck.minDeck", type: "num", label: "Минимум общей колоды", help: "Сколько карт минимум в общей колоде. Недобор добивают «Слабые удары». Работает только с включённой общей колодой." },
-      { path: "tests.specialCards.perFight", type: "num", label: "Особых карт за бой", help: "Сколько разных особых карт («Единение», «Клятвы») выдаётся на всю пати за бой. Без копий, каждая — случайному герою (или в общую колоду). 0 — без особых карт." },
+      { path: "tests.specialCards.perFight", type: "num", label: "Особых карт за бой", help: "Сколько разных особых карт («Единение») выдаётся на всю пати за бой. Без копий, каждая — случайному герою (или в общую колоду). 0 — без особых карт." },
     ] },
     { id: "merge", title: "Мердж", color: "#b77cff", items: [
       { path: "tests.merge.enabled", type: "chk", label: "Мердж = передача", help: "Свою карту можно перетащить на карту в руке союзника — его карта усиливается до конца боя (и после сброса тоже)." },
@@ -25,12 +25,13 @@ BP.UISettings = (function () {
     { id: "coop", title: "Кооп-тесты", color: "#f2c94a", items: [
       { path: "tests.partyTask.enabled", type: "chk", label: "Задача пати на бой", help: "У каждого боя есть общая задача (🎯 сверху). Выполнили — бонус всем." },
       { path: "tests.sharedPool.enabled", type: "chk", label: "Карта «Единение»", help: "Особая карта: остаток энергии всех героев складывается в общий пул до конца хода, любой тратит из него." },
-      { path: "tests.questCards.enabled", type: "chk", label: "Карты-квесты «Клятва»", help: "Особые карты, которые ставят пати квест на ход. Выполнили — награда." },
+      { path: "tests.fightQuest.enabled", type: "chk", label: "Квест боя «?»", help: "Над полем врагов висит «?»: серый — квест не выполнен, золотой — выполнен. Наведи — условие и награда. Условие на весь бой. Кто закрыл условие, тот сразу получает в руку квестовую карту: одноразовую, не сгорает в конце хода." },
     ] },
     { id: "fight", title: "Бой и урон", color: "#ff8a5c", items: [
       { path: "rules.energy", type: "num", label: "Энергия за ход", help: "Сколько энергии получает каждый герой в начале хода." },
       { path: "rules.critMultiplier", type: "num", label: "Множитель крита", help: "Во сколько раз крит сильнее обычного удара." },
       { path: "rules.conditionalCrit", type: "chk", label: "Условный крит", help: "Удар по оглушённому или толкнутому в этот ход врагу — всегда крит." },
+      { path: "tests.fixedShapes.enabled", type: "chk", label: "Фигуры без поворота", help: "У каждой массовки своя фигура, правой кнопкой не крутится. Фигуры из 3+ клеток симметричные и смотрят на героев. Выключено — старые фигуры с поворотом ПКМ." },
       { path: "rules.collisionDamage", type: "num", label: "Урон столкновения", help: "Урон обоим, когда толкнутый враг врезается в другого врага или в край поля." },
     ] },
     { id: "enemies", title: "Враги", color: "#6cb4ff", items: [
@@ -50,7 +51,7 @@ BP.UISettings = (function () {
 
   function item(c, it) {
     return `<div class="set-item">
-      <label><span class="set-label">${esc(it.label)}<button type="button" class="info" data-act="set-help" data-path="${it.path}" data-help="${esc(it.help)}">i</button></span>${field(c, it)}</label>
+      <label><span class="set-label">${esc(it.label)}<button type="button" class="info" data-act="set-help" data-path="${it.path}">i</button></span>${field(c, it)}</label>
       ${open[it.path] ? `<div class="set-help">${esc(it.help)}</div>` : ""}
     </div>`;
   }
@@ -60,7 +61,7 @@ BP.UISettings = (function () {
     const groups = GROUPS.map((g) => `<section class="set-group" style="--gc:${g.color}"><h3>${esc(g.title)}</h3><div class="set-items">${g.items.map((it) => item(c, it)).join("")}</div></section>`).join("");
     return `<div class="modal-back"><div class="modal settings">
       <h2>Настройки и тесты</h2>
-      <div class="muted small">Наведи на <b>i</b> — короткая подсказка, клик — пояснение. Применение перезапускает забег. Настройки сохраняются в этом браузере и перекрывают config.js, пока не нажать «Вернуть config.js».</div>
+      <div class="muted small">Клик по <b>i</b> — пояснение. Применение перезапускает забег. Настройки сохраняются в этом браузере и перекрывают config.js, пока не нажать «Вернуть config.js».</div>
       <div class="set-groups">${groups}</div>
       <details><summary>Весь конфиг (JSON) — для правки карт, оружия, врагов</summary>
         <textarea id="cfg-json" rows="18" style="width:100%;margin-top:8px">${esc(JSON.stringify(c, null, 2))}</textarea>
@@ -89,13 +90,15 @@ BP.UISettings = (function () {
     return cfg;
   }
 
+  const findItem = (p) => GROUPS.flatMap((g) => g.items).find((it) => it.path === p);
+
   // Клик по «i»: развернуть/свернуть пояснение, не теряя введённых значений
   function toggleHelp(btn) {
     const p = btn.dataset.path, wrap = btn.closest(".set-item");
     open[p] = !open[p];
     const ex = wrap.querySelector(".set-help");
     if (ex) ex.remove();
-    if (open[p]) { const d = document.createElement("div"); d.className = "set-help"; d.textContent = btn.dataset.help; wrap.appendChild(d); }
+    if (open[p]) { const d = document.createElement("div"); d.className = "set-help"; d.textContent = (findItem(p) || {}).help || ""; wrap.appendChild(d); }
   }
 
   return { render, collect, toggleHelp };

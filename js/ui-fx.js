@@ -6,6 +6,8 @@ BP.FX = (function () {
   const esc = (s) => BP.UIGame.esc(s);
   let layer = null, svg = null, tip = null;
   let lastFx = -1, shakes = {}, mx = -1, my = -1, tipKey = null;
+  let arrowPts = [];      // точки стрелок намерений — тултип старается их не закрывать
+  let flash = null;       // {ids, t0} — герои, которых бьёт враг под курсором (мерцают ~2 с)
   const st = () => BP.Session.state;
 
   function ensure() {
@@ -69,9 +71,11 @@ BP.FX = (function () {
     if (!svg) return;
     const defs = `<defs><marker id="ia-r" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#ff4a3a"/></marker>
       <marker id="ia-p" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#c08af0"/></marker></defs>`;
+    arrowPts = [];
     svg.innerHTML = defs + pairs.map((p) => {
       const a = center(p.from, "bottom"), b = center(p.to, "top");
       const cx = (a.x + b.x) / 2, cy = Math.min(a.y, b.y) + (b.y - a.y) * 0.35 - 30;
+      for (let t = 0; t <= 1.001; t += 0.05) arrowPts.push({ x: (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * cx + t * t * b.x, y: (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * cy + t * t * b.y });
       const col = p.curse ? "#c08af0" : "#ff4a3a";
       return `<path d="M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}" fill="none" stroke="#000a" stroke-width="9"/>
         <path d="M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}" fill="none" stroke="${col}" stroke-width="5" stroke-dasharray="${p.strong ? "0" : "10 7"}" marker-end="url(#${p.curse ? "ia-p" : "ia-r"})"/>`;
@@ -147,7 +151,8 @@ BP.FX = (function () {
         <div class="tip-tags">${esc(BP.Cards.tags(c).join(" · "))}</div>
         <div>${esc(c.text)}</div>
         ${c.attack === "melee" ? `<div class="tip-note">Мили: бьёт только открытых врагов — тех, кого никто не прикрывает спереди.</div>` : ""}
-        ${c.area === "shape" ? `<div class="tip-note row">${BP.Icons.shapeSvg(c.shapeSteps, rot)}<span>Фигура «${esc(c.shapeName)}». <b>Правая кнопка мыши</b> — повернуть по часовой. Задетые клетки подсвечиваются красным.</span></div>` : ""}
+        ${c.area === "shape" ? `<div class="tip-note row">${BP.Icons.shapeSvg(c.shapeSteps, c.fixed ? 0 : rot)}<span>Фигура «${esc(c.shapeName)}». ${c.fixed ? "Не крутится: клетка прицела — передняя клетка фигуры." : "<b>Правая кнопка мыши</b> — повернуть по часовой."} Задетые клетки подсвечиваются красным, клетки за краем поля — ✕.</span></div>` : ""}
+        ${c.questCard ? `<div class="tip-note good">Квестовая карта: одноразовая (после розыгрыша пропадает), в конце хода не сгорает.</div>` : ""}
         ${c.area === "adjacent" ? `<div class="tip-note">Бьёт клетку и все соседние (до 7 клеток).</div>` : ""}
         ${ci ? `<div class="tip-note ${ci.willCrit ? "good" : ""}">Крит ×${s.config.rules.critMultiplier} каждый ${ci.every}-й удар оружием «${esc(c.weaponName)}». ${ci.willCrit ? "<b>Эта карта критует!</b>" : `До крита: ${ci.left} уд.`}</div>` : ""}
         ${c.merged ? `<div class="tip-note">★ Усилена мерджем ×${c.merged}</div>` : ""}`;
@@ -182,13 +187,13 @@ BP.FX = (function () {
         <div class="tip-sec">Прогресс</div><div>${t.done ? "✔ выполнена" : esc(progress(s, t.condition))}</div>
         <div class="tip-sec">Награда всем</div><div class="good">${esc(BP.Cards.rewardText(t.reward))}</div>`;
     }
-    if (kind === "quest") {
-      const q = s.quests[+el.dataset.idx];
-      if (!q) return null;
-      return `<div class="tip-title">📜 Квест ${q.scope === "turn" ? "на этот ход" : "на бой"} <span class="muted">от ${esc(q.by)}</span></div><div>${esc(q.text)}</div>
-        <div class="tip-sec">Прогресс</div><div>${q.done ? "✔ выполнен" : esc(progress(s, q.condition))}</div>
-        <div class="tip-sec">Награда всем</div><div class="good">${esc(BP.Cards.rewardText(q.reward))}</div>
-        ${q.scope === "turn" && !q.done ? `<div class="tip-note bad">Не успели до конца хода — квест провален.</div>` : ""}`;
+    if (kind === "fquest" && s.quest) {
+      const q = s.quest, rc = s.config.cards[q.reward] || {};
+      const rtext = BP.Cards.text(Object.assign({ effects: [] }, rc));
+      return `<div class="tip-title">${q.done ? "✔ Квест выполнен" : "? Квест боя"}</div><div>${esc(q.text)}</div>
+        <div class="tip-sec">Прогресс (за весь бой)</div><div>${esc(BP.Quests.progressText(s))}</div>
+        <div class="tip-sec">Награда — карта</div><div class="good"><b>${esc(rc.name || q.reward)}</b> <span class="tip-cost">${rc.cost || 0}⚡</span> — ${esc(rtext)}</div>
+        <div class="tip-note">Карту сразу получает в руку герой, который закрыл условие. Одноразовая, в конце хода не сгорает.</div>`;
     }
     if (kind === "targeting") {
       return s.config.tests.enemyTargeting === "A"
@@ -198,13 +203,31 @@ BP.FX = (function () {
     return null;
   }
 
+  // Тултип ставим рядом с курсором туда, где он меньше всего закрывает стрелки намерений
   function placeTip() {
     if (!tip || tip.style.display === "none") return;
-    const w = tip.offsetWidth, h = tip.offsetHeight;
-    let x = mx + 18, y = my + 18;
-    if (x + w > window.innerWidth - 8) x = mx - w - 18;
-    if (y + h > window.innerHeight - 8) y = my - h - 14;
-    tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+    const w = tip.offsetWidth, h = tip.offsetHeight, W = window.innerWidth, H = window.innerHeight;
+    const clamp = (x, y) => ({ x: Math.max(8, Math.min(x, W - w - 8)), y: Math.max(8, Math.min(y, H - h - 8)) });
+    const cands = [[mx + 18, my + 18], [mx - w - 18, my + 18], [mx + 18, my - h - 14], [mx - w - 18, my - h - 14], [mx + 24, my - h / 2], [mx - w - 24, my - h / 2]].map(([x, y]) => clamp(x, y));
+    let best = cands[0], bestScore = Infinity;
+    cands.forEach((c, i) => {
+      const covers = arrowPts.filter((p) => p.x > c.x - 6 && p.x < c.x + w + 6 && p.y > c.y - 6 && p.y < c.y + h + 6).length;
+      const underCursor = mx >= c.x && mx <= c.x + w && my >= c.y && my <= c.y + h ? 1 : 0;
+      const score = covers * 10 + underCursor * 50 + i * 0.1;
+      if (score < bestScore) { bestScore = score; best = c; }
+    });
+    tip.style.left = best.x + "px"; tip.style.top = best.y + "px";
+  }
+
+  // Герои под ударом врага под курсором мерцают и вздрагивают ~2 с (кроме стрелок)
+  function applyFlash() {
+    document.querySelectorAll(".flash-target").forEach((el) => el.classList.remove("flash-target"));
+    if (!flash) return;
+    const dt = Date.now() - flash.t0;
+    if (dt > 2000) { flash = null; return; }
+    flash.ids.forEach((id) => document.querySelectorAll(`.hero.token[data-hero="${id}"], .hsec[data-hero="${id}"] .hsec-head`).forEach((el) => {
+      el.classList.add("flash-target"); el.style.animationDelay = -dt + "ms";
+    }));
   }
 
   function hoverElement() {
@@ -219,13 +242,19 @@ BP.FX = (function () {
     if (!s || s.phase === "lobby") { tip.style.display = "none"; svg.innerHTML = ""; return; }
     const el = BP.Drag.isDragging() || document.querySelector(".modal-back") ? null : hoverElement();
     const key = el ? el.dataset.tip + ":" + (el.dataset.enemy || el.dataset.card || el.dataset.hero || el.dataset.idx || "") : null;
+    if (key !== tipKey) {
+      const e = el && el.dataset.tip === "enemy" ? s.enemies.find((x) => x.uid === el.dataset.enemy) : null;
+      const ids = e && e.alive && e.intent && e.intent.targets ? e.intent.targets.slice() : [];
+      flash = ids.length ? { ids, t0: Date.now() } : null;
+      applyFlash();
+    }
     if (force || key !== tipKey) {
       tipKey = key;
       const html = el ? tipHtml(s, el) : null;
       if (html) { tip.innerHTML = html; tip.style.display = "block"; } else tip.style.display = "none";
     }
-    placeTip();
     drawArrows(arrowPairs(s, el));
+    placeTip();
   }
 
   function afterRender(s) {
@@ -233,6 +262,7 @@ BP.FX = (function () {
     if (!s || s.phase === "lobby") { lastFx = -1; updateHover(true); return; }
     processFx(s);
     applyShakes();
+    applyFlash();
     updateHover(true);
   }
 

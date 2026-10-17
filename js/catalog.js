@@ -15,7 +15,7 @@ BP.Catalog = (function () {
   const ui = { tab: "cards", group: store.get("group", "weapon"), q: "", fx: [], onlyNew: false, open: null, useOverride: store.get("override", false), closed: store.get("closed", {}) };
 
   const FX_LABEL = { damage: "Урон", block: "Блок", blockSelf: "Блок себе", push: "Толчок", stun: "Оглушение", taunt: "Вызов", cleanse: "Очищение",
-    draw: "Добор", energy: "Энергия", sharedPool: "Общий пул", quest: "Квест" };
+    draw: "Добор", energy: "Энергия", sharedPool: "Общий пул", blockParty: "Блок всем", damageAllEnemies: "Урон всем врагам" };
   const ATTACK_LABEL = { melee: "Мили", ranged: "Дальние", aoe: "Массовки" };
   const TARGET_LABEL = { enemy: "враг", cell: "клетка поля", self: "себя", hero: "себя или союзника", ally: "только союзник", none: "без цели" };
 
@@ -52,13 +52,14 @@ BP.Catalog = (function () {
     });
     cfg.heroes.forEach((h) => Object.entries(h.cards || {}).forEach(([cid, n]) => add(cid, { type: "hero", label: h.name, n, heroes: [h.name] })));
     ((cfg.tests.specialCards || {}).pool || []).forEach((cid) => add(cid, { type: "special", label: "особая (тест)", n: 1, heroes: [] }));
+    (cfg.questRewards || []).forEach((cid) => add(cid, { type: "quest", label: "награда квеста", n: 1, heroes: [] }));
     if (cfg.rules.fillerCard) add(cfg.rules.fillerCard, { type: "filler", label: "добивка колоды", n: 0, heroes: [] });
     return map;
   }
 
   function srcText(c) {
     if (!c.src.length) return "не в колодах";
-    return c.src.map((s) => s.type === "filler" ? "добивка" : s.type === "special" ? "особая" : `${s.label}${s.n > 1 ? " ×" + s.n : ""}`).join(", ");
+    return c.src.map((s) => s.type === "filler" ? "добивка" : s.type === "special" ? "особая" : s.type === "quest" ? "награда квеста" : `${s.label}${s.n > 1 ? " ×" + s.n : ""}`).join(", ");
   }
 
   // Простая «сила» карты: урон / блок и сколько это на 1 энергию
@@ -89,6 +90,7 @@ BP.Catalog = (function () {
       });
       out.push({ key: "hero", title: "Кооп-карты героев", sub: "доп. карты сверх оружия", cards: cards.filter((c) => c.src.some((s) => s.type === "hero")) });
       out.push({ key: "special", title: "Особые карты", sub: "тесты: раздаются по одной за бой", cards: cards.filter((c) => c.src.some((s) => s.type === "special")) });
+      out.push({ key: "quest", title: "Награды квеста боя", sub: "одноразовые, получает герой, выполнивший квест", cards: cards.filter((c) => c.src.some((s) => s.type === "quest")) });
       out.push({ key: "filler", title: "Добивка колоды", sub: `до ${cfg.rules.minDeck} карт`, cards: cards.filter((c) => c.src.some((s) => s.type === "filler")) });
       out.push({ key: "none", title: "Не в колодах", sub: "есть в конфиге, но ни у кого не лежит", cards: cards.filter((c) => !c.src.length) });
     } else if (ui.group === "type") {
@@ -154,7 +156,6 @@ BP.Catalog = (function () {
     const row = (k, v) => (v ? `<tr><th>${k}</th><td>${v}</td></tr>` : "");
     const fxList = c.effects.map((e) => {
       let v = e.amount !== undefined ? String(e.amount) + (e.hits > 1 ? ` ×${e.hits} удара` : "") : "";
-      if (e.type === "quest") { const q = (cfg.quests || {})[e.id]; v = q ? q.text : e.id; }
       return `<li><b>${esc(FX_LABEL[e.type] || e.type)}</b>${v ? " " + esc(v) : ""} <span class="muted small">(${esc(e.type)})</span></li>`;
     }).join("");
     const where = c.src.length ? c.src.map((s) => `<li>${s.type === "weapon" ? `${esc(s.label)} ×${s.n} — ${esc(s.heroes.join(", ") || "ни у кого")}` : s.type === "hero" ? `доп. карта: ${esc(s.label)} ×${s.n}` : esc(s.label)}</li>`).join("") : "<li>ни у кого — карта есть в конфиге, но не попадает в колоды</li>";

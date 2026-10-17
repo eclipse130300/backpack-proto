@@ -31,7 +31,6 @@ BP.Deck = (function () {
       if (!c) return false;
       const types = (c.effects || []).map((e) => e.type);
       if (types.includes("sharedPool")) return !!(cfg.tests.sharedPool && cfg.tests.sharedPool.enabled);
-      if (types.includes("quest")) return !!(cfg.tests.questCards && cfg.tests.questCards.enabled);
       return true;
     };
     const pool = shuffle([...new Set((sc.pool || []).filter(allowed))]);
@@ -88,8 +87,9 @@ BP.Deck = (function () {
     }
   }
 
-  // Карта уходит в сброс: общая — в общий, своя — в сброс героя
+  // Карта уходит в сброс: общая — в общий, своя — в сброс героя. Одноразовая (квестовая) — пропадает.
   function discard(state, hero, card) {
+    if (card.exhaust) return;
     if (card.shared && state.shared) state.shared.discard.push(card);
     else hero.discard.push(card);
   }

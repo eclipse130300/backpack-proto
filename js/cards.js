@@ -24,9 +24,10 @@ BP.Cards = (function () {
         case "taunt": parts.push("враг атакует тебя"); break;
         case "cleanse": parts.push("снять проклятия"); break;
         case "draw": parts.push(`взять ${e.amount} карт`); break;
-        case "energy": parts.push(`+${e.amount} энергии`); break;
+        case "energy": parts.push(card.target === "ally" ? `союзнику +${e.amount} энергии` : `+${e.amount} энергии`); break;
         case "sharedPool": parts.push("общий пул энергии пати до конца хода"); break;
-        case "quest": parts.push("квест для пати"); break;
+        case "blockParty": parts.push(`всем героям ${e.amount} блока`); break;
+        case "damageAllEnemies": parts.push(`всем врагам ${e.amount} урона`); break;
       }
     });
     let t = parts.join(", ");
@@ -110,12 +111,26 @@ BP.Cards = (function () {
     let cells = [c];
     if (card.area === "shape") {
       const sh = (state.config.shapes || {})[card.shape];
-      cells = BP.Hex.shapeCells(c.col, c.row, sh ? sh.steps : [[]], (target && target.rot) || 0, r.cols, r.rows);
+      cells = BP.Hex.shapeCells(c.col, c.row, sh ? sh.steps : [[]], card.fixed ? 0 : (target && target.rot) || 0, r.cols, r.rows);
     }
     if (card.area === "adjacent") cells = cells.concat(BP.Hex.neighbors(c.col, c.row, r.cols, r.rows));
     if (card.area === "row") { cells = []; for (let i = 0; i < r.cols; i++) cells.push({ col: i, row: c.row }); }
     if (card.area === "line") cells = cells.concat(lineCells(state, hero, c));
     return cells;
+  }
+
+  // Клетки зоны за краем поля — только для подсказки (хексы с красным ✕), никого не бьют
+  const ALL_DIRS = [[0], [1], [2], [3], [4], [5]];
+  function areaOffCells(state, card, target) {
+    const c = primaryCell(state, card, target || {});
+    if (!c) return [];
+    const r = state.config.rules;
+    if (card.area === "shape") {
+      const sh = (state.config.shapes || {})[card.shape];
+      return BP.Hex.shapeCellsOff(c.col, c.row, sh ? sh.steps : [[]], card.fixed ? 0 : (target && target.rot) || 0, r.cols, r.rows);
+    }
+    if (card.area === "adjacent") return BP.Hex.shapeCellsOff(c.col, c.row, ALL_DIRS, 0, r.cols, r.rows);
+    return [];
   }
 
   // «Насквозь»: клетка за целью по линии от героя. Если за целью край поля — рикошет в тот же ряд соседней колонки:
@@ -174,7 +189,7 @@ BP.Cards = (function () {
     return { left, every: c.every, willCrit: left <= (dmg.hits || 1) };
   }
 
-  const rotatable = (card) => card.area === "shape";
+  const rotatable = (card) => card.area === "shape" && !card.fixed; // tests.fixedShapes — фигура не крутится
 
   // Превью для UI: суммарный урон по каждому врагу
   function preview(state, hero, card, target) {
@@ -233,7 +248,7 @@ BP.Cards = (function () {
   // Тип карты для цвета картинки: melee | ranged | aoe | block | coop | special | filler
   function kind(card) {
     const t = (card.effects || []).map((e) => e.type);
-    if (t.includes("sharedPool") || t.includes("quest")) return "special";
+    if (t.includes("sharedPool") || card.questCard || /^q_/.test(card.id || "")) return "special";
     if (card.id === "weak_strike") return "filler";
     if (card.target === "hero" || card.target === "ally" || t.includes("taunt") || t.includes("cleanse")) return "coop";
     if (card.attack === "aoe") return "aoe";
@@ -242,5 +257,5 @@ BP.Cards = (function () {
     return "coop";
   }
 
-  return { mergeCost, kind, text, rewardText, tags, has, checkTarget, areaCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
+  return { mergeCost, kind, text, rewardText, tags, has, checkTarget, areaCells, areaOffCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
 })();
