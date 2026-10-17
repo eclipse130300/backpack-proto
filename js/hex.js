@@ -1,28 +1,32 @@
 // Геометрия хекс-поля врагов 6×2 (вид сверху).
-// row 0 — передний ряд (ближе к героям, внизу экрана), row 1 — задний (сверху, сдвинут на полхекса вправо).
+// РЕШЕНО (17.10): хексы смотрят на героев ровной стороной («flat-top»). Две клетки колонки стоят строго
+// друг за другом: row 0 — передний ряд (ближе к героям, внизу экрана), row 1 — задний (прямо за ним).
+// Соседние колонки сдвинуты на полхекса: колонки 0, 2, 4 (1, 3, 5 при счёте с единицы) ближе к героям, 1, 3, 5 — дальше.
+// Единица длины — ширина хекса (от угла до угла). Шаг колонок 0.75, высота хекса ROW_H.
 window.BP = window.BP || {};
 
 BP.Hex = (function () {
   const ROW_H = 0.866; // высота ряда в "ширинах хекса"
 
-  // Направления толчка: 6 сторон, угол в градусах (0 = вправо, 90 = вверх, к заднему ряду)
+  // 6 сторон хекса (угол в градусах, 90 = назад, к заднему ряду; 270 = вперёд, к героям). Чистых «влево/вправо» нет.
   const DIRS = [
-    { id: 0, angle: 0, label: "→", name: "вправо" },
-    { id: 1, angle: 60, label: "↗", name: "вверх-вправо" },
-    { id: 2, angle: 120, label: "↖", name: "вверх-влево" },
-    { id: 3, angle: 180, label: "←", name: "влево" },
-    { id: 4, angle: 240, label: "↙", name: "вниз-влево" },
-    { id: 5, angle: 300, label: "↘", name: "вниз-вправо" },
+    { id: 0, angle: 30, label: "↗", name: "назад-вправо" },
+    { id: 1, angle: 90, label: "↑", name: "назад" },
+    { id: 2, angle: 150, label: "↖", name: "назад-влево" },
+    { id: 3, angle: 210, label: "↙", name: "вперёд-влево" },
+    { id: 4, angle: 270, label: "↓", name: "вперёд" },
+    { id: 5, angle: 330, label: "↘", name: "вперёд-вправо" },
   ];
 
+  const colX = (col) => col * 0.75;
   function center(col, row) {
-    return { x: col + (row === 1 ? 0.5 : 0), y: row * ROW_H };
+    return { x: colX(col), y: row * ROW_H + (col % 2 === 1 ? ROW_H / 2 : 0) };
   }
 
-  // Позиция героя i (0..2) под полем: каждый герой "стоит" под двумя колонками.
+  // Позиция героя i (0..2) под полем: каждый герой "стоит" под двумя колонками (своим коридором).
   function heroPos(i, cols) {
     const per = cols / 3;
-    return { x: i * per + (per - 1) / 2, y: -1.4 };
+    return { x: (colX(i * per) + colX(i * per + per - 1)) / 2, y: -1.4 };
   }
 
   function cellAt(x, y, cols, rows) {
@@ -39,7 +43,7 @@ BP.Hex = (function () {
   function neighbor(col, row, dir, cols, rows) {
     const p = center(col, row);
     const a = (DIRS[dir].angle * Math.PI) / 180;
-    return cellAt(p.x + Math.cos(a), p.y + Math.sin(a), cols, rows);
+    return cellAt(p.x + ROW_H * Math.cos(a), p.y + ROW_H * Math.sin(a), cols, rows);
   }
 
   function neighbors(col, row, cols, rows) {
@@ -77,14 +81,13 @@ BP.Hex = (function () {
     return out;
   }
 
-  // Клетки «впереди» (ближе к героям): для заднего ряда — две клетки переднего ряда, между которыми он стоит.
-  function frontCells(col, row, cols, rows) {
-    if (row === 0) return [];
-    return [4, 5].map((d) => neighbor(col, row, d, cols, rows)).filter(Boolean);
+  // Клетка «впереди» (ближе к героям): для заднего ряда — передняя клетка той же колонки.
+  function frontCells(col, row) {
+    return row === 0 ? [] : [{ col, row: row - 1 }];
   }
 
   // Коридор (0..2) для колонки: по cols/3 колонки на героя
   function laneOf(col, cols) { return Math.min(2, Math.floor(col / (cols / 3))); }
 
-  return { DIRS, center, heroPos, neighbor, neighbors, dirFromPoint, shapeCells, frontCells, laneOf, ROW_H };
+  return { DIRS, colX, center, heroPos, neighbor, neighbors, dirFromPoint, shapeCells, frontCells, laneOf, ROW_H };
 })();

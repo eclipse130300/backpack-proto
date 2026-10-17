@@ -453,12 +453,6 @@ BP.Engine = (function () {
       h.debuffs.forEach((d) => d.turns--);
       h.debuffs = h.debuffs.filter((d) => d.turns > 0);
     });
-    if (state.config.rules.enemyAdvance) {
-      state.enemies.filter((e) => e.alive && e.row === 1).forEach((e) => {
-        const front = { col: e.col, row: 0 };
-        if (!C().enemyAt(state, front.col, front.row)) { e.row = 0; log(state, e.name, "шагает в передний ряд"); }
-      });
-    }
     if (!checkFightEnd(state)) startPlayerTurn(state);
   }
 

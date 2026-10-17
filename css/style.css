@@ -71,13 +71,13 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
   padding: 5px 14px; border-radius: 8px; font-size: 15px; white-space: nowrap; z-index: 20; display: none; pointer-events: none; }
 .board-side { position: absolute; right: 18px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; width: 170px; z-index: 5; }
 .field { position: relative; flex-shrink: 0; }
-.hex { position: absolute; width: var(--hw); height: calc(var(--hw) * 1.1547);
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: #4a2a22; display: flex;
+.hex { position: absolute; width: var(--hw); height: calc(var(--hw) * 0.866);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: #4a2a22; display: flex;
   align-items: center; justify-content: center; text-align: center; }
 .hex.lane0 { background: color-mix(in srgb, var(--lane0) 60%, #1a0d0a); }
 .hex.lane1 { background: color-mix(in srgb, var(--lane1) 60%, #1a0d0a); }
 .hex.lane2 { background: color-mix(in srgb, var(--lane2) 60%, #1a0d0a); }
-.hex .inner { position: absolute; inset: 4px; clip-path: inherit; background: #2a1814; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18% 6%; }
+.hex .inner { position: absolute; inset: 4px; clip-path: inherit; background: #2a1814; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4% 17%; text-align: center; }
 .hex.row0 .inner { background: #321c16; }
 .hex.enemy .inner { background: linear-gradient(#5a1f1a, #3a1310); }
 .hex.enemy.acting .inner { background: linear-gradient(#a0352a, #6a1d16); }
@@ -98,7 +98,7 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 .hex .badges { font-size: 11px; color: #e8d36a; min-height: 13px; margin-top: 2px; }
 .hex .preview { position: absolute; top: 12%; font-size: 30px; font-weight: 800; color: #ffd36b; text-shadow: 0 0 6px #000, 0 0 2px #000; pointer-events: none; }
 .hex .preview.crit { color: #ff6b4a; }
-.hex .rowlabel { position: absolute; bottom: 20%; font-size: 12px; color: #7a5a4a; }
+.hex .rowlabel { position: absolute; bottom: 12%; font-size: 12px; color: #7a5a4a; }
 .bar { width: 80%; height: 8px; background: #111; border-radius: 4px; overflow: hidden; margin: 3px auto; position: relative; }
 .bar > i { display: block; height: 100%; background: var(--red); }
 .bar.hp > i { background: linear-gradient(#c43a2c, #8a1f17); }
@@ -284,6 +284,9 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 
 /* Компактный режим для невысоких экранов (1366×768 и т.п.) */
 @media (max-height: 860px) {
+  .hex .inner { padding: 2% 14%; }
+  .hex .intent { font-size: 11px; padding: 1px 4px; }
+  .hex .ename { font-size: 13px; }
   .handbar { height: 224px; padding: 6px 8px 8px; gap: 8px; }
   .card { width: 92px; height: 138px; padding: 4px 4px; }
   .card .cart { height: 46px; margin-top: 7px; }

@@ -4,7 +4,7 @@ window.BP = window.BP || {};
 BP.Cards = (function () {
   const TARGET_LABEL = { enemy: "враг", cell: "клетка", self: "себя", hero: "себя или союзника", ally: "союзник", none: "" };
   const ATTACK_LABEL = { melee: "Мили", ranged: "Дальний", aoe: "Массовая" };
-  const AREA_LABEL = { adjacent: "по клетке и всем соседям", row: "по всему ряду", line: "насквозь (цель и враг за ней; у края поля — рикошет вбок)" };
+  const AREA_LABEL = { adjacent: "по клетке и всем соседям", row: "по всему ряду", line: "насквозь (цель и враг за ней; у края поля — рикошет в соседнюю колонку)" };
   // card.shapeName кладёт engine.makeCard из config.shapes
   function areaLabel(card) {
     if (card.area === "shape") return card.shapeName ? "по фигуре: " + card.shapeName : "";
@@ -61,12 +61,9 @@ BP.Cards = (function () {
     return state.enemies.find((e) => e.alive && e.col === col && e.row === row) || null;
   }
 
-  // РЕШЕНО: мили бьют только открытых. Враг закрыт, если перед ним (ближе к героям) стоит другой враг.
+  // РЕШЕНО: мили бьют только открытых. Враг закрыт, если прямо перед ним (в той же колонке) стоит другой враг.
   function isExposed(state, e) {
-    const r = state.config.rules;
-    const front = BP.Hex.frontCells(e.col, e.row, r.cols, r.rows).map((c) => !!enemyAt(state, c.col, c.row));
-    if (!front.length) return true;
-    return r.cover === "all" ? !front.every(Boolean) : !front.some(Boolean);
+    return !BP.Hex.frontCells(e.col, e.row).some((c) => !!enemyAt(state, c.col, c.row));
   }
 
   // Можно ли сыграть карту с этой целью. target: {enemy, cell:{col,row}, hero, dir}
@@ -121,7 +118,7 @@ BP.Cards = (function () {
     return cells;
   }
 
-  // «Насквозь»: клетка за целью по линии от героя. Если за целью край поля — рикошет вбок по ряду цели:
+  // «Насквозь»: клетка за целью по линии от героя. Если за целью край поля — рикошет в тот же ряд соседней колонки:
   // герой справа от цели — влево, слева — вправо, ровно напротив — в обе стороны.
   function lineCells(state, hero, c) {
     const r = state.config.rules;
@@ -130,8 +127,8 @@ BP.Cards = (function () {
     const n = BP.Hex.neighbor(c.col, c.row, dir, r.cols, r.rows);
     if (n) return [n];
     const dx = BP.Hex.center(c.col, c.row).x - from.x;
-    const dirs = Math.abs(dx) < 0.25 ? [3, 0] : dx < 0 ? [3] : [0]; // 3 — влево, 0 — вправо
-    return dirs.map((d) => BP.Hex.neighbor(c.col, c.row, d, r.cols, r.rows)).filter(Boolean);
+    const sides = Math.abs(dx) < 0.1 ? [-1, 1] : dx < 0 ? [-1] : [1];
+    return sides.map((s) => ({ col: c.col + s, row: c.row })).filter((x) => x.col >= 0 && x.col < r.cols);
   }
 
   // Все враги, которых задевает карта (по зоне)

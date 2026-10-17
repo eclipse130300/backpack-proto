@@ -15,15 +15,18 @@ BP.UIGame = (function () {
     const r = state.config.rules, z = sizes();
     const availW = Math.min(window.innerWidth - z.logW - 2 * 190, 1300);
     const availH = window.innerHeight - 54 - z.handH - z.tokensH - 76;
-    const hw = Math.max(80, Math.min(190, availW / (r.cols + 0.5), availH / (1 + 0.75 * (r.rows - 1)) / 1.1547));
-    const hh = hw * 1.1547;
-    return { hw, hh, width: hw * (r.cols + 0.5), height: hh * (1 + 0.75 * (r.rows - 1)), cols: r.cols, rows: r.rows };
+    // Хексы ровной стороной к героям: ширина hw (угол–угол), высота hh = hw·0.866, шаг колонок 0.75·hw,
+    // нечётные колонки (1, 3, 5) сдвинуты на полхекса назад (вверх).
+    const wUnits = 0.75 * (r.cols - 1) + 1, hUnits = 0.866 * (r.rows + 0.5);
+    const hw = Math.max(80, Math.min(230, availW / wUnits, availH / hUnits));
+    const hh = hw * 0.866;
+    return { hw, hh, width: hw * wUnits, height: hh * (r.rows + 0.5), cols: r.cols, rows: r.rows };
   }
 
   function cellPos(g, col, row) {
-    // row 1 (задний) сверху, row 0 (передний) снизу
-    const top = (g.rows - 1 - row) * g.hh * 0.75;
-    const left = (col + (row === 1 ? 0.5 : 0)) * g.hw;
+    // row 1 (задний) сверху, row 0 (передний) снизу; нечётные колонки выше на полхекса
+    const top = (g.rows - 1 - row) * g.hh + (col % 2 === 1 ? 0 : g.hh / 2);
+    const left = col * 0.75 * g.hw;
     return { left, top };
   }
 
@@ -102,7 +105,7 @@ BP.UIGame = (function () {
       const inc = incomingFor(state, h);
       const weak = (h.debuffs || []).map((d) => `☠ −${d.amount} урона (${d.turns} х.)`).join(" ");
       const tgt = state.actingTargets && state.actingTargets.includes(h.id) ? "targeted" : "";
-      html += `<div class="hero token ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"} ${tgt}" data-drop="hero" data-tip="hero" data-hero="${h.id}" style="width:${g.hw * 2 - 14}px">
+      html += `<div class="hero token ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"} ${tgt}" data-drop="hero" data-tip="hero" data-hero="${h.id}" style="width:${g.width / 3 - 14}px">
         ${portrait(state, h)}
         <div class="tinfo">
           <div class="hname">${esc(h.name)} ${weaponsHtml(state, h)} ${state.phase === "players" && owner ? `<span class="readytag">${owner.ready ? "✅" : "⏳"}</span>` : ""}</div>
