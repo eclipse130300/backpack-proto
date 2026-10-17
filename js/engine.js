@@ -11,7 +11,7 @@ BP.Engine = (function () {
     const state = {
       config: clone(config), phase: "lobby", seq: 1, turn: 0, fightIndex: 0,
       players: players || {}, heroes: [], enemies: [], log: [], fightLog: [],
-      task: null, quest: null, pool: null, shared: null, turnStats: null, fightStats: null,
+      quest: null, pool: null, shared: null, turnStats: null, fightStats: null,
       actingEnemy: null, actingTargets: [], enemyQueue: [], banner: null, summary: null, fx: [], fxSeq: 0,
     };
     state.config.heroes.forEach((hc) => {
@@ -78,13 +78,7 @@ BP.Engine = (function () {
       h.stats = { cards: 0, energy: 0, damage: 0, blockGiven: 0, merges: 0, taken: 0 };
     });
     BP.Deck.buildFight(state, makeCard); // колоды героев (и общая) — js/deck.js
-    state.fightStats = { collisions: 0, turns: 0, taskDone: false, crits: 0, aoeBest: 0 };
-    state.task = null;
-    if (cfg.tests.partyTask.enabled && enc.task) {
-      const ids = Object.keys(cfg.tasks);
-      const tid = enc.task === "random" ? ids[Math.floor(Math.random() * ids.length)] : enc.task;
-      if (cfg.tasks[tid]) state.task = Object.assign({ id: tid, done: false }, clone(cfg.tasks[tid]));
-    }
+    state.fightStats = { collisions: 0, turns: 0, crits: 0, aoeBest: 0 };
     state.summary = null;
     log(state, "—", `Бой ${index + 1}: ${enc.name}`);
     // квест боя (tests.fightQuest): сначала голосование за 1 из 3 — фаза questPick, бой начнётся после выбора (js/quests.js)
@@ -324,44 +318,7 @@ BP.Engine = (function () {
     return null;
   }
 
-  // ---------- Задачи и квесты ----------
-  function condMet(state, c, endOfTurn) {
-    const ts = state.turnStats;
-    switch (c.type) {
-      case "cardsInTurn": return ts.played.filter((p) => p.cost === c.cost).length >= c.count;
-      case "killsInTurn": return ts.kills >= c.count;
-      case "collisions": return state.fightStats.collisions >= c.count;
-      case "sameTarget": {
-        const alive = aliveHeroes(state).map((h) => h.id);
-        return alive.length > 1 && Object.values(ts.damageBy).some((list) => alive.every((id) => list.includes(id)));
-      }
-      case "blockAll": return endOfTurn && aliveHeroes(state).every((h) => h.block >= c.amount);
-    }
-    return false;
-  }
-
-  function giveReward(state, r) {
-    const heroes = aliveHeroes(state);
-    switch (r.type) {
-      case "energyNextTurn": heroes.forEach((h) => (h.bonusEnergy += r.amount)); break;
-      case "blockAll": heroes.forEach((h) => (h.block += r.amount)); break;
-      case "drawNow": heroes.forEach((h) => drawCards(state, h, r.amount)); break;
-      case "damageAllEnemies": state.enemies.filter((e) => e.alive).forEach((e) => hurtEnemy(state, e, r.amount)); break;
-    }
-    return C().rewardText(r);
-  }
-
-  function checkGoals(state, endOfTurn) {
-    if (state.task && !state.task.done && condMet(state, state.task.condition, endOfTurn)) {
-      state.task.done = true; state.fightStats.taskDone = true;
-      const r = giveReward(state, state.task.reward);
-      state.banner = { id: state.seq++, text: `Задача пати выполнена: ${r}` };
-      log(state, "Пати", `выполнила задачу «${state.task.text}»`, { detail: r });
-    }
-  }
-
-  function afterChange(state, endOfTurn) {
-    checkGoals(state, endOfTurn);
+  function afterChange(state, endOfTurn) { // endOfTurn пока не используется
     checkFightEnd(state);
   }
 
@@ -388,7 +345,6 @@ BP.Engine = (function () {
     return {
       id: state.seq++, win, fight: state.fightIndex + 1, name: state.config.encounters[state.fightIndex].name,
       turns: state.turn, collisions: state.fightStats.collisions,
-      task: state.task ? { text: state.task.text, done: state.task.done } : null,
       quest: state.quest ? { text: state.quest.text, done: state.quest.done } : null,
       heroes: state.heroes.map((h) => Object.assign({ name: h.name, hp: h.hp, maxHp: h.maxHp }, h.stats)),
     };

@@ -46,16 +46,6 @@ BP.Cards = (function () {
     return out;
   }
 
-  function rewardText(r) {
-    switch (r.type) {
-      case "energyNextTurn": return `всем +${r.amount} энергии в след. ход`;
-      case "blockAll": return `всем +${r.amount} блока`;
-      case "drawNow": return `всем +${r.amount} карт`;
-      case "damageAllEnemies": return `всем врагам ${r.amount} урона`;
-    }
-    return "";
-  }
-
   const has = (card, type) => (card.effects || []).some((e) => e.type === type);
 
   // ---------- Цели ----------
@@ -258,5 +248,5 @@ BP.Cards = (function () {
     return "coop";
   }
 
-  return { mergeCost, kind, text, rewardText, tags, has, checkTarget, areaCells, areaOffCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
+  return { mergeCost, kind, text, tags, has, checkTarget, areaCells, areaOffCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
 })();

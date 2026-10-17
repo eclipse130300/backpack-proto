@@ -105,19 +105,6 @@ BP.FX = (function () {
   }
 
   // ---------- Тултипы ----------
-  function progress(s, c) {
-    const ts = s.turnStats || { played: [], kills: 0, damageBy: {} };
-    const alive = s.heroes.filter((h) => h.alive);
-    switch (c.type) {
-      case "cardsInTurn": return `${ts.played.filter((p) => p.cost === c.cost).length} из ${c.count} карт за ${c.cost}⚡ в этот ход`;
-      case "killsInTurn": return `${ts.kills} из ${c.count} убийств в этот ход`;
-      case "collisions": return `${(s.fightStats || {}).collisions || 0} из ${c.count} столкновений`;
-      case "sameTarget": { const best = Math.max(0, ...Object.values(ts.damageBy).map((l) => l.length)); return `${best} из ${alive.length} героев ударили одного врага`; }
-      case "blockAll": { const min = alive.length ? Math.min(...alive.map((h) => h.block)) : 0; return `сейчас минимум блока: ${min} из ${c.amount} (проверка в конце хода)`; }
-    }
-    return "";
-  }
-
   function intentLong(s, e) {
     const it = e.intent || {};
     const names = (it.targets || []).map((id) => BP.UIGame.heroName(s, id)).join(", ");
@@ -180,12 +167,6 @@ BP.FX = (function () {
         ${crit ? `<div class="muted">${crit}</div>` : ""}
         ${(h.debuffs || []).map((d) => `<div class="tip-note bad">☠ Проклятие: −${d.amount} к урону, ещё ${d.turns} х.</div>`).join("")}
         <div class="tip-sec">Его будут бить</div>${inc.length ? inc.map((e) => `<div>⚔ ${esc(e.name)}: ${e.intent.damage}${e.intent.hits > 1 ? "×" + e.intent.hits : ""}</div>`).join("") : '<div class="muted">никто</div>'}`;
-    }
-    if (kind === "task" && s.task) {
-      const t = s.task;
-      return `<div class="tip-title">🎯 Задача пати на бой</div><div>${esc(t.text)}</div>
-        <div class="tip-sec">Прогресс</div><div>${t.done ? "✔ выполнена" : esc(progress(s, t.condition))}</div>
-        <div class="tip-sec">Награда всем</div><div class="good">${esc(BP.Cards.rewardText(t.reward))}</div>`;
     }
     if (kind === "fquest" && s.quest) {
       const q = s.quest, rc = s.config.cards[q.reward] || {};

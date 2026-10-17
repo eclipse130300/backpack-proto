@@ -77,7 +77,7 @@ BP.UI = (function () {
     const rows = sm.heroes.map((h) => `<tr><td>${esc(h.name)}</td><td>${h.hp}/${h.maxHp}</td><td>${h.cards}</td><td>${h.energy}</td><td>${h.damage}</td><td>${h.blockGiven}</td><td>${h.taken}</td><td>${h.merges}</td></tr>`).join("");
     return `<div class="modal-back"><div class="modal" style="max-width:860px">
       <h2>${title}</h2>
-      <div class="muted">«${esc(sm.name)}» · ходов: ${sm.turns} · столкновений: ${sm.collisions}${sm.task ? ` · задача пати: ${sm.task.done ? "✔ выполнена" : "✘ нет"}` : ""}${sm.quest ? ` · квест боя: ${sm.quest.done ? "✔ выполнен" : "✘ нет"}` : ""}</div>
+      <div class="muted">«${esc(sm.name)}» · ходов: ${sm.turns} · столкновений: ${sm.collisions}${sm.quest ? ` · квест боя: ${sm.quest.done ? "✔ выполнен" : "✘ нет"}` : ""}</div>
       <table><tr><th>Герой</th><th>ХП</th><th>Карт</th><th>Энергии</th><th>Урон</th><th>Блок дал</th><th>Урона получил</th><th>Мерджей</th></tr>${rows}</table>
       <div class="row">${host ? (s.phase === "won" ? `<button class="primary" data-act="next">Следующий бой</button>` : `<button class="primary" data-act="retry">Заново</button>`) : `<span class="muted">Ждём хоста…</span>`}
       <button data-act="log-csv">Скачать лог (CSV)</button><button data-act="toggle-log">Показать лог</button></div>

@@ -55,8 +55,6 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 .topbar .title { font-weight: 700; color: var(--gold); }
 .chip { padding: 4px 10px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); font-size: 15px; white-space: nowrap; }
 .chip[data-tip] { cursor: help; }
-.chip.task { border-color: var(--gold); }
-.chip.task.done { border-color: var(--green); color: var(--green); }
 .chip.quest { border-color: var(--purple); max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
 .chip.quest.done { color: var(--green); border-color: var(--green); }
 .chip.pool { border-color: var(--blue); color: #bcd6f5; }

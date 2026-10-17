@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 7,
+  version: 8,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -54,9 +54,6 @@ window.GAME_CONFIG = {
     // Сыгранная общая карта уходит в общий сброс. minDeck — минимум общей колоды, недобор = слабые удары.
     // Карты героя подсвечены его цветом, общие — бирюзовой полосой «общая».
     sharedDeck: { enabled: false, minDeck: 12 },
-
-    // Задача пати на бой: у каждого боя есть задача (см. tasks и encounters), бонус всем.
-    partyTask: { enabled: true },
 
     // Квест боя (17.10, заменил «Клятвы»): перед боем игроки голосуют за 1 из 3 случайных квестов (у каждого своя награда).
     // Ничья — рулетка выбирает случайно. Во время боя над полем висит «?»: серый — не выполнен, золотой — выполнен.
@@ -198,16 +195,6 @@ window.GAME_CONFIG = {
     priest:  { name: "Падший жрец",  hp: 150, melee: false, actions: [{ type: "attack", damage: 17 }, { type: "attack", damage: 10, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
   },
 
-  // ---------- Задачи пати на бой ----------
-  // condition: cardsInTurn {count, cost} | sameTarget | killsInTurn {count}
-  //            collisions {count} (за бой) | blockAll {amount} (у всех героев в конце хода)
-  // reward:    energyNextTurn {amount} | blockAll {amount} | damageAllEnemies {amount} | drawNow {amount}
-  tasks: {
-    three_cheap: { text: "Сыграйте 3 карты по 1 энергии за один ход", condition: { type: "cardsInTurn", count: 3, cost: 1 }, reward: { type: "energyNextTurn", amount: 1 } },
-    focus:       { text: "Все герои бьют одного врага за один ход",  condition: { type: "sameTarget" }, reward: { type: "damageAllEnemies", amount: 5 } },
-    crush:       { text: "Устройте 2 столкновения толчками за бой", condition: { type: "collisions", count: 2 }, reward: { type: "blockAll", amount: 6 } }
-  },
-
   // ---------- Квест боя (tests.fightQuest) ----------
   // Перед боем — 3 разных случайных условия, у каждого своя случайная награда; игроки голосуют. Условие — на весь бой.
   // condition: killMarked (убить отмеченного 🎯 врага) | aoeHits {count} (задеть N врагов одной массовкой)
@@ -235,7 +222,7 @@ window.GAME_CONFIG = {
   questRewards: ["q_surge", "q_insight", "q_gift", "q_bulwark", "q_wave", "unity"],
 
   // ---------- Бои (идут по порядку) ----------
-  // task: id задачи пати | "random" | null. Клетки: col 0–5 (слева направо), row 0 — передний ряд, 1 — задний.
+  // Клетки: col 0–5 (слева направо), row 0 — передний ряд, 1 — задний.
   // Враг заднего ряда (col, 1) стоит прямо за (col, 0) — она его и прикрывает. Колонки 0, 2, 4 ближе к героям.
   // Задумка забега: каждый бой отъедает немного ХП, минибосс — больше всех.
   //   1 «Трупоеды» — разминка, лучник за упырём учит бить дальними;
@@ -243,9 +230,9 @@ window.GAME_CONFIG = {
   //   3 «Громила» — танк с блоком (распылять урон невыгодно) и два дальника по краям;
   //   4 «Минибосс: Жрец» — жрец в заднем ряду за упырём (рядом второй упырь), сбоку лучник.
   encounters: [
-    { name: "Трупоеды",          task: "three_cheap", enemies: [{ type: "ghoul", col: 1, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 2, row: 1 }, { type: "archer", col: 4, row: 1 }] },
-    { name: "Стая",              task: "focus",       enemies: [{ type: "hound", col: 0, row: 0 }, { type: "hound", col: 2, row: 0 }, { type: "hound", col: 3, row: 0 }, { type: "hound", col: 5, row: 0 }, { type: "archer", col: 2, row: 1 }] },
-    { name: "Громила",           task: "crush",       enemies: [{ type: "brute", col: 2, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 0, row: 1 }, { type: "archer", col: 5, row: 1 }] },
-    { name: "Минибосс: Жрец",    task: "focus",       enemies: [{ type: "priest", col: 2, row: 1 }, { type: "ghoul", col: 2, row: 0 }, { type: "ghoul", col: 3, row: 0 }, { type: "archer", col: 5, row: 1 }] }
+    { name: "Трупоеды",          enemies: [{ type: "ghoul", col: 1, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 2, row: 1 }, { type: "archer", col: 4, row: 1 }] },
+    { name: "Стая",              enemies: [{ type: "hound", col: 0, row: 0 }, { type: "hound", col: 2, row: 0 }, { type: "hound", col: 3, row: 0 }, { type: "hound", col: 5, row: 0 }, { type: "archer", col: 2, row: 1 }] },
+    { name: "Громила",           enemies: [{ type: "brute", col: 2, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 0, row: 1 }, { type: "archer", col: 5, row: 1 }] },
+    { name: "Минибосс: Жрец",    enemies: [{ type: "priest", col: 2, row: 1 }, { type: "ghoul", col: 2, row: 0 }, { type: "ghoul", col: 3, row: 0 }, { type: "archer", col: 5, row: 1 }] }
   ]
 };

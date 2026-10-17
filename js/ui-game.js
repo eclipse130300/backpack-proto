@@ -194,7 +194,6 @@ BP.UIGame = (function () {
 
   function renderTop(state) {
     const enc = state.config.encounters[state.fightIndex] || {};
-    const task = state.task ? `<span class="chip task ${state.task.done ? "done" : ""}" data-tip="task">🎯 Задача пати${state.task.done ? " ✔" : ""}</span>` : "";
     const pool = state.pool ? `<span class="chip pool">⚡ Общий пул: ${state.pool.amount}</span>` : "";
     const shared = state.shared ? `<span class="chip shared" title="Общая колода / общий сброс">🂠 Общая колода ${state.shared.draw.length} · ♻ ${state.shared.discard.length}</span>` : "";
     const req = BP.Engine.requiredPlayers(state);
@@ -202,7 +201,7 @@ BP.UIGame = (function () {
     const roomInfo = BP.Session.code ? `<span class="chip" title="Код комнаты">🔑 ${esc(BP.Session.code)}</span>` : `<span class="chip">локально</span>`;
     return `<div class="topbar">
       <span class="title">Бой ${state.fightIndex + 1}/${state.config.encounters.length}: ${esc(enc.name || "")}</span>
-      <span class="chip">Ход ${state.turn}</span>${task}${pool}${shared}
+      <span class="chip">Ход ${state.turn}</span>${pool}${shared}
       <span class="grow"></span>${ready}${roomInfo}
       <span class="chip" data-tip="targeting">Цели врагов: ${corridors(state) ? "коридоры" : "любой"}</span>
       ${BP.Session.isHost() ? `<button data-act="settings">⚙</button>` : ""}
