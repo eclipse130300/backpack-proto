@@ -20,7 +20,7 @@ BP.Cards = (function () {
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
         case "blockSelf": parts.push(`себе ${e.amount} блока`); break;
         case "blockHero": parts.push(`отдавшему дар ${e.amount} блока`); break;
-        case "push": parts.push(`${card.target === "cell" ? "сначала толкнуть врага в клетке прицела" : "толкнуть"}${card.pushDist > 1 ? " на 2 клетки" : ""} (выбор стороны)`); break;
+        case "push": parts.push(`${card.target === "cell" ? "сначала толкнуть врага в клетке прицела" : "толкнуть"}${card.pushDist > 1 ? ` на ${card.pushDist} клетки` : ""} (выбор стороны)`); break;
         case "sparks": parts.push(`${e.count} искры по ${e.amount} в случайных соседних врагов (не в цель)`); break;
         case "stun": parts.push("оглушить (пропустит действие)"); break;
         case "taunt": parts.push("враг атакует тебя"); break;
@@ -172,7 +172,7 @@ BP.Cards = (function () {
         hits.push({ enemy: e.uid, amount: base * mult * exec, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "" });
       });
     }
-    if (BP.Gifts && (card.blast || card.repeat || card.chain || card.focus)) BP.Gifts.extraHits(state, hero, card, target, enemies, Math.max(0, dmgEff.amount - weakness(hero)), hits);
+    if (BP.Gifts && BP.Gifts.hasExtra(card)) BP.Gifts.extraHits(state, hero, card, target, enemies, Math.max(0, dmgEff.amount - weakness(hero)), hits);
     if (commit && crit) crit.count = counter;
     return hits;
   }
