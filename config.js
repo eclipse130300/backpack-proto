@@ -225,7 +225,8 @@ window.GAME_CONFIG = {
     brute:   { name: "Громила",      hp: 88, melee: true,  actions: [{ type: "block", amount: 8 }, { type: "attack", damage: 9, targets: 3 }] },
     // баланс 18.10 (ветка merge, бот medium): Жрец ХП 150→110, удары 17→14 и 10×2→8×2 — с мерджем medium выигрывал 30%;
     // 18.10 13:45 после «прибавка в базовый урон» мердж стал сильнее (79%) — ХП 110→120, удары вернули 17 и 10×2
-    priest:  { name: "Падший жрец",  hp: 120, melee: false, actions: [{ type: "attack", damage: 17 }, { type: "attack", damage: 10, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
+    // 19.10 (ветка merge-2, бот medium): после упрощения даров medium выигрывал 55% — удары 17→15 и 10×2→9×2 (≈70%)
+    priest:  { name: "Падший жрец",  hp: 120, melee: false, actions: [{ type: "attack", damage: 15 }, { type: "attack", damage: 9, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
   },
 
   // ---------- Квест боя (tests.fightQuest) ----------
