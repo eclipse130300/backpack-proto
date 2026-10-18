@@ -199,7 +199,7 @@ BP.UI = (function () {
         break;
       }
       case "reset-config": BP.Session.clearOverride(); ui.modal = null; BP.Session.restart(window.GAME_CONFIG); toast("Снова используется config.js", "good"); break;
-      case "dir": { const d = ui.dirPick; ui.dirPick = null; BP.Session.dispatch({ a: "play", hero: d.hero, card: d.card, target: { enemy: d.enemy, dir: +el.dataset.dir } }); break; }
+      case "dir": { const d = ui.dirPick; ui.dirPick = null; BP.Session.dispatch({ a: "play", hero: d.hero, card: d.card, target: Object.assign({ enemy: d.enemy }, d.target || {}, { dir: +el.dataset.dir }) }); break; }
       case "dir-cancel": ui.dirPick = null; render(); break;
       case "play-self": {
         const cardEl = el.closest(".card");

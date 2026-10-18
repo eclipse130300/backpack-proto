@@ -29,6 +29,7 @@ BP.Drag = (function () {
 
   function isValid(el, hero, card) {
     const s = st(), kind = el.dataset.drop;
+    const onToken = kind === "hero" && el.classList.contains("token"); // фишка героя на поле (а не панель его руки внизу)
     if (kind === "merge") {
       if (!s.config.tests.merge.enabled || el.dataset.hero === hero.id) return false;
       const ally = s.heroes.find((h) => h.id === el.dataset.hero);
@@ -44,11 +45,12 @@ BP.Drag = (function () {
       }
       case "cell": return kind === "enemy" || kind === "cell";
       case "hero": case "ally": {
-        if (kind !== "hero") return false;
+        if (!onToken) return false; // только фишка героя на поле, не панель руки (18.10)
         return !BP.Cards.checkTarget(s, hero, card, { hero: el.dataset.hero });
       }
-      case "self": return kind === "field" || kind === "enemy" || kind === "cell" || (kind === "hero" && el.dataset.hero === hero.id);
-      case "none": return kind !== "merge";
+      // «на себя» и «без цели» — только над полем боя: отпустил над рукой — карта вернулась (18.10)
+      case "self": return kind === "field" || kind === "enemy" || kind === "cell" || (onToken && el.dataset.hero === hero.id);
+      case "none": return kind === "field" || kind === "enemy" || kind === "cell" || onToken;
     }
     return false;
   }
@@ -75,8 +77,8 @@ BP.Drag = (function () {
       if (BP.Cards.rotatable(c)) parts.push("🖱 Правая кнопка — повернуть фигуру");
       else if (c.area === "shape") parts.push(`Фигура «${c.shapeName}» не крутится`);
       if (c.area === "shape" || c.area === "adjacent") parts.push("Клетки с ✕ за краем поля никого не бьют");
-      if (c.target === "hero" || c.target === "ally") parts.push("Цель — герой (фишка на поле или его рука внизу)");
-      if (c.target === "none" || c.target === "self") parts.push("Отпусти на поле — карта сыграется");
+      if (c.target === "hero" || c.target === "ally") parts.push("Цель — фишка героя на поле");
+      if (c.target === "none" || c.target === "self") parts.push("Отпусти над полем боя — карта сыграется (над рукой — отмена)");
       if (s.config.tests.merge.enabled) parts.push("На карту союзника — мердж (цена в фиолетовом ромбе)");
       parts.push(drag ? "Отпусти мимо цели — отмена" : "Esc — отмена");
     } else if (s && s.phase === "players") {
@@ -167,7 +169,8 @@ BP.Drag = (function () {
 
   // Применить карту к элементу-цели
   function drop(el, hero, card) {
-    if (!el || !isValid(el, hero, card)) { if (el && el.dataset.drop !== "field") BP.UI.toast("Сюда эту карту нельзя", "bad"); return; }
+    // мимо цели, над полем или над панелью руки — тихая отмена; ругаемся только на явно неверную цель на поле
+    if (!el || !isValid(el, hero, card)) { if (el && el.dataset.drop !== "field" && !el.classList.contains("hsec")) BP.UI.toast("Сюда эту карту нельзя", "bad"); return; }
     const kind = el.dataset.drop;
     ui().selected = null;
     if (kind === "merge") {
@@ -175,8 +178,10 @@ BP.Drag = (function () {
       return;
     }
     const target = targetFrom(el, card);
-    if (BP.Cards.has(card, "push") && card.target === "enemy") {
-      ui().dirPick = { hero: hero.id, card: card.uid, enemy: target.enemy };
+    // толчок: сначала выбрать направление (у массовки с даром «Толчок» — для врага в клетке прицела)
+    const pushed = card.target === "enemy" ? target.enemy : card.target === "cell" && (BP.Cards.enemyAt(st(), target.cell.col, target.cell.row) || {}).uid;
+    if (BP.Cards.has(card, "push") && pushed) {
+      ui().dirPick = { hero: hero.id, card: card.uid, enemy: pushed, target };
       BP.UI.render();
       return;
     }

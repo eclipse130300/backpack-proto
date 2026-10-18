@@ -201,6 +201,17 @@ BP.Engine = (function () {
     return `${e.name} отброшен ${BP.Hex.DIRS[dir].label}${now}`;
   }
 
+  // Толчок на n клеток (дар «Толчок» в карту с толчком = 2). Упёрся (край/враг) — урон столкновения и стоп, без рикошета.
+  function pushN(state, e, dir, heroId, n) {
+    const out = [];
+    for (let i = 0; i < (n || 1) && e.alive; i++) {
+      const c = e.col, r = e.row;
+      out.push(push(state, e, dir, heroId));
+      if (e.col === c && e.row === r) break;
+    }
+    return out.join("; ");
+  }
+
   // Пересчёт намерения после того, как поле изменилось (толчок). Действие то же, меняются цели и «закрыт/открыт».
   // moved — враг сдвинулся: в режиме коридоров берёт цель по новому коридору. Провокация сохраняется.
   function reintent(state, e, moved) {
@@ -245,6 +256,11 @@ BP.Engine = (function () {
     const primary = card.target === "enemy" ? state.enemies.find((e) => e.uid === t.enemy) : null;
     const tHero = (card.target === "hero" || card.target === "ally") ? state.heroes.find((x) => x.id === t.hero) : card.target === "self" ? hero : null;
 
+    // дар «Толчок» в массовку: сначала толкаем врага в клетке прицела, потом бьёт массовка (по исходной зоне)
+    if (card.target === "cell" && C().has(card, "push") && t.dir !== undefined && t.dir !== null) {
+      const pe = C().enemyAt(state, t.cell.col, t.cell.row);
+      if (pe) notes.push(pushN(state, pe, t.dir, hero.id, card.pushDist));
+    }
     // урон считаем до остальных эффектов (чтобы толчок не менял цели)
     const hits = C().computeHits(state, hero, card, t, true);
     if (hits.length) {
@@ -262,7 +278,7 @@ BP.Engine = (function () {
         case "block": { const to = tHero || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; }
         case "blockSelf": hero.block += ef.amount; notes.push(`+${ef.amount} блока себе`); break;
         case "blockHero": { const to = state.heroes.find((x) => x.id === ef.hero && x.alive) || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; } // дар «Прикрытие»
-        case "push": if (primary && primary.alive) notes.push(push(state, primary, t.dir, hero.id)); break;
+        case "push": if (primary && primary.alive) notes.push(pushN(state, primary, t.dir, hero.id, card.pushDist)); break;
         case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a, hero.id))); break;
         case "stun": if (primary && primary.alive) { primary.stunned = true; primary.intent = { type: "stunned" }; notes.push(`${primary.name} оглушён`); } break;
         case "taunt": if (primary && primary.alive && retarget(state, primary, hero.id)) notes.push(`${primary.name} теперь целит в ${hero.name}`); break;

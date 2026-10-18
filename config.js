@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 9,
+  version: 10,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -69,21 +69,22 @@ window.GAME_CONFIG = {
   },
 
   // ---------- Дары (мердж в режиме tests.merge.mode = "gift") ----------
-  // У карты поле gift — что она даст карте союзника, если её отдать. Нет поля — карту отдать нельзя (напр. оглушение).
+  // У карты поле gift — что она даст карте союзника, если её отдать. Нет поля — карту отдать нельзя (слабые удары и Искры — 18.10).
   // РЕШЕНО (18.10): бусты — только простые числа (50%, ×1.5, ×2, +1). Дробное округляем вверх.
-  // Мощь, Взрыв, Повтор, Броня, Прикрытие складываются по 50% (две Мощи = ×2). Остальные дары — только один раз на карту.
+  // Мощь, Взрыв, Повтор, Броня, Прикрытие складываются по 50% (две Мощи = ×2), проценты складываются, не перемножаются.
+  // Толчок + Толчок (или Толчок в карту, которая уже толкает) = толчок на 2 клетки. Остальные дары — только один раз на карту.
   gifts: {
-    power:  { name: "Мощь",       text: "урон ×1.5" },
-    blast:  { name: "Взрыв",      text: "соседние с зоной клетки получают 50% урона" },
-    pierce: { name: "Пробой",     text: "враг за целью тоже получает 100% урона" },
-    repeat: { name: "Повтор",     text: "ещё один удар на 50% урона" },
-    push:   { name: "Толчок",     text: "толкнуть цель" },
-    sparks: { name: "Искры",      text: "+2 искры по 1 в соседних врагов" },
-    armor:  { name: "Броня",      text: "блок себе = 50% урона карты (у карты блока — блок ×1.5)" },
-    cover:  { name: "Прикрытие",  text: "блок отдавшему дар = 50% урона карты (у карты блока — блок ×1.5)" },
-    taunt:  { name: "Вызов",      text: "цель атакует тебя" },
-    execute:{ name: "Добивание",  text: "урон ×2 по врагу, у которого ≤50% ХП" },
-    chain:  { name: "Цепь",       text: "молния перескакивает на соседа цели (с меньшим ХП) — 50% урона" }
+    // color — цвет фона карты с этим даром (поднятая карта светится им)
+    power:  { name: "Мощь",       color: "#d83a3a", text: "урон ×1.5" },
+    blast:  { name: "Взрыв",      color: "#e8822a", text: "соседние с зоной клетки получают 50% урона" },
+    pierce: { name: "Пробой",     color: "#e0c040", text: "одиночной атаке — враг за целью тоже получает 100%; массовке и стреле насквозь — ещё 50% в клетку прицела" },
+    repeat: { name: "Повтор",     color: "#4cb35a", text: "ещё один удар на 50% урона" },
+    push:   { name: "Толчок",     color: "#9a6a3e", text: "толкнуть цель (у массовки — врага в клетке прицела, до удара); если карта уже толкает — толчок на 2 клетки" },
+    armor:  { name: "Броня",      color: "#4a78d8", text: "блок себе = 50% урона карты (у карты блока — блок ×1.5)" },
+    cover:  { name: "Прикрытие",  color: "#4a78d8", text: "блок отдавшему дар = 50% урона карты (у карты блока — блок ×1.5)" },
+    taunt:  { name: "Вызов",      color: "#d4a94f", text: "цель атакует тебя" },
+    execute:{ name: "Добивание",  color: "#9a4ad8", text: "урон ×2 по врагу, у которого ≤50% ХП" },
+    chain:  { name: "Цепь",       color: "#48b8e0", text: "молния перескакивает на ближайшего врага вне зоны (с меньшим ХП) — 50% урона" }
   },
 
   // ---------- Фигуры массовых атак ----------
@@ -128,7 +129,7 @@ window.GAME_CONFIG = {
     // Слабые удары оружия (17.10, эксперимент): ими добивается колода до minDeck. Двигают счётчик крита своего оружия.
     weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee",  weak: true, effects: [{ type: "damage", amount: 3 }] },
     weak_shot:     { name: "Слабый выстрел",    cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 2 }], isNew: true, added: "17.10.2026" },
-    sparks:        { name: "Искры",             cost: 1, gift: "sparks", icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 1 }, { type: "sparks", count: 2, amount: 1 }], isNew: true, added: "17.10.2026" },
+    sparks:        { name: "Искры",             cost: 1, icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 1 }, { type: "sparks", count: 2, amount: 1 }], isNew: true, added: "17.10.2026" },
 
     // Меч
     cleave:        { name: "Рубящий удар",      cost: 1, gift: "execute", icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
@@ -143,7 +144,7 @@ window.GAME_CONFIG = {
     // Посох
     bolt:          { name: "Разряд",            cost: 1, gift: "chain", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
     fireball:      { name: "Огненный шар",      cost: 2, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
-    stun_bolt:     { name: "Оглушающий разряд", cost: 2, icon: "stun",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
+    stun_bolt:     { name: "Оглушающий разряд", cost: 2, gift: "power", icon: "stun",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
     flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
     nova:          { name: "Огненное кольцо",   cost: 2, gift: "blast", icon: "nova",   target: "cell",  attack: "aoe", area: "adjacent", effects: [{ type: "damage", amount: 6 }] },
 

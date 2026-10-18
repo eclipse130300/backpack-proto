@@ -8,7 +8,7 @@ window.BP = window.BP || {};
 BP.Gifts = (function () {
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const up = (x) => Math.ceil(x - 1e-9);
-  const STACK = { power: 1, blast: 1, repeat: 1, armor: 1, cover: 1 };
+  const STACK = { power: 1, blast: 1, repeat: 1, armor: 1, cover: 1, push: 1 }; // push: до 2 толчков на карте (свой + дар) = толчок на 2 клетки
   const isBlock = (e) => e.type === "block" || e.type === "blockSelf";
 
   const isOn = (state) => state.config.tests.merge.mode === "gift";
@@ -24,19 +24,24 @@ BP.Gifts = (function () {
   // Полезен ли дар этой карте. Бесполезные мерджи не подсвечиваются (разряд в фаербол и т.п.).
   function applicable(giftId, dst) {
     const b = baseOf(dst), has = (t) => b.effects.some((e) => e.type === t);
-    const dmg = has("damage"), blk = b.effects.some(isBlock), single = dst.target === "enemy";
+    const dmg = has("damage"), blk = b.effects.some(isBlock), single = dst.target === "enemy", cell = dst.target === "cell";
     if (!STACK[giftId] && count(dst, giftId)) return false;
     switch (giftId) {
       case "power": case "blast": case "repeat": return dmg;
-      case "pierce": return dmg && single && !b.area;
+      case "pierce": return dmg && (single || cell);
       case "execute": return dmg;
-      case "chain": return dmg && single && !b.area;
-      case "push": return single && !has("push");
+      case "chain": return dmg && (single || cell);
+      case "push": return (single || cell) && pushTotal(dst) < 2;
       case "taunt": return single && !has("taunt");
       case "sparks": return dmg && single && !has("sparks");
       case "armor": case "cover": return dmg || blk;
     }
     return false;
+  }
+
+  // Сколько толчков на карте: свой (в исходнике) + дары «Толчок». 2 = толчок на 2 клетки.
+  function pushTotal(card) {
+    return (baseOf(card).effects.some((e) => e.type === "push") ? 1 : 0) + count(card, "push");
   }
 
   function canMerge(state, src, dst) {
@@ -60,11 +65,17 @@ BP.Gifts = (function () {
     const b = card.giftBase, n = (id) => count(card, id);
     card.effects = clone(b.effects); card.attack = b.attack; card.area = b.area;
     card.blast = 0.5 * n("blast"); card.repeat = 0.5 * n("repeat");
-    card.execute = n("execute") > 0; card.chain = n("chain") ? 0.5 : 0;
+    card.execute = n("execute") > 0; card.chain = n("chain") ? 0.5 : 0; card.focus = 0; card.pushDist = 0;
     const dmg = card.effects.find((e) => e.type === "damage"), blk = card.effects.find(isBlock);
     if (dmg && n("power")) dmg.amount = up(dmg.amount * (1 + 0.5 * n("power")));
-    if (n("pierce")) card.area = "line";
-    if (n("push")) card.effects.push({ type: "push" });
+    // Пробой: одиночной атаке — «насквозь» (враг за целью 100%); массовке и карте, что уже бьёт насквозь, — +50% в клетку прицела
+    if (n("pierce")) { if (card.target === "enemy" && !b.area) card.area = "line"; else card.focus = 0.5; }
+    // Толчок: карта без толчка начинает толкать; второй толчок (свой + дар или два дара) — толчок на 2 клетки.
+    // У массовки толкается враг в клетке прицела, ДО удара массовки.
+    if (n("push")) {
+      if (!card.effects.some((e) => e.type === "push")) card.effects.push({ type: "push" });
+      if (pushTotal(card) >= 2) card.pushDist = 2;
+    }
     if (n("taunt")) card.effects.push({ type: "taunt" });
     if (n("sparks")) card.effects.push({ type: "sparks", count: 2, amount: 1 });
     if (dmg) {
@@ -85,16 +96,24 @@ BP.Gifts = (function () {
   // «Цепь» (молния перескакивает на одного соседа цели — с меньшим ХП — 50%). Без крита.
   function extraHits(state, hero, card, target, enemies, amount, hits) {
     const r = state.config.rules;
-    if (card.chain && enemies[0]) {
-      const p = enemies[0];
-      const nb = BP.Hex.neighbors(p.col, p.row, r.cols, r.rows).map((c) => BP.Cards.enemyAt(state, c.col, c.row))
-        .filter((e) => e && e.uid !== p.uid).sort((a, b) => a.hp - b.hp)[0];
+    const cells = BP.Cards.areaCells(state, hero, card, target);
+    const inArea = (c) => cells.some((x) => x.col === c.col && x.row === c.row);
+    if (card.focus) { // Пробой в массовку / в «насквозь»: враг в клетке прицела получает ещё 50%
+      const t = target || {};
+      const f = card.target === "enemy" ? state.enemies.find((e) => e.uid === t.enemy && e.alive) : t.cell && BP.Cards.enemyAt(state, t.cell.col, t.cell.row);
+      if (f) hits.push({ enemy: f.uid, amount: up(amount * card.focus), crit: false, critReason: "" });
+    }
+    if (card.chain && enemies.length) { // Цепь: на одного ближайшего врага вне зоны (с меньшим ХП)
+      const hit = new Set(enemies.map((e) => e.uid)), cand = [];
+      cells.forEach((c) => BP.Hex.neighbors(c.col, c.row, r.cols, r.rows).forEach((nb) => {
+        const e = !inArea(nb) && BP.Cards.enemyAt(state, nb.col, nb.row);
+        if (e && !hit.has(e.uid) && !cand.includes(e)) cand.push(e);
+      }));
+      const nb = cand.sort((a, b) => a.hp - b.hp)[0];
       if (nb) hits.push({ enemy: nb.uid, amount: up(amount * card.chain), crit: false, critReason: "" });
     }
     if (card.repeat) enemies.forEach((e) => hits.push({ enemy: e.uid, amount: up(amount * card.repeat), crit: false, critReason: "" }));
     if (!card.blast) return;
-    const cells = BP.Cards.areaCells(state, hero, card, target);
-    const inArea = (c) => cells.some((x) => x.col === c.col && x.row === c.row);
     const done = new Set(enemies.map((e) => e.uid));
     cells.forEach((c) => BP.Hex.neighbors(c.col, c.row, r.cols, r.rows).forEach((nb) => {
       if (inArea(nb)) return;
@@ -111,7 +130,8 @@ BP.Gifts = (function () {
     const out = [];
     if (dmg && card.blast) out.push(`взрыв: соседним клеткам ${up(dmg.amount * card.blast)}`);
     if (dmg && card.repeat) out.push(`повтор: ещё удар ${up(dmg.amount * card.repeat)}`);
-    if (dmg && card.chain) out.push(`цепь: соседу цели ${up(dmg.amount * card.chain)}`);
+    if (dmg && card.chain) out.push(`цепь: ближайшему врагу вне зоны ${up(dmg.amount * card.chain)}`);
+    if (dmg && card.focus) out.push(`пробой: ещё ${up(dmg.amount * card.focus)} в клетку прицела`);
     if (dmg && card.execute) out.push(`добивание: ×2 по врагу с ≤50% ХП`);
     return out;
   }

@@ -176,6 +176,9 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 .card .ctext { font-size: 11px; line-height: 1.2; text-align: center; color: #d9c6a6; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .card .crit { position: absolute; left: 2px; bottom: 2px; font-size: 11px; background: #2a0d0aee; border: 1px solid #a05a3a; border-radius: 7px; padding: 0 4px; z-index: 2; color: #f0c08a; white-space: nowrap; }
 .card .crit.on { background: #ff5a2a; color: #fff; border-color: #fff2c2; font-weight: 800; box-shadow: 0 0 8px #ff5a2a; }
+/* мердж «дар»: фон карты в цвет дара; поднятая/выбранная карта светится им */
+.card.gifted { background: linear-gradient(color-mix(in srgb, var(--gc) 38%, #4a1915), color-mix(in srgb, var(--gc) 14%, #210a08)); }
+.card.gifted.ghost, .card.gifted.selected { box-shadow: 0 0 22px 6px var(--gc); border-color: var(--gc); }
 .card .cgift { position: absolute; bottom: 4px; left: 6px; font-size: 10px; color: #e8cf8a; opacity: .85; white-space: nowrap; }
 .card .cmerged { position: absolute; bottom: 4px; right: 6px; color: #d6b0f5; font-weight: 800; }
 .card .play-btn { position: absolute; bottom: 6px; left: 6px; right: 6px; padding: 4px; font-size: 13px; }
