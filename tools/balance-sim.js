@@ -66,6 +66,7 @@ function report(bot, sum) {
   console.log(`Победа ${pct(sum.winRate)} | Вайп ${pct(1 - sum.winRate)}${sum.worstFight ? ` (чаще всего в «${sum.worstFight}»)` : ""}`);
   const rl = sum.runLost ? `${pct(sum.runLost.avg)} (от ${pct(sum.runLost.p10)} до ${pct(sum.runLost.p90)})` : "—";
   console.log(`ХП/бой ${pct(sum.hpPerFight)} | ХП за забег (победы) ${rl} | Ходов/бой ${sum.turnsPerFight.toFixed(1)} | Смертей за забег ${sum.deathsPerRun.toFixed(2)}`);
+  console.log(`Мерджей за бой ${(sum.mergesPerFight || 0).toFixed(1)}`);
   console.log("  " + pad("Бой", 26) + pad("дошли", 8) + pad("вайп", 8) + pad("ХП-%", 8) + pad("ходы", 7) + "смерти");
   sum.fights.forEach((p, i) => console.log("  " + pad(`${i + 1}. ${p.name}`, 26) + pad(pct(p.reach), 8) + pad(pct(p.wipe), 8) + pad(pct(p.lost), 8) + pad(p.turns.toFixed(1), 7) + p.deaths.toFixed(2)));
   const line = Object.entries(sum.cards).filter(([, c]) => c.played).sort((a, b) => b[1].perFight - a[1].perFight)

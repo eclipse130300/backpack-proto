@@ -69,7 +69,9 @@ BP.Sim = (function () {
   }
 
   // ---------- оценка позиции для smart ----------
-  const W = { dmg: 1, killBase: 4, killThreat: 1.0, hp: 1.4, startBlock: 0.6, death: 25, weakNow: 2, weakNext: 1.5, win: 40, wastedBlock: 0.05 };
+  const W = { dmg: 1, killBase: 4, killThreat: 1.0, hp: 1.4, startBlock: 0.6, death: 25, weakNow: 2, weakNext: 1.5, win: 40, wastedBlock: 0.05,
+    // мердж: прирост «ценности» карты союзника × (1, если он сыграет её в этот ход) + mergeFuture (ожидаемые розыгрыши до конца боя)
+    mergeFuture: 0.5, mergeCands: 2, mergeBlock: 0.6, mergePush: 2, mergeTaunt: 3 };
 
   // Проигрываем конец хода и ход врагов на копии и считаем «насколько хорошо»
   function evaluate(s) {
@@ -92,6 +94,62 @@ BP.Sim = (function () {
     });
     v -= Math.min(blockLeft, blockBefore + 99) * W.wastedBlock;
     return v;
+  }
+
+  // ---------- мердж для ботов ----------
+  // Ценность карты без хода врагов: лучший суммарный урон по одной цели/зоне + блок, толчок, вызов
+  function cardValue(s, hero, card) {
+    let best = 0;
+    if (BP.Cards.has(card, "damage")) targetsFor(s, hero, card, false).forEach((t) => {
+      const v = BP.Cards.computeHits(s, hero, card, Object.assign({ dir: 0 }, t), false).reduce((a, h) => a + h.amount, 0);
+      if (v > best) best = v;
+    });
+    (card.effects || []).forEach((e) => {
+      if (e.type === "block" || e.type === "blockSelf" || e.type === "blockHero") best += e.amount * W.mergeBlock;
+      if (e.type === "push") best += W.mergePush * (card.pushDist || 1);
+      if (e.type === "taunt") best += W.mergeTaunt;
+    });
+    return best;
+  }
+
+  // Лучший мердж карты card героя hero. Сначала дешёвый отбор (прирост ценности карты союзника), потом для 3 лучших —
+  // честная проверка: «мердж → союзник сразу играет усиленную карту» против «союзник играет её без мерджа» (с ходом врагов),
+  // плюс прирост × mergeFuture (карта с бонусом ещё вернётся в руку до конца боя).
+  function bestMerge(s, hero, card, base) {
+    const m = s.config.tests.merge;
+    if (!m || !m.enabled) return null;
+    const cost = BP.Cards.mergeCost(s, hero, card);
+    if (cost > energyOf(s, hero)) return null;
+    const cands = [];
+    s.heroes.forEach((a) => {
+      if (a === hero || !a.alive) return;
+      a.hand.forEach((d) => {
+        if (!BP.Cards.canMerge(s, card, d)) return;
+        const src2 = JSON.parse(JSON.stringify(card)), dst2 = JSON.parse(JSON.stringify(d));
+        if (!BP.Cards.mergeInto(s, src2, dst2, hero.id)) return;
+        const gain = cardValue(s, a, dst2) - cardValue(s, a, d);
+        if (gain > 0) cands.push({ a, d, gain });
+      });
+    });
+    let best = null;
+    cands.sort((x, y) => y.gain - x.gain).slice(0, W.mergeCands).forEach(({ a, d, gain }) => {
+      const after = cloneState(s);
+      if (act(after, { a: "merge", hero: hero.id, card: card.uid, ally: a.id, allyCard: d.uid })) return;
+      const a2 = after.heroes.find((h) => h.id === a.id), d2 = a2.hand.find((c) => c.uid === d.uid);
+      const bestPlay = (st, h, c) => {
+        let v = null;
+        if (!c || !BP.Engine.canPay(st, h, c.cost)) return null;
+        targetsFor(st, h, c, false).forEach((t) => { const x = tryPlay(st, h, c, t); if (x) { const e = evaluate(x); if (v === null || e > v) v = e; } });
+        return v;
+      };
+      const withM = bestPlay(after, a2, d2), without = bestPlay(s, a, d);
+      const now = withM !== null && without !== null ? withM - without : evaluate(after) - base;
+      // отданная карта уходит чистой: её собственные усиления теряются
+      const lost = card.giftBase ? cardValue(s, hero, card) - cardValue(s, hero, Object.assign(JSON.parse(JSON.stringify(card)), { effects: card.giftBase.effects, bonus: 0, blast: 0, repeat: 0, chain: 0, focus: 0, execute: 0, pushDist: 0 })) : 0;
+      const score = now + (gain - lost) * W.mergeFuture;
+      if (!best || score > best.score) best = { hero, card, merge: { ally: a.id, allyCard: d.uid }, score, cost };
+    });
+    return best;
   }
 
   function tryPlay(s, hero, card, target) {
@@ -118,9 +176,10 @@ BP.Sim = (function () {
     let pick = null;
     for (const h of s.heroes) {
       const items = [];
-      playable(s, h).forEach((card) => {
+      (h.alive ? h.hand : []).forEach((card) => {
         if (BP.Cards.has(card, "sharedPool")) return;
-        let best = null;
+        let best = bestMerge(s, h, card, base); // мердж и розыгрыш одной карты — взаимоисключающие, берём лучшее
+        if (!BP.Engine.canPay(s, h, card.cost)) { if (best && best.score > 0.01) items.push(best); return; }
         targetsFor(s, h, card, true).forEach((t) => {
           const after = tryPlay(s, h, card, t);
           if (!after) return;
@@ -132,6 +191,7 @@ BP.Sim = (function () {
       const sub = bestSubset(items, energyOf(s, h));
       sub.set.forEach((it) => { if (!pick || it.score > pick.score) pick = it; });
     }
+    if (pick && pick.merge) { const err = act(s, { a: "merge", hero: pick.hero.id, card: pick.card.uid, ally: pick.merge.ally, allyCard: pick.merge.allyCard }); return !err; }
     if (pick) { act(s, { a: "play", hero: pick.hero.id, card: pick.card.uid, target: pick.target }); return true; }
     // в конце хода: «Единение», если у кого-то осталась энергия, а у другого — неоплатные карты
     if (!s.pool) {
@@ -210,7 +270,7 @@ BP.Sim = (function () {
           act(s, { a: "ready" });
           while (BP.Engine.enemyStep(s)) {}
         }
-        s.log.forEach((l) => { if (l.card) { if (l.merge) cc(l.card).merged++; else cc(l.card).played++; } });
+        s.log.forEach((l) => { if (l.card) { if (l.merge) { cc(l.card).merged++; cur.merges = (cur.merges || 0) + 1; } else cc(l.card).played++; } });
         s.log = []; s.fx = [];
         continue;
       }
@@ -268,6 +328,7 @@ BP.Sim = (function () {
       hpPerFight: avg(allF.map((f) => f.lost)),
       runLost: wl.length ? { avg: avg(wl), p10: wl[Math.floor(wl.length * 0.1)], p90: wl[Math.floor(wl.length * 0.9)] } : null,
       turnsPerFight: avg(allF.map((f) => f.turns)),
+      mergesPerFight: avg(allF.map((f) => f.merges || 0)),
       deathsPerRun: avg(runs.map((r) => r.fights.reduce((a, f) => a + f.deaths, 0))),
       fights: per, cards,
     };
