@@ -165,11 +165,12 @@ BP.Cards = (function () {
       enemies.forEach((e) => {
         const cond = rules.conditionalCrit && (e.stunned || e.pushedThisTurn);
         const mult = weaponCrit || cond ? rules.critMultiplier : 1;
+        const exec = BP.Gifts ? BP.Gifts.executeMult(card, e) : 1; // дар «Добивание»
         const base = Math.max(0, dmgEff.amount - weakness(hero));
-        hits.push({ enemy: e.uid, amount: base * mult, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "" });
+        hits.push({ enemy: e.uid, amount: base * mult * exec, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "" });
       });
     }
-    if (BP.Gifts && (card.blast || card.repeat)) BP.Gifts.extraHits(state, hero, card, target, enemies, Math.max(0, dmgEff.amount - weakness(hero)), hits);
+    if (BP.Gifts && (card.blast || card.repeat || card.chain)) BP.Gifts.extraHits(state, hero, card, target, enemies, Math.max(0, dmgEff.amount - weakness(hero)), hits);
     if (commit && crit) crit.count = counter;
     return hits;
   }

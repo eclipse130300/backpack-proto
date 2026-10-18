@@ -29,7 +29,8 @@ BP.Gifts = (function () {
     switch (giftId) {
       case "power": case "blast": case "repeat": return dmg;
       case "pierce": return dmg && single && !b.area;
-      case "range": return dmg && b.attack === "melee";
+      case "execute": return dmg;
+      case "chain": return dmg && single && !b.area;
       case "push": return single && !has("push");
       case "taunt": return single && !has("taunt");
       case "sparks": return dmg && single && !has("sparks");
@@ -59,10 +60,10 @@ BP.Gifts = (function () {
     const b = card.giftBase, n = (id) => count(card, id);
     card.effects = clone(b.effects); card.attack = b.attack; card.area = b.area;
     card.blast = 0.5 * n("blast"); card.repeat = 0.5 * n("repeat");
+    card.execute = n("execute") > 0; card.chain = n("chain") ? 0.5 : 0;
     const dmg = card.effects.find((e) => e.type === "damage"), blk = card.effects.find(isBlock);
     if (dmg && n("power")) dmg.amount = up(dmg.amount * (1 + 0.5 * n("power")));
     if (n("pierce")) card.area = "line";
-    if (n("range")) card.attack = "ranged";
     if (n("push")) card.effects.push({ type: "push" });
     if (n("taunt")) card.effects.push({ type: "taunt" });
     if (n("sparks")) card.effects.push({ type: "sparks", count: 2, amount: 1 });
@@ -75,11 +76,24 @@ BP.Gifts = (function () {
     }
   }
 
-  // Доп. удары «Взрыв» (соседние клетки зоны, 50%) и «Повтор» (ещё удар по тем же целям, 50%). Без крита.
+  // «Добивание»: урон ×2 по врагу, у которого ≤50% ХП (по ХП до удара). Применяется к основным ударам карты.
+  function executeMult(card, e) {
+    return card.execute && e.hp * 2 <= e.maxHp ? 2 : 1;
+  }
+
+  // Доп. удары «Взрыв» (соседние клетки зоны, 50%), «Повтор» (ещё удар по тем же целям, 50%),
+  // «Цепь» (молния перескакивает на одного соседа цели — с меньшим ХП — 50%). Без крита.
   function extraHits(state, hero, card, target, enemies, amount, hits) {
+    const r = state.config.rules;
+    if (card.chain && enemies[0]) {
+      const p = enemies[0];
+      const nb = BP.Hex.neighbors(p.col, p.row, r.cols, r.rows).map((c) => BP.Cards.enemyAt(state, c.col, c.row))
+        .filter((e) => e && e.uid !== p.uid).sort((a, b) => a.hp - b.hp)[0];
+      if (nb) hits.push({ enemy: nb.uid, amount: up(amount * card.chain), crit: false, critReason: "" });
+    }
     if (card.repeat) enemies.forEach((e) => hits.push({ enemy: e.uid, amount: up(amount * card.repeat), crit: false, critReason: "" }));
     if (!card.blast) return;
-    const r = state.config.rules, cells = BP.Cards.areaCells(state, hero, card, target);
+    const cells = BP.Cards.areaCells(state, hero, card, target);
     const inArea = (c) => cells.some((x) => x.col === c.col && x.row === c.row);
     const done = new Set(enemies.map((e) => e.uid));
     cells.forEach((c) => BP.Hex.neighbors(c.col, c.row, r.cols, r.rows).forEach((nb) => {
@@ -97,6 +111,8 @@ BP.Gifts = (function () {
     const out = [];
     if (dmg && card.blast) out.push(`взрыв: соседним клеткам ${up(dmg.amount * card.blast)}`);
     if (dmg && card.repeat) out.push(`повтор: ещё удар ${up(dmg.amount * card.repeat)}`);
+    if (dmg && card.chain) out.push(`цепь: соседу цели ${up(dmg.amount * card.chain)}`);
+    if (dmg && card.execute) out.push(`добивание: ×2 по врагу с ≤50% ХП`);
     return out;
   }
 
@@ -110,5 +126,5 @@ BP.Gifts = (function () {
     };
   }
 
-  return { isOn, canMerge, mergeInto, extraHits, textExtra, labels, applicable };
+  return { isOn, canMerge, mergeInto, extraHits, executeMult, textExtra, labels, applicable };
 })();

@@ -82,7 +82,8 @@ window.GAME_CONFIG = {
     armor:  { name: "Броня",      text: "блок себе = 50% урона карты (у карты блока — блок ×1.5)" },
     cover:  { name: "Прикрытие",  text: "блок отдавшему дар = 50% урона карты (у карты блока — блок ×1.5)" },
     taunt:  { name: "Вызов",      text: "цель атакует тебя" },
-    range:  { name: "Дальность",  text: "мили-удар достаёт и закрытых врагов" }
+    execute:{ name: "Добивание",  text: "урон ×2 по врагу, у которого ≤50% ХП" },
+    chain:  { name: "Цепь",       text: "молния перескакивает на соседа цели (с меньшим ХП) — 50% урона" }
   },
 
   // ---------- Фигуры массовых атак ----------
@@ -130,7 +131,7 @@ window.GAME_CONFIG = {
     sparks:        { name: "Искры",             cost: 1, gift: "sparks", icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 1 }, { type: "sparks", count: 2, amount: 1 }], isNew: true, added: "17.10.2026" },
 
     // Меч
-    cleave:        { name: "Рубящий удар",      cost: 1, gift: "range", icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
+    cleave:        { name: "Рубящий удар",      cost: 1, gift: "execute", icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
     sweep:         { name: "Размах",            cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "across2", effects: [{ type: "damage", amount: 8 }] },
     great_sweep:   { name: "Мощный размах",     cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "arc5", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
     crush:         { name: "Сокрушение",        cost: 2, gift: "power", icon: "crush",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 13 }] },
@@ -140,7 +141,7 @@ window.GAME_CONFIG = {
     shield_wall:   { name: "Стена щитов",       cost: 1, gift: "armor", icon: "shield", target: "self",  effects: [{ type: "block", amount: 7 }] },
 
     // Посох
-    bolt:          { name: "Разряд",            cost: 1, gift: "range", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
+    bolt:          { name: "Разряд",            cost: 1, gift: "chain", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
     fireball:      { name: "Огненный шар",      cost: 2, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
     stun_bolt:     { name: "Оглушающий разряд", cost: 2, icon: "stun",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
     flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
