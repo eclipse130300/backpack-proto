@@ -27,14 +27,19 @@ BP.FX = (function () {
     return { left: f.left + p.left, top: f.top + p.top, width: g.hw, height: g.hh };
   }
 
-  function spawnNumber(s, ev) {
+  // Несколько чисел по одной цели (удар, прибавка, повтор, цепь, искры) не сливаются: каждое следующее — через 0.15 с
+  // и со сдвигом влево-вправо по очереди
+  const NUM_GAP = 150, NUM_SHIFT = 34;
+  const numQueue = {}; // ключ цели → { t: когда можно следующее, n: номер в серии }
+
+  function spawnNumber(s, ev, shift) {
     const r = ev.k === "enemy" ? enemyRect(s, ev) : (document.querySelector(`.hero.token[data-hero="${ev.hero}"]`) || { getBoundingClientRect: () => null }).getBoundingClientRect();
     if (!r) return;
     const d = document.createElement("div");
     const main = ev.amount > 0 ? `−${ev.amount}` : ev.blocked > 0 ? "блок" : "0";
     d.className = `dmg-num ${ev.k} ${ev.crit ? "crit" : ""} ${ev.amount > 0 ? "" : "blocked-only"}`;
     d.innerHTML = `${ev.crit ? '<span class="critword">КРИТ!</span>' : ""}<span class="n">${main}</span>${ev.blocked > 0 ? `<span class="b">🛡${ev.blocked}</span>` : ""}`;
-    d.style.left = r.left + r.width / 2 + (Math.random() * 30 - 15) + "px";
+    d.style.left = r.left + r.width / 2 + (shift || 0) + (Math.random() * 10 - 5) + "px";
     d.style.top = r.top + (ev.k === "enemy" ? r.height * 0.35 : -18) + "px";
     layer.appendChild(d);
     setTimeout(() => d.remove(), 1500);
@@ -45,8 +50,13 @@ BP.FX = (function () {
     const now = Date.now();
     (s.fx || []).forEach((ev) => {
       if (ev.id <= lastFx) return;
-      spawnNumber(s, ev);
-      shakes[ev.k === "enemy" ? "e:" + ev.uid : "h:" + ev.hero] = now;
+      const key = ev.k === "enemy" ? "e:" + ev.uid : "h:" + ev.hero;
+      const q = numQueue[key] && numQueue[key].t > now ? numQueue[key] : { t: now, n: 0 };
+      const delay = q.t - now, n = q.n;
+      const shift = n === 0 ? 0 : (n % 2 ? 1 : -1) * NUM_SHIFT * Math.ceil(n / 2);
+      numQueue[key] = { t: q.t + NUM_GAP, n: n + 1 };
+      if (delay > 0) setTimeout(() => spawnNumber(s, ev, shift), delay); else spawnNumber(s, ev, shift);
+      shakes[key] = now;
     });
     lastFx = Math.max(lastFx, s.fxSeq || 0);
   }
