@@ -218,8 +218,9 @@ window.GAME_CONFIG = {
     cultist: { name: "Культист",     hp: 37, melee: false, actions: [{ type: "curse", amount: 2, turns: 2 }, { type: "attack", damage: 9 }] },
     archer:  { name: "Костяной лучник", hp: 31, melee: false, actions: [{ type: "attack", damage: 3, targets: 3 }, { type: "attack", damage: 6 }] },
     brute:   { name: "Громила",      hp: 88, melee: true,  actions: [{ type: "block", amount: 8 }, { type: "attack", damage: 9, targets: 3 }] },
-    // баланс 18.10 (ветка merge, бот medium): Жрец ХП 150→110, удары 17→14 и 10×2→8×2 — с мерджем medium выигрывал 30%
-    priest:  { name: "Падший жрец",  hp: 110, melee: false, actions: [{ type: "attack", damage: 14 }, { type: "attack", damage: 8, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
+    // баланс 18.10 (ветка merge, бот medium): Жрец ХП 150→110, удары 17→14 и 10×2→8×2 — с мерджем medium выигрывал 30%;
+    // 18.10 13:45 после «прибавка в базовый урон» мердж стал сильнее (79%) — ХП 110→120, удары вернули 17 и 10×2
+    priest:  { name: "Падший жрец",  hp: 120, melee: false, actions: [{ type: "attack", damage: 17 }, { type: "attack", damage: 10, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
   },
 
   // ---------- Квест боя (tests.fightQuest) ----------
