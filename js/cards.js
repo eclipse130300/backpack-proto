@@ -16,7 +16,12 @@ BP.Cards = (function () {
     const parts = [];
     (card.effects || []).forEach((e) => {
       switch (e.type) {
-        case "damage": parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}`); break;
+        case "damage": {
+          const center = BP.Gifts ? BP.Gifts.centerDamage(card) : 0; // мердж в массовку: клетка прицела бьёт сильнее
+          if (center) parts.push(`${center} в клетку прицела, ${e.amount} по ${card.area === "adjacent" ? "соседним" : "остальным клеткам"}${card.area === "shape" && card.shapeName ? ` (${card.shapeName})` : ""}`);
+          else parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}`);
+          break;
+        }
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
         case "blockSelf": parts.push(`себе ${e.amount} блока`); break;
         case "blockHero": parts.push(`отдавшему дар ${e.amount} блока`); break;
@@ -158,7 +163,7 @@ BP.Cards = (function () {
     if (!dmgEff) return [];
     const rules = state.config.rules;
     const enemies = areaEnemies(state, hero, card, target);
-    const crit = card.weapon ? hero.crit[card.weapon] : null;
+    const crit = card.weapon && !card.weak ? hero.crit[card.weapon] : null; // слабые удары не двигают крит и не критуют (18.10)
     let counter = crit ? crit.count : 0;
     const hits = [];
     for (let i = 0; i < (dmgEff.hits || 1); i++) {
@@ -180,7 +185,7 @@ BP.Cards = (function () {
   // Сколько ударов этим оружием до крита (1 = следующий удар критует) и критует ли эта карта
   function critInfo(hero, card) {
     const dmg = (card.effects || []).find((e) => e.type === "damage");
-    const c = card.weapon && hero.crit ? hero.crit[card.weapon] : null;
+    const c = card.weapon && !card.weak && hero.crit ? hero.crit[card.weapon] : null;
     if (!dmg || !c) return null;
     const left = c.every - c.count;
     return { left, every: c.every, willCrit: left <= (dmg.hits || 1) };

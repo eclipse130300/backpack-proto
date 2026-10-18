@@ -1,8 +1,8 @@
 // Мердж «дар» (tests.merge.mode = "gift", 18.10).
 // Отданная карта передаёт карте союзника:
 //   1) свой родной дар (поле gift у карты, таблица config.gifts) и ВСЕ дары, которые сама получила раньше (цепочки);
-//   2) атака → атака: +50% своего текущего урона (уже с Мощью и прибавками) — «прибавка». Одиночке — в цель,
-//      массовке — только в клетку прицела. Мощь умножает только собственный урон карты, прибавка идёт сверху.
+//   2) атака → атака: +50% своего текущего урона (уже с Мощью и прибавками) — «прибавка». Одиночке — прямо в базовый
+//      урон (в каждый удар), массовке — только в клетку прицела. Мощь умножает собственный урон карты, прибавка идёт сверху.
 // Отданная карта уходит в сброс ЧИСТОЙ (без даров и прибавки), сыгранная — усиленной. Лимита даров нет.
 // Повторы: Мощь/Взрыв/Повтор/Броня/Прикрытие — +50% за каждый (проценты складываются, не перемножаются);
 // Толчок: N толчков = N клеток; Цепь: каждая — отдельный прыжок 50% на другого врага;
@@ -47,10 +47,10 @@ BP.Gifts = (function () {
     return [{ id: src.gift, from: null }].concat(list(src).map((g) => ({ id: g.id, from: g.from })));
   }
 
-  // Текущий урон карты за розыгрыш по основной цели: собственный (с Мощью) × удары + прибавка
+  // Текущий урон карты за розыгрыш по основной цели: урон (с Мощью и прибавкой) × удары; у массовки — плюс прибавка в центр
   function currentDamage(card) {
     const d = (card.effects || []).find((e) => e.type === "damage");
-    return d ? d.amount * (d.hits || 1) + (card.bonus || 0) : 0;
+    return d ? d.amount * (d.hits || 1) + (card.target === "cell" ? card.bonus || 0 : 0) : 0;
   }
 
   function canMerge(state, src, dst) {
@@ -94,6 +94,7 @@ BP.Gifts = (function () {
     card.execute = n("execute"); card.chain = n("chain"); card.focus = 0; card.pushDist = 0;
     const dmg = card.effects.find((e) => e.type === "damage"), blk = card.effects.find(isBlock);
     if (dmg && n("power")) dmg.amount = up(dmg.amount * (1 + 0.5 * n("power")));
+    if (dmg && card.bonus && card.target !== "cell") dmg.amount += card.bonus; // прибавка — прямо в базовый урон (не массовкам)
     // Пробой: одиночке без зоны первый даёт «насквозь» (враг за целью 100%), остальные — +50% в клетку прицела
     const p = n("pierce");
     if (p) {
@@ -129,7 +130,7 @@ BP.Gifts = (function () {
     const inArea = (c) => cells.some((x) => x.col === c.col && x.row === c.row);
     const push = (e, a) => { if (a > 0) hits.push({ enemy: e.uid, amount: a, crit: false, critReason: "" }); };
     const f = card.target === "enemy" ? state.enemies.find((e) => e.uid === t.enemy && e.alive) : t.cell && BP.Cards.enemyAt(state, t.cell.col, t.cell.row);
-    if (f) push(f, (card.bonus || 0) + (card.focus ? up(amount * card.focus) : 0));
+    if (f) push(f, (card.target === "cell" ? card.bonus || 0 : 0) + (card.focus ? up(amount * card.focus) : 0));
     if (card.chain && enemies.length) {
       const hit = new Set(enemies.map((e) => e.uid)), cand = [];
       cells.forEach((c) => BP.Hex.neighbors(c.col, c.row, r.cols, r.rows).forEach((nb) => {
@@ -149,16 +150,14 @@ BP.Gifts = (function () {
       push(e, up(amount * card.blast));
     }));
   }
-  const hasExtra = (card) => !!(card.blast || card.repeat || card.chain || card.focus || card.bonus);
+  const hasExtra = (card) => !!(card.blast || card.repeat || card.chain || card.focus || (card.bonus && card.target === "cell"));
 
   // Доп. текст карты (того, чего нет в effects)
   function textExtra(card) {
     const dmg = (card.effects || []).find((e) => e.type === "damage");
     const out = [];
     if (!dmg) return out;
-    const aoe = card.target === "cell";
-    if (card.bonus) out.push(`+${card.bonus} ${aoe ? "в клетку прицела" : "в цель"} (мердж)`);
-    if (card.focus) out.push(`пробой: ещё ${up(dmg.amount * card.focus)} в клетку прицела`);
+    if (card.focus && card.target !== "cell") out.push(`пробой: ещё ${up(dmg.amount * card.focus)} основной цели`); // у массовки — в centerDamage
     if (card.blast) out.push(`взрыв: соседним клеткам ${up(dmg.amount * card.blast)}`);
     if (card.repeat) out.push(`повтор: ещё удар ${up(dmg.amount * card.repeat)}`);
     if (card.chain) out.push(`цепь: ${card.chain > 1 ? card.chain + " врагам" : "ближайшему врагу"} вне зоны по ${up(dmg.amount * 0.5)}`);
@@ -177,5 +176,12 @@ BP.Gifts = (function () {
     };
   }
 
-  return { isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, applicable, currentDamage };
+  // Массовка с прибавкой/пробоем: сколько получает клетка прицела (для понятного текста «18 в клетку прицела, 9 по соседним»)
+  function centerDamage(card) {
+    const d = (card.effects || []).find((e) => e.type === "damage");
+    if (!d || card.target !== "cell" || !(card.bonus || card.focus)) return 0;
+    return d.amount + (card.bonus || 0) + (card.focus ? up(d.amount * card.focus) : 0);
+  }
+
+  return { centerDamage, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, applicable, currentDamage };
 })();
