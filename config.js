@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 11,
+  version: 12,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -70,24 +70,24 @@ window.GAME_CONFIG = {
     fixedShapes: { enabled: true }
   },
 
-  // ---------- Дары (мердж в режиме tests.merge.mode = "gift") ----------
+  // ---------- Дары (мердж в режиме tests.merge.mode = "gift"), версия merge-2 (19.10) ----------
   // У карты поле gift — что она даст карте союзника, если её отдать. Нет поля — карту отдать нельзя (слабые удары и Искры — 18.10).
-  // РЕШЕНО (18.10): бусты — только простые числа (50%, ×1.5, ×2, +1). Дробное округляем вверх.
-  // Мощь, Взрыв, Повтор, Броня, Прикрытие складываются по 50% (две Мощи = ×2), проценты складываются, не перемножаются.
-  // Толчок: N толчков = N клеток. Цепь: каждая — отдельный прыжок 50%. Пробой: каждый (кроме первого в одиночку) — +50% в клетку прицела.
-  // Добивание: +100% за каждое. Вызов — только один на карте.
+  // На карте каждый дар — иконка (icon) + одно число. Повторный дар не добавляет иконку, а растит число на 50%
+  // (проценты складываются, не перемножаются; РЕШЕНО 18.10: бусты — только простые числа). Дробное округляем вверх.
+  // Атака → атака: кроме дара карта союзника получает ещё +50% урона отданной карты прямо в свой урон
+  // (у массовки — во всю родную фигуру). Подробно — js/gifts.js.
   gifts: {
-    // color — цвет фона карты с этим даром (поднятая карта светится им)
-    power:  { name: "Мощь",       color: "#d83a3a", text: "урон ×1.5" },
-    blast:  { name: "Взрыв",      color: "#e8822a", text: "соседние с зоной клетки получают 50% урона" },
-    pierce: { name: "Пробой",     color: "#e0c040", text: "одиночной атаке — враг за целью тоже получает 100%; массовке и стреле насквозь — ещё 50% в клетку прицела" },
-    repeat: { name: "Повтор",     color: "#4cb35a", text: "ещё один удар на 50% урона" },
-    push:   { name: "Толчок",     color: "#9a6a3e", text: "толкнуть цель (у массовки — врага в клетке прицела, до удара); каждый следующий толчок на карте — +1 клетка" },
-    armor:  { name: "Броня",      color: "#4a78d8", text: "блок себе = 50% урона карты (у карты блока — блок ×1.5)" },
-    cover:  { name: "Прикрытие",  color: "#4a78d8", text: "блок отдавшему дар = 50% урона карты (у карты блока — блок ×1.5)" },
-    taunt:  { name: "Вызов",      color: "#d4a94f", text: "цель атакует тебя" },
-    execute:{ name: "Добивание",  color: "#9a4ad8", text: "+100% урона (×2, ×3…) по врагу, у которого ≤50% ХП" },
-    chain:  { name: "Цепь",       color: "#48b8e0", text: "молния перескакивает на ближайшего врага вне зоны (с меньшим ХП) — 50% урона; каждая Цепь — ещё один враг" }
+    // color — цвет фона карты с этим даром и плашки дара; icon — значок на плашке
+    power:  { name: "Мощь",       icon: "💪", color: "#d83a3a", text: "урон ×1.5 (две Мощи ×2, три ×2.5)" },
+    blast:  { name: "Взрыв",      icon: "💣", color: "#e8822a", text: "добавляет карте фигуру своей массовки (фигуры складываются по клетке прицела); новые клетки бьют 50% урона, каждый следующий Взрыв +50%" },
+    pierce: { name: "Пробой",     icon: "➹", color: "#e0c040", text: "враг прямо за каждой целью получает ещё 50% урона (каждый Пробой +50%)" },
+    repeat: { name: "Повтор",     icon: "🔁", color: "#4cb35a", text: "ещё удар по тем же целям на 50% (каждый Повтор +50%)" },
+    push:   { name: "Толчок",     icon: "⇧", color: "#9a6a3e", text: "толкнуть цель (у массовки — врага в клетке прицела, до удара); каждый следующий толчок — +1 клетка" },
+    armor:  { name: "Броня",      icon: "🛡", color: "#4a78d8", text: "блок себе = 50% урона карты (у карты блока — блок ×1.5); каждая Броня +50%" },
+    cover:  { name: "Прикрытие",  icon: "🤝", color: "#4a78d8", text: "блок отдавшему дар = 50% урона карты (у карты блока — блок ×1.5); каждое +50%" },
+    taunt:  { name: "Вызов",      icon: "📣", color: "#d4a94f", text: "цель атакует тебя (только один на карте)" },
+    execute:{ name: "Добивание",  icon: "💀", color: "#9a4ad8", text: "×2 урона по врагу, у которого ≤50% ХП (каждое ещё +1: ×3, ×4…)" },
+    chain:  { name: "Цепь",       icon: "⚡", color: "#48b8e0", text: "молния прыгает от цели на соседнего врага с наименьшим ХП, которого карта ещё не била. N цепей = N прыжков: первый N×50% урона, каждый следующий на 50% меньше (2 цепи: 100% → 50%)" }
   },
 
   // ---------- Фигуры массовых атак ----------
@@ -100,9 +100,14 @@ window.GAME_CONFIG = {
     tri:   { name: "треугольник из 3 клеток", steps: [[], [0], [1]] },
     fan:   { name: "веер из 3 клеток", steps: [[], [5], [1]] },
     // Фигуры для tests.fixedShapes (не крутятся). Клетка прицела — передняя (ближняя к героям) клетка фигуры.
+    // merge-2 (19.10): у каждой массовки своя фигура, 3 клетки (2 маны) или 4 клетки (3 маны).
     across2: { name: "2 клетки поперёк", steps: [[], [0]] },
     arc3:    { name: "уголок из 3 клеток", steps: [[], [2], [0]] },          // уголок вниз, к героям
+    line3r:  { name: "косая линия ／ из 3 клеток", steps: [[], [0], [0, 0]] },
+    line3l:  { name: "косая линия ＼ из 3 клеток", steps: [[], [2], [2, 2]] },
+    tri3l:   { name: "треугольник из 3 клеток", steps: [[], [2], [1]] },
     diamond4:{ name: "ромб из 4 клеток", steps: [[], [2], [0], [1]] },      // уголок + клетка за прицелом
+    wave4:   { name: "волна из 4 клеток поперёк", steps: [[], [2], [0], [0, 5]] },
     arc5:    { name: "широкий уголок из 5 клеток", steps: [[], [2], [2, 2], [0], [0, 0]] }
   },
 
@@ -136,8 +141,8 @@ window.GAME_CONFIG = {
 
     // Меч
     cleave:        { name: "Рубящий удар",      cost: 1, gift: "execute", icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
-    sweep:         { name: "Размах",            cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "across2", effects: [{ type: "damage", amount: 8 }] },
-    great_sweep:   { name: "Мощный размах",     cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "arc5", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
+    sweep:         { name: "Размах",            cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "arc3", effects: [{ type: "damage", amount: 8 }] },
+    great_sweep:   { name: "Мощный размах",     cost: 3, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "wave4", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
     crush:         { name: "Сокрушение",        cost: 2, gift: "power", icon: "crush",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 13 }] },
 
     // Щит
@@ -146,16 +151,16 @@ window.GAME_CONFIG = {
 
     // Посох
     bolt:          { name: "Разряд",            cost: 1, gift: "chain", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
-    fireball:      { name: "Огненный шар",      cost: 2, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
+    fireball:      { name: "Огненный шар",      cost: 3, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
     stun_bolt:     { name: "Оглушающий разряд", cost: 2, gift: "power", icon: "stun",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
-    flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
-    nova:          { name: "Огненное кольцо",   cost: 2, gift: "blast", icon: "nova",   target: "cell",  attack: "aoe", area: "adjacent", effects: [{ type: "damage", amount: 6 }] },
+    flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "line3r", effects: [{ type: "damage", amount: 6 }] },
+    nova:          { name: "Огненное кольцо",   cost: 2, gift: "blast", icon: "nova",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "tri3l", effects: [{ type: "damage", amount: 6 }] },
 
     // Лук
     double_shot:   { name: "Двойной выстрел",   cost: 1, gift: "repeat", icon: "arrows", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3, hits: 2 }] },
     pierce_arrow:  { name: "Пробивающая стрела", cost: 2, gift: "pierce", icon: "pierce", target: "enemy", attack: "ranged", area: "line", effects: [{ type: "damage", amount: 7 }] },
     knock_arrow:   { name: "Отбрасывающая стрела", cost: 1, gift: "push", icon: "knock", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "push" }] },
-    arrow_rain:    { name: "Град стрел",        cost: 2, gift: "blast", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "arc3", effects: [{ type: "damage", amount: 6 }] },
+    arrow_rain:    { name: "Град стрел",        cost: 2, gift: "blast", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "line3l", effects: [{ type: "damage", amount: 6 }] },
     aimed_shot:    { name: "Прицельный выстрел", cost: 2, gift: "power", icon: "aim",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 10 }] },
 
     // Кооп-сейвы

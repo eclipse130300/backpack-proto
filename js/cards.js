@@ -17,9 +17,7 @@ BP.Cards = (function () {
     (card.effects || []).forEach((e) => {
       switch (e.type) {
         case "damage": {
-          const center = BP.Gifts ? BP.Gifts.centerDamage(card) : 0; // мердж в массовку: клетка прицела бьёт сильнее
-          if (center) parts.push(`${center} в клетку прицела, ${e.amount} по ${card.area === "adjacent" ? "соседним" : "остальным клеткам"}${card.area === "shape" && card.shapeName ? ` (${card.shapeName})` : ""}`);
-          else parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}`);
+          parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}`);
           break;
         }
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
@@ -37,7 +35,7 @@ BP.Cards = (function () {
         case "damageAllEnemies": parts.push(`всем врагам ${e.amount} урона`); break;
       }
     });
-    if (BP.Gifts) parts.push(...BP.Gifts.textExtra(card)); // взрыв / повтор от даров (js/gifts.js)
+    if (BP.Gifts) parts.push(...BP.Gifts.textExtra(card)); // взрыв / цепь / повтор / пробой от даров (js/gifts.js)
     let t = parts.join(", ");
     t = t.charAt(0).toUpperCase() + t.slice(1);
     if (card.note) t += (t ? ". " : "") + card.note;
@@ -103,8 +101,23 @@ BP.Cards = (function () {
     return null;
   }
 
-  // Все клетки, которые задевает карта (по зоне). target.rot — поворот фигуры (ПКМ).
+  // Все клетки, которые задевает карта: родная зона + клетки Взрыва (дар массовки, js/gifts.js). target.rot — поворот (ПКМ).
   function areaCells(state, hero, card, target) {
+    return nativeCells(state, hero, card, target).concat(zoneCells(state, hero, card, target));
+  }
+
+  // Клетки, добавленные Взрывом (бьют card.zone от урона карты); без клеток родной зоны
+  function zoneCells(state, hero, card, target) {
+    if (!card.zoneSteps || !card.zoneSteps.length) return [];
+    const c = primaryCell(state, card, target || {});
+    if (!c) return [];
+    const r = state.config.rules, own = nativeCells(state, hero, card, target);
+    return BP.Hex.shapeCells(c.col, c.row, card.zoneSteps, card.fixed ? 0 : (target && target.rot) || 0, r.cols, r.rows)
+      .filter((z) => !own.some((o) => o.col === z.col && o.row === z.row));
+  }
+
+  // Родная зона карты (без даров)
+  function nativeCells(state, hero, card, target) {
     const c = primaryCell(state, card, target || {});
     if (!c) return [];
     const r = state.config.rules;
@@ -125,12 +138,12 @@ BP.Cards = (function () {
     const c = primaryCell(state, card, target || {});
     if (!c) return [];
     const r = state.config.rules;
-    if (card.area === "shape") {
-      const sh = (state.config.shapes || {})[card.shape];
-      return BP.Hex.shapeCellsOff(c.col, c.row, sh ? sh.steps : [[]], card.fixed ? 0 : (target && target.rot) || 0, r.cols, r.rows);
-    }
-    if (card.area === "adjacent") return BP.Hex.shapeCellsOff(c.col, c.row, ALL_DIRS, 0, r.cols, r.rows);
-    return [];
+    const rot = card.fixed ? 0 : (target && target.rot) || 0;
+    let steps = [];
+    if (card.area === "shape") { const sh = (state.config.shapes || {})[card.shape]; steps = sh ? sh.steps : [[]]; }
+    if (card.area === "adjacent") steps = ALL_DIRS;
+    steps = steps.concat(card.zoneSteps || []);
+    return steps.length ? BP.Hex.shapeCellsOff(c.col, c.row, steps, rot, r.cols, r.rows) : [];
   }
 
   // «Насквозь»: клетка за целью по линии от героя. Если за целью край поля — рикошет в тот же ряд соседней колонки:
@@ -144,6 +157,15 @@ BP.Cards = (function () {
     const dx = BP.Hex.center(c.col, c.row).x - from.x;
     const sides = Math.abs(dx) < 0.1 ? [-1, 1] : dx < 0 ? [-1] : [1];
     return sides.map((s) => ({ col: c.col + s, row: c.row })).filter((x) => x.col >= 0 && x.col < r.cols);
+  }
+
+  // Враги в зоне с долей урона: родная зона — 1, клетки Взрыва — card.zone
+  function areaTargets(state, hero, card, target) {
+    const out = [], seen = new Set();
+    const add = (cells, f) => cells.forEach((cc) => { const e = enemyAt(state, cc.col, cc.row); if (e && !seen.has(e.uid)) { seen.add(e.uid); out.push({ e, f }); } });
+    add(nativeCells(state, hero, card, target), 1);
+    add(zoneCells(state, hero, card, target), card.zone || 0);
+    return out;
   }
 
   // Все враги, которых задевает карта (по зоне)
@@ -162,22 +184,23 @@ BP.Cards = (function () {
     const dmgEff = (card.effects || []).find((e) => e.type === "damage");
     if (!dmgEff) return [];
     const rules = state.config.rules;
-    const enemies = areaEnemies(state, hero, card, target);
+    const targets = areaTargets(state, hero, card, target);
+    const base = Math.max(0, dmgEff.amount - weakness(hero));
+    const areaHits = targets.map((t) => ({ enemy: t.e.uid, amount: Math.ceil(base * t.f - 1e-9) })); // до крита — для Повтора
     const crit = card.weapon && !card.weak ? hero.crit[card.weapon] : null; // слабые удары не двигают крит и не критуют (18.10)
     let counter = crit ? crit.count : 0;
     const hits = [];
     for (let i = 0; i < (dmgEff.hits || 1); i++) {
       let weaponCrit = false;
       if (crit) { counter++; if (counter >= crit.every) { weaponCrit = true; counter = 0; } }
-      enemies.forEach((e) => {
+      targets.forEach(({ e }, k) => {
         const cond = rules.conditionalCrit && (e.stunned || e.pushedThisTurn);
         const mult = weaponCrit || cond ? rules.critMultiplier : 1;
         const exec = BP.Gifts ? BP.Gifts.executeMult(card, e) : 1; // дар «Добивание»
-        const base = Math.max(0, dmgEff.amount - weakness(hero));
-        hits.push({ enemy: e.uid, amount: base * mult * exec, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "" });
+        hits.push({ enemy: e.uid, amount: areaHits[k].amount * mult * exec, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "" });
       });
     }
-    if (BP.Gifts && BP.Gifts.hasExtra(card)) BP.Gifts.extraHits(state, hero, card, target, enemies, Math.max(0, dmgEff.amount - weakness(hero)), hits);
+    if (BP.Gifts && BP.Gifts.hasExtra(card)) BP.Gifts.extraHits(state, hero, card, target, areaHits, base, hits);
     if (commit && crit) crit.count = counter;
     return hits;
   }
@@ -261,5 +284,5 @@ BP.Cards = (function () {
     return "coop";
   }
 
-  return { mergeCost, kind, text, tags, has, checkTarget, areaCells, areaOffCells, areaEnemies, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
+  return { mergeCost, kind, text, tags, has, checkTarget, areaCells, nativeCells, zoneCells, areaOffCells, areaEnemies, areaTargets, computeHits, preview, mergeInto, canMerge, enemyAt, weakness, isExposed, critInfo, rotatable, areaLabel };
 })();

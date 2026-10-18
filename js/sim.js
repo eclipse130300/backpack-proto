@@ -145,7 +145,7 @@ BP.Sim = (function () {
       const withM = bestPlay(after, a2, d2), without = bestPlay(s, a, d);
       const now = withM !== null && without !== null ? withM - without : evaluate(after) - base;
       // отданная карта уходит чистой: её собственные усиления теряются
-      const lost = card.giftBase ? cardValue(s, hero, card) - cardValue(s, hero, Object.assign(JSON.parse(JSON.stringify(card)), { effects: card.giftBase.effects, bonus: 0, blast: 0, repeat: 0, chain: 0, focus: 0, execute: 0, pushDist: 0 })) : 0;
+      const lost = card.giftBase ? cardValue(s, hero, card) - cardValue(s, hero, BP.Gifts.stripped(card)) : 0;
       const score = now + (gain - lost) * W.mergeFuture;
       if (!best || score > best.score) best = { hero, card, merge: { ally: a.id, allyCard: d.uid }, score, cost };
     });

@@ -137,11 +137,13 @@ BP.Drag = (function () {
     if (!(el.dataset.drop === "enemy" || el.dataset.drop === "cell")) return;
     const target = targetFrom(el, cc.card);
     // массовки и «насквозь»: красным все задетые клетки
-    if (cc.card.area && cc.card.area !== "single") {
-      BP.Cards.areaCells(st(), cc.hero, cc.card, target).forEach((c) => {
+    if ((cc.card.area && cc.card.area !== "single") || (cc.card.zoneSteps && cc.card.zoneSteps.length)) {
+      const mark = (cells, cls) => cells.forEach((c) => {
         const h = document.querySelector(`.hex[data-col="${c.col}"][data-row="${c.row}"]`);
-        if (h) h.classList.add("aoe");
+        if (h) h.classList.add(...cls);
       });
+      mark(BP.Cards.nativeCells(st(), cc.hero, cc.card, target), ["aoe"]);
+      mark(BP.Cards.zoneCells(st(), cc.hero, cc.card, target), ["aoe", "zone"]); // клетки Взрыва — жёлтые
       ghostCells(cc, target);
     }
     const pv = BP.Cards.preview(st(), cc.hero, cc.card, target);

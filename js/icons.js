@@ -61,19 +61,21 @@ BP.Icons = (function () {
   }
 
   // Мини-схема фигуры массовки: шестиугольники в клетках фигуры (первая — клетка прицела)
-  function shapeSvg(steps, rot) {
-    const pts = (steps || [[]]).map((path) => {
+  // zone — клетки, добавленные даром «Взрыв» (рисуются жёлтыми)
+  function shapeSvg(steps, rot, zone) {
+    const all = (steps || [[]]).concat(zone || []), own = (steps || [[]]).length;
+    const pts = all.map((path) => {
       let x = 0, y = 0;
       path.forEach((s) => { const a = ((30 + (((rot || 0) + s) % 6) * 60) * Math.PI) / 180; x += Math.cos(a); y -= Math.sin(a); });
       return { x, y };
     });
     const minX = Math.min(...pts.map((p) => p.x)) - 0.6, maxX = Math.max(...pts.map((p) => p.x)) + 0.6;
     const minY = Math.min(...pts.map((p) => p.y)) - 0.6, maxY = Math.max(...pts.map((p) => p.y)) + 0.6;
-    const hex = (cx, cy, first) => {
-      const p = [0, 1, 2, 3, 4, 5].map((i) => { const a = ((60 * i) * Math.PI) / 180; return `${(cx + 0.55 * Math.cos(a)).toFixed(3)},${(cy + 0.55 * Math.sin(a)).toFixed(3)}`; }).join(" ");
-      return `<polygon points="${p}" fill="${first ? "#ff5a3c" : "#b5372f"}" stroke="#1d0b09" stroke-width="0.06"/>`;
+    const hex = (cx, cy, i) => {
+      const p = [0, 1, 2, 3, 4, 5].map((k) => { const a = ((60 * k) * Math.PI) / 180; return `${(cx + 0.55 * Math.cos(a)).toFixed(3)},${(cy + 0.55 * Math.sin(a)).toFixed(3)}`; }).join(" ");
+      return `<polygon points="${p}" fill="${i === 0 ? "#ff5a3c" : i < own ? "#b5372f" : "#f2c14a"}" stroke="#1d0b09" stroke-width="0.06"/>`;
     };
-    return `<svg class="shape-mini" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}">${pts.map((p, i) => hex(p.x, p.y, i === 0)).join("")}</svg>`;
+    return `<svg class="shape-mini" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}">${pts.map((p, i) => hex(p.x, p.y, i)).join("")}</svg>`;
   }
 
   return { svg, shapeSvg, KIND_COLOR, KIND_LABEL, list: () => Object.keys(I) };

@@ -68,14 +68,16 @@ BP.Hex = (function () {
   }
 
   // Клетки фигуры массовки. steps — пути от клетки прицела (см. shapes в config.js), rot — поворот 0..5.
-  // Клетки за краем поля отбрасываются.
+  // Клетки за краем поля отбрасываются. Путь считается геометрически: промежуточные шаги могут выходить за край.
   function shapeCells(col, row, steps, rot, cols, rows) {
     const out = [];
     (steps || [[]]).forEach((path) => {
-      let c = { col, row };
+      let p = center(col, row);
       for (const s of path) {
-        c = c && neighbor(c.col, c.row, (((rot || 0) + s) % 6 + 6) % 6, cols, rows);
+        const a = (DIRS[(((rot || 0) + s) % 6 + 6) % 6].angle * Math.PI) / 180;
+        p = { x: p.x + ROW_H * Math.cos(a), y: p.y + ROW_H * Math.sin(a) };
       }
+      const c = cellAt(p.x, p.y, cols, rows);
       if (c && !out.some((o) => o.col === c.col && o.row === c.row)) out.push(c);
     });
     return out;

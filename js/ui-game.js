@@ -126,6 +126,27 @@ BP.UIGame = (function () {
     return c.text;
   }
 
+  // Мини-схема фигуры: родные клетки красные, добавленные Взрывом — жёлтые
+  function shapeMini(c) {
+    const zone = c.zoneSteps && c.zoneSteps.length ? c.zoneSteps : null;
+    if (c.area !== "shape" && !zone) return "";
+    return BP.Icons.shapeSvg(c.area === "shape" ? c.shapeSteps : [[]], 0, zone);
+  }
+
+  // Крупное число на картинке карты: урон (×удары) или блок
+  function bigNumber(c) {
+    const ef = c.effects || [], d = ef.find((e) => e.type === "damage"), b = ef.find((e) => e.type === "block" || e.type === "blockSelf");
+    if (d) return `<div class="cbig dmg">${d.amount}${d.hits > 1 ? `<small>×${d.hits}</small>` : ""}</div>`;
+    if (b) return `<div class="cbig blk">${b.amount}</div>`;
+    return "";
+  }
+
+  // Плашки полученных даров: иконка + число, цветом дара
+  function badgesHtml(state, c) {
+    if (!BP.Gifts.isOn(state) || !c.gifts || !c.gifts.length) return "";
+    return `<div class="cbadges">${BP.Gifts.badges(state, c).map((b) => `<span class="cbadge" style="--bc:${b.color}" title="${esc(b.name)}">${b.icon}${b.value ? `<b>${esc(b.value)}</b>` : ""}</span>`).join("")}</div>`;
+  }
+
   function cardHtml(state, hero, c, ui, readonly, ml) {
     const avail = state.pool ? state.pool.amount : hero.energy;
     const kind = BP.Cards.kind(c), kc = BP.Icons.KIND_COLOR[kind];
@@ -143,11 +164,12 @@ BP.UIGame = (function () {
     const gc = BP.Gifts.isOn(state) && c.gift && (state.config.gifts[c.gift] || {}).color; // фон карты — цвет её дара
     return `<div class="${cls}${gc ? " gifted" : ""}" data-card="${c.uid}" data-hero="${hero.id}" data-drop="merge" data-tip="card" style="--kc:${kc};${gc ? `--gc:${gc};` : ""}${ml ? `margin-left:${ml}px` : ""}">
       <div class="cost">${c.cost}</div>${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
-      <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${c.area === "shape" ? BP.Icons.shapeSvg(c.shapeSteps, 0) : ""}${crit}</div>
+      <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${shapeMini(c)}${crit}${bigNumber(c)}</div>
       <div class="cname">${esc(c.name)}</div>
+      ${badgesHtml(state, c)}
       <div class="ctext">${esc(shortText(state, c))}</div>
       ${c.merged ? `<div class="cmerged">★${c.merged > 1 ? c.merged : ""}</div>` : ""}
-      ${BP.Gifts.isOn(state) && c.gift ? `<div class="cgift">🎁 ${esc(BP.Gifts.labels(state, c).own)}</div>` : ""}
+      ${BP.Gifts.isOn(state) && c.gift ? `<div class="cgift">🎁 ${esc(BP.Gifts.labels(state, c).ownIcon)} ${esc(BP.Gifts.labels(state, c).own)}</div>` : ""}
       ${needsBtn ? `<button class="play-btn primary" data-act="play-self">▶ Сыграть</button>` : ""}
     </div>`;
   }
