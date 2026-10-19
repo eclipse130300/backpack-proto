@@ -115,7 +115,7 @@ BP.Catalog = (function () {
     const pill = v ? `<span class="pill v-${v}" title="Боты играли эту карту в ${Math.round(r.playRate * 100)}% случаев, когда она была в руке">${Math.round(r.playRate * 100)}%</span>` : "";
     return `<div class="ctile${ui.open === c.id ? " open" : ""}" data-card="${esc(c.id)}">
       <div class="card readonly k-${c.kind}" style="--kc:${kc}">
-        <div class="cost">${c.cost}</div>
+        ${BP.Icons.costHtml(c)}${BP.Icons.statsHtml(c)}
         ${c.isNew ? `<div class="cnew">🆕</div>` : ""}
         <div class="cart">${BP.Icons.svg(c.icon)}${c.area === "shape" ? BP.Icons.shapeSvg(c.shapeSteps, 0) : ""}</div>
         <div class="cname">${esc(c.name)}</div>

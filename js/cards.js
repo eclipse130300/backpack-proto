@@ -197,10 +197,16 @@ BP.Cards = (function () {
         const cond = rules.conditionalCrit && (e.stunned || e.pushedThisTurn);
         const mult = weaponCrit || cond ? rules.critMultiplier : 1;
         const exec = BP.Gifts ? BP.Gifts.executeMult(card, e) : 1; // дар «Добивание»
-        hits.push({ enemy: e.uid, amount: areaHits[k].amount * mult * exec, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "" });
+        const zone = targets[k].f !== 1; // клетка Взрыва
+        hits.push({ enemy: e.uid, amount: areaHits[k].amount * mult * exec, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "",
+          src: zone ? "blast" : "card", step: zone && BP.Gifts ? BP.Gifts.stepOf(card, "blast") : 0 });
       });
     }
     if (BP.Gifts && BP.Gifts.hasExtra(card)) BP.Gifts.extraHits(state, hero, card, target, areaHits, base, hits);
+    // Показ по порядку (только для глаз, 19.10): сначала сама карта, потом дары в порядке первого мерджа (hit.step)
+    hits.forEach((h, i) => { h.i = i; });
+    hits.sort((a, b) => (a.step || 0) - (b.step || 0) || a.i - b.i);
+    hits.forEach((h) => { delete h.i; });
     if (commit && crit) crit.count = counter;
     return hits;
   }

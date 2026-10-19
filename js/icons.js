@@ -78,5 +78,18 @@ BP.Icons = (function () {
     return `<svg class="shape-mini" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}">${pts.map((p, i) => hex(p.x, p.y, i)).join("")}</svg>`;
   }
 
-  return { svg, shapeSvg, KIND_COLOR, KIND_LABEL, list: () => Object.keys(I) };
+  // Левый верхний угол карты (19.10): стоимость со значком энергии ⚡ и под ней столбик ⚔ урон / 🛡 блок
+  function costHtml(c) {
+    return `<div class="cost" title="Стоимость в энергии"><i>⚡</i>${c.cost}</div>`;
+  }
+  function statsHtml(c) {
+    const ef = c.effects || [], d = ef.find((e) => e.type === "damage");
+    const blk = ef.filter((e) => e.type === "block" || e.type === "blockSelf" || e.type === "blockHero").reduce((a, e) => a + e.amount, 0);
+    const rows = [];
+    if (d) rows.push(`<div class="st atk" title="Урон">⚔️<b>${d.amount}${d.hits > 1 ? `<small>×${d.hits}</small>` : ""}</b></div>`);
+    if (blk) rows.push(`<div class="st blk" title="Блок">🛡️<b>${blk}</b></div>`);
+    return rows.length ? `<div class="cstats">${rows.join("")}</div>` : "";
+  }
+
+  return { costHtml, statsHtml, svg, shapeSvg, KIND_COLOR, KIND_LABEL, list: () => Object.keys(I) };
 })();

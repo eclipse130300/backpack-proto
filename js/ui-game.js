@@ -133,14 +133,6 @@ BP.UIGame = (function () {
     return BP.Icons.shapeSvg(c.area === "shape" ? c.shapeSteps : [[]], 0, zone);
   }
 
-  // Крупное число на картинке карты: урон (×удары) или блок
-  function bigNumber(c) {
-    const ef = c.effects || [], d = ef.find((e) => e.type === "damage"), b = ef.find((e) => e.type === "block" || e.type === "blockSelf");
-    if (d) return `<div class="cbig dmg">${d.amount}${d.hits > 1 ? `<small>×${d.hits}</small>` : ""}</div>`;
-    if (b) return `<div class="cbig blk">${b.amount}</div>`;
-    return "";
-  }
-
   // Плашки полученных даров: иконка + число, цветом дара
   function badgesHtml(state, c) {
     if (!BP.Gifts.isOn(state) || !c.gifts || !c.gifts.length) return "";
@@ -163,8 +155,8 @@ BP.UIGame = (function () {
     const crit = ci ? `<div class="crit ${ci.willCrit ? "on" : ""}">${ci.willCrit ? "💥 КРИТ" : `💥 через ${ci.left}`}</div>` : "";
     const gc = BP.Gifts.isOn(state) && c.gift && (state.config.gifts[c.gift] || {}).color; // фон карты — цвет её дара
     return `<div class="${cls}${gc ? " gifted" : ""}" data-card="${c.uid}" data-hero="${hero.id}" data-drop="merge" data-tip="card" style="--kc:${kc};${gc ? `--gc:${gc};` : ""}${ml ? `margin-left:${ml}px` : ""}">
-      <div class="cost">${c.cost}</div>${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
-      <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${shapeMini(c)}${crit}${bigNumber(c)}</div>
+      ${BP.Icons.costHtml(c)}${BP.Icons.statsHtml(c)}${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
+      <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${shapeMini(c)}${crit}</div>
       <div class="cname">${esc(c.name)}</div>
       ${badgesHtml(state, c)}
       <div class="ctext">${esc(shortText(state, c))}</div>

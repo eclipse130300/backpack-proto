@@ -166,8 +166,18 @@ h1, h2, h3 { margin: 0 0 10px; font-weight: 700; letter-spacing: .3px; }
 .card.readonly { cursor: default; }
 .card.valid { border-color: var(--gold); box-shadow: 0 0 12px var(--gold); }
 .card.hover { border-color: #fff2c2; }
-.card .cost { position: absolute; top: -9px; left: -9px; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(#f3e3c0, #b99a62); color: #2a0d0a;
-  font-weight: 800; font-size: 17px; display: flex; align-items: center; justify-content: center; border: 2px solid #2a0d0a; z-index: 2; }
+.card .cost { position: absolute; top: -9px; left: -9px; min-width: 30px; height: 30px; padding: 0 7px 0 4px; border-radius: 15px; background: radial-gradient(#f3e3c0, #b99a62); color: #2a0d0a;
+  font-weight: 800; font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 1px; border: 2px solid #2a0d0a; z-index: 3; box-sizing: border-box; }
+.card .cost i { font-style: normal; font-size: 12px; filter: saturate(1.4); }
+/* Под стоимостью — урон и блок карты (19.10) */
+.card .cstats { position: absolute; top: 24px; left: -8px; display: flex; flex-direction: column; gap: 3px; z-index: 3; }
+.card .cstats .st { display: flex; align-items: center; gap: 2px; padding: 0 5px 0 3px; height: 22px; border-radius: 6px; font-size: 14px;
+  background: #1d0b09ee; border: 2px solid; box-shadow: 0 2px 4px #000a; }
+.card .cstats .st b { font-size: 16px; font-weight: 900; color: #fff; }
+.card .cstats .st b small { font-size: 11px; }
+.card .cstats .st.atk { border-color: #ff5a3c; }
+.card .cstats .st.blk { border-color: #6fa8ff; }
+.card .cstats .st.blk b { color: #cfe2ff; }
 .card .cart { width: 100%; height: 62px; display: flex; align-items: center; justify-content: center; color: var(--kc, #e8d6b5); position: relative;
   background: radial-gradient(circle, color-mix(in srgb, var(--kc, #6a2a22) 32%, #2a0d0a) 0%, #1a0806 78%); border-radius: 6px; margin-top: 8px; }
 .card .cart .icon { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--kc, #000) 60%, transparent)); }
@@ -228,6 +238,8 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 .dmg-num { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; font-weight: 900;
   animation: dmgfloat 1.4s ease-out forwards; text-shadow: 0 0 4px #000, 0 2px 0 #000, 0 0 12px #000; }
 .dmg-num .n { font-size: 54px; color: #ff4a3a; line-height: 1; }
+.dmg-num .nrow { display: flex; align-items: center; gap: 4px; }
+.dmg-num .src { font-size: 30px; line-height: 1; filter: drop-shadow(0 2px 3px #000); }
 .dmg-num.hero .n { color: #ff2a2a; }
 .dmg-num.crit .n { font-size: 72px; color: #ffb02a; }
 .dmg-num .critword { font-size: 22px; color: #fff2c2; letter-spacing: 2px; }
@@ -294,7 +306,9 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
   .card .cart .shape-mini { height: 24px; width: 30px; }
   .card .cname { font-size: 14px; min-height: 32px; }
   .card .ctext { font-size: 12px; -webkit-line-clamp: 4; }
-  .card .cost { width: 32px; height: 32px; font-size: 18px; }
+  .card .cost { min-width: 32px; height: 32px; font-size: 18px; }
+  .card .cstats { top: 27px; }
+  .card .cstats .st { height: 24px; } .card .cstats .st b { font-size: 18px; }
   .card .crit { font-size: 12px; }
 }
 
@@ -309,7 +323,10 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
   .card .cart .icon { width: 40px; height: 40px; }
   .card .cname { font-size: 11px; min-height: 25px; margin-top: 3px; }
   .card .ctext { font-size: 10px; -webkit-line-clamp: 2; }
-  .card .cost { width: 26px; height: 26px; font-size: 15px; }
+  .card .cost { min-width: 26px; height: 26px; font-size: 15px; padding: 0 5px 0 3px; }
+  .card .cost i { font-size: 10px; }
+  .card .cstats { top: 20px; left: -7px; gap: 2px; }
+  .card .cstats .st { height: 18px; font-size: 11px; padding: 0 3px 0 2px; } .card .cstats .st b { font-size: 13px; }
   .card .cbig { font-size: 19px; bottom: -2px; }
   .card .cbig small { font-size: 12px; }
   .card .crit { font-size: 9px; padding: 0 2px; bottom: auto; top: 0; left: auto; right: 0; }

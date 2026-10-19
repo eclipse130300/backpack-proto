@@ -162,9 +162,12 @@ BP.Gifts = (function () {
   //   Цепь — N прыжков от цели по соседям с наименьшим ХП, которых карта ещё не била: N×50%, (N−1)×50%, … 50%.
   function extraHits(state, hero, card, target, areaHits, amount, hits) {
     const r = state.config.rules;
-    const push = (e, a) => { if (a > 0) hits.push({ enemy: e.uid, amount: a, crit: false, critReason: "" }); };
+    let src = "";
+    const push = (e, a) => { if (a > 0) hits.push({ enemy: e.uid, amount: a, crit: false, critReason: "", src, step: stepOf(card, src) }); };
     const byUid = (uid) => state.enemies.find((e) => e.uid === uid);
+    src = "repeat";
     if (card.repeat) areaHits.forEach((h) => push(byUid(h.enemy), up(h.amount * card.repeat)));
+    src = "pierce";
     if (card.pierce) {
       const done = new Set();
       areaHits.forEach((h) => {
@@ -172,6 +175,7 @@ BP.Gifts = (function () {
         if (back && !done.has(back.uid)) { done.add(back.uid); push(back, up(amount * card.pierce)); }
       });
     }
+    src = "chain";
     if (card.chain) {
       const hit = new Set(areaHits.map((h) => h.enemy));
       const t = target || {};
@@ -188,15 +192,26 @@ BP.Gifts = (function () {
       }
     }
   }
+  // Порядок дара на карте: 1, 2, 3… по первому мерджу (повторный дар не сдвигает); 0 — сама карта
+  function order(card) {
+    const out = [];
+    list(card).forEach((g) => { if (!out.includes(g.id)) out.push(g.id); });
+    return out;
+  }
+  function stepOf(card, id) {
+    const k = order(card).indexOf(id);
+    return k < 0 ? 0 : k + 1;
+  }
+
   const hasExtra = (card) => !!(card.repeat || card.chain || card.pierce);
 
-  // Плашки даров на карте: иконка + одно число (в порядке таблицы gifts)
+  // Плашки даров на карте: иконка + одно число (в порядке первого мерджа — в том же порядке идёт урон)
   function badges(state, card) {
     const out = [], dmg = (card.effects || []).find((e) => e.type === "damage");
     const pct = (x) => Math.round(x * 100) + "%";
-    Object.keys(state.config.gifts || {}).forEach((id) => {
+    order(card).forEach((id) => { // в порядке первого мерджа
       const n = count(card, id);
-      if (!n) return;
+      if (!n || !info(state, id)) return;
       const g = info(state, id);
       let v = "";
       switch (id) {
@@ -237,5 +252,5 @@ BP.Gifts = (function () {
     };
   }
 
-  return { isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild };
+  return { isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf };
 })();

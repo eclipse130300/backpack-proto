@@ -131,12 +131,12 @@ BP.Engine = (function () {
   }
 
   // ---------- Урон ----------
-  function hurtEnemy(state, e, amount, heroId, crit) {
+  function hurtEnemy(state, e, amount, heroId, crit, src, step) {
     if (!e.alive || amount <= 0) return 0;
     const absorbed = Math.min(e.block, amount);
     e.block -= absorbed;
     e.hp -= amount - absorbed;
-    fx(state, { k: "enemy", uid: e.uid, col: e.col, row: e.row, amount: Math.min(amount - absorbed, e.hp + amount - absorbed), blocked: absorbed, crit: !!crit });
+    fx(state, { k: "enemy", uid: e.uid, col: e.col, row: e.row, amount: Math.min(amount - absorbed, e.hp + amount - absorbed), blocked: absorbed, crit: !!crit, src: src || "", step: step || 0, play: state.playSeq || 0 });
     if (heroId) {
       const h = state.heroes.find((x) => x.id === heroId);
       if (h) h.stats.damage += amount - absorbed;
@@ -262,12 +262,13 @@ BP.Engine = (function () {
       if (pe) notes.push(pushN(state, pe, t.dir, hero.id, card.pushDist));
     }
     // урон считаем до остальных эффектов (чтобы толчок не менял цели)
+    state.playSeq = (state.playSeq || 0) + 1; // номер розыгрыша — для показа урона по шагам (js/ui-fx.js)
     const hits = C().computeHits(state, hero, card, t, true);
     if (hits.length) {
       const per = {};
       hits.forEach((h) => {
         const e = state.enemies.find((x) => x.uid === h.enemy);
-        hurtEnemy(state, e, h.amount, hero.id, h.crit);
+        hurtEnemy(state, e, h.amount, hero.id, h.crit, h.src, h.step);
         per[e.name] = (per[e.name] || []).concat(h.amount + (h.crit ? "!" : ""));
       });
       notes.push(Object.entries(per).map(([n, a]) => `${n}: ${a.join("+")}`).join(", "));
@@ -279,7 +280,7 @@ BP.Engine = (function () {
         case "blockSelf": hero.block += ef.amount; notes.push(`+${ef.amount} блока себе`); break;
         case "blockHero": { const to = state.heroes.find((x) => x.id === ef.hero && x.alive) || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; } // дар «Прикрытие»
         case "push": if (primary && primary.alive) notes.push(pushN(state, primary, t.dir, hero.id, card.pushDist)); break;
-        case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a, hero.id))); break;
+        case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a, hero.id, false, "sparks", 1))); break;
         case "stun": if (primary && primary.alive) { primary.stunned = true; primary.intent = { type: "stunned" }; notes.push(`${primary.name} оглушён`); } break;
         case "taunt": if (primary && primary.alive && retarget(state, primary, hero.id)) notes.push(`${primary.name} теперь целит в ${hero.name}`); break;
         case "cleanse": if (tHero) { tHero.debuffs = []; notes.push(`${tHero.name} очищен`); } break;

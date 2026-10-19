@@ -31,6 +31,17 @@ BP.FX = (function () {
   // и со сдвигом влево-вправо по очереди
   const NUM_GAP = 150, NUM_SHIFT = 34;
   const numQueue = {}; // ключ цели → { t: когда можно следующее, n: номер в серии }
+  // Урон одной карты показывается по шагам (только для глаз, 19.10): шаг 0 — сама карта, дальше дары в порядке
+  // первого мерджа (ev.step), между шагами STEP_GAP мс. У числа — иконка источника (ev.src).
+  const STEP_GAP = 200;
+  const playStart = {}; // номер розыгрыша → время первого числа
+  function srcIcon(s, ev) {
+    if (ev.crit) return "💥";
+    if (ev.src === "card") return "⚔️";
+    if (ev.src === "sparks") return "✨";
+    const g = ev.src && (s.config.gifts || {})[ev.src];
+    return g ? g.icon || "" : "";
+  }
 
   function spawnNumber(s, ev, shift) {
     const r = ev.k === "enemy" ? enemyRect(s, ev) : (document.querySelector(`.hero.token[data-hero="${ev.hero}"]`) || { getBoundingClientRect: () => null }).getBoundingClientRect();
@@ -38,7 +49,8 @@ BP.FX = (function () {
     const d = document.createElement("div");
     const main = ev.amount > 0 ? `−${ev.amount}` : ev.blocked > 0 ? "блок" : "0";
     d.className = `dmg-num ${ev.k} ${ev.crit ? "crit" : ""} ${ev.amount > 0 ? "" : "blocked-only"}`;
-    d.innerHTML = `${ev.crit ? '<span class="critword">КРИТ!</span>' : ""}<span class="n">${main}</span>${ev.blocked > 0 ? `<span class="b">🛡${ev.blocked}</span>` : ""}`;
+    const ic = ev.k === "enemy" ? srcIcon(s, ev) : "";
+    d.innerHTML = `${ev.crit ? '<span class="critword">КРИТ!</span>' : ""}<span class="nrow">${ic ? `<span class="src">${ic}</span>` : ""}<span class="n">${main}</span></span>${ev.blocked > 0 ? `<span class="b">🛡${ev.blocked}</span>` : ""}`;
     d.style.left = r.left + r.width / 2 + (shift || 0) + (Math.random() * 10 - 5) + "px";
     d.style.top = r.top + (ev.k === "enemy" ? r.height * 0.35 : -18) + "px";
     layer.appendChild(d);
@@ -51,7 +63,12 @@ BP.FX = (function () {
     (s.fx || []).forEach((ev) => {
       if (ev.id <= lastFx) return;
       const key = ev.k === "enemy" ? "e:" + ev.uid : "h:" + ev.hero;
-      const q = numQueue[key] && numQueue[key].t > now ? numQueue[key] : { t: now, n: 0 };
+      let q = numQueue[key] && numQueue[key].t > now ? numQueue[key] : { t: now, n: 0 };
+      if (ev.play && ev.k === "enemy") { // шаг розыгрыша: не раньше, чем start + step × STEP_GAP
+        if (!playStart[ev.play]) playStart[ev.play] = now;
+        const at = playStart[ev.play] + (ev.step || 0) * STEP_GAP;
+        if (at > q.t) q = { t: at, n: q.n };
+      }
       const delay = q.t - now, n = q.n;
       const shift = n === 0 ? 0 : (n % 2 ? 1 : -1) * NUM_SHIFT * Math.ceil(n / 2);
       numQueue[key] = { t: q.t + NUM_GAP, n: n + 1 };
