@@ -8,6 +8,7 @@ BP.Cards = (function () {
   // card.shapeName кладёт engine.makeCard из config.shapes
   function areaLabel(card) {
     if (card.area === "shape") return card.shapeName ? "по фигуре: " + card.shapeName : "";
+    if (card.area === "rays" || card.area === "level") return BP.Mech.dynLabel(card); // динамические массовки (js/mech.js)
     return AREA_LABEL[card.area] || "";
   }
 
@@ -26,17 +27,25 @@ BP.Cards = (function () {
         case "pull": parts.push("притянуть врага из заднего ряда вперёд (впереди кто-то есть — меняются местами)"); break;
         case "blockPartyPct": parts.push(`всем героям блок ${Math.round(e.pct * 100)}% урона`); break;
         case "push": parts.push(`${card.target === "cell" ? "сначала толкнуть врага в клетке прицела" : "толкнуть"}${card.pushDist > 1 ? ` на ${card.pushDist} клетки` : ""} (выбор стороны)`); break;
-        case "sparks": parts.push(`${e.count} искры по ${e.amount} в случайных соседних врагов (не в цель)`); break;
-        case "stun": parts.push("оглушить (пропустит действие)"); break;
+        case "sparks": parts.push(`${e.count} выстрела по ${e.amount}: каждый с шансом ${Math.round((e.stray || 0) * 100)}% уходит в случайного соседа цели`); break;
+        case "stun": parts.push(card.target === "cell" ? "оглушить всех задетых" : "оглушить (пропустит действие)"); break;
+        case "buffDamage": parts.push(`до конца боя каждая карта цели +${e.amount} урона (складывается)`); break;
+        case "buffBlock": parts.push(`до конца боя каждая карта блока цели +${e.amount} блока (складывается)`); break;
+        case "miss": parts.push("следующая атака врага по цели промахнётся"); break;
+        case "pick": parts.push(`выбрать 1 из ${e.count || 3} случайных карт колод всех героев — она уйдёт владельцу в руку`); break;
+        case "tutor": parts.push("найти любую карту в колодах всех героев — она уйдёт владельцу в руку"); break;
         case "taunt": parts.push("враг атакует тебя"); break;
         case "cleanse": parts.push("снять проклятия"); break;
         case "draw": parts.push(`взять ${e.amount} карт`); break;
-        case "energy": parts.push(card.target === "ally" ? `союзнику +${e.amount} энергии` : `+${e.amount} энергии`); break;
+        case "energy": parts.push(card.target === "ally" ? `союзнику +${e.amount} энергии` : card.target === "hero" ? `себе или союзнику +${e.amount} энергии` : `+${e.amount} энергии`); break;
         case "sharedPool": parts.push("общий пул энергии пати до конца хода"); break;
         case "blockParty": parts.push(`всем героям ${e.amount} блока`); break;
         case "damageAllEnemies": parts.push(`всем врагам ${e.amount} урона`); break;
       }
     });
+    if (card.ricochet && !card.pierce) parts.push("рикошет: сосед цели по выбранному направлению получает 100%");
+    if (card.armorBreak) parts.push("по броне ×2");
+    if (card.alwaysCrit) parts.push("всегда крит");
     if (BP.Evolve) parts.push(...BP.Evolve.textExtra(card)); // эволюции и Рывок (js/evolve.js)
     if (BP.Gifts) parts.push(...BP.Gifts.textExtra(card)); // взрыв / цепь / повтор / пробой от даров (js/gifts.js)
     let t = parts.join(", ");
@@ -81,14 +90,14 @@ BP.Cards = (function () {
         const e = state.enemies.find((x) => x.uid === t.enemy && x.alive);
         if (!e) return "Нужна цель-враг";
         if (card.attack === "melee" && !card.ignoreCover && !isExposed(state, e)) return "Мили бьёт только открытых врагов: этого прикрывают спереди";
-        if (has(card, "push") && (t.dir === undefined || t.dir === null)) return "NEED_DIR";
+        if (BP.Mech.needsDir(state, card, t)) return "NEED_DIR"; // толчок и рикошет — одно направление атаки
         return null;
       }
       case "cell": {
         const r = state.config.rules;
         if (!t.cell || t.cell.col < 0 || t.cell.col >= r.cols || t.cell.row < 0 || t.cell.row >= r.rows) return "Нужна клетка поля";
         // дар «Толчок» в массовку: враг в клетке прицела толкается — нужно направление
-        if (has(card, "push") && enemyAt(state, t.cell.col, t.cell.row) && (t.dir === undefined || t.dir === null)) return "NEED_DIR";
+        if (BP.Mech.needsDir(state, card, t)) return "NEED_DIR";
         return null;
       }
     }
@@ -111,12 +120,16 @@ BP.Cards = (function () {
 
   // Клетки, добавленные Взрывом (бьют card.zone от урона карты); без клеток родной зоны
   function zoneCells(state, hero, card, target) {
-    if (!card.zoneSteps || !card.zoneSteps.length) return [];
+    const dyn = !!((card.zoneRays && card.zoneRays.length) || card.zoneLevel);
+    if ((!card.zoneSteps || !card.zoneSteps.length) && !dyn) return [];
     const c = primaryCell(state, card, target || {});
     if (!c) return [];
     const r = state.config.rules, own = nativeCells(state, hero, card, target);
-    return BP.Hex.shapeCells(c.col, c.row, card.zoneSteps, card.fixed ? 0 : (target && target.rot) || 0, r.cols, r.rows)
-      .filter((z) => !own.some((o) => o.col === z.col && o.row === z.row));
+    const cells = BP.Hex.shapeCells(c.col, c.row, card.zoneSteps || [], card.fixed ? 0 : (target && target.rot) || 0, r.cols, r.rows)
+      .concat(BP.Mech.zoneDynCells(state, card, c)); // Зона от динамических массовок (js/mech.js)
+    const out = [];
+    cells.forEach((z) => { if (!own.some((o) => o.col === z.col && o.row === z.row) && !out.some((o) => o.col === z.col && o.row === z.row)) out.push(z); });
+    return out;
   }
 
   // Родная зона карты (без даров)
@@ -125,6 +138,8 @@ BP.Cards = (function () {
     if (!c) return [];
     const r = state.config.rules;
     let cells = [c];
+    const dyn = BP.Mech.dynCells(state, card, c); // rays / level — до края поля
+    if (dyn) return dyn;
     if (card.area === "shape") {
       const sh = (state.config.shapes || {})[card.shape];
       cells = BP.Hex.shapeCells(c.col, c.row, sh ? sh.steps : [[]], card.fixed ? 0 : (target && target.rot) || 0, r.cols, r.rows);
@@ -190,22 +205,25 @@ BP.Cards = (function () {
     if (!dmgEff) return [];
     const rules = state.config.rules;
     const targets = areaTargets(state, hero, card, target);
-    const base = Math.max(0, dmgEff.amount - weakness(hero));
+    const base = Math.max(0, dmgEff.amount - weakness(hero) + (hero.dmgBuff || 0)); // + Сила (js/mech.js)
     const areaHits = targets.map((t) => ({ enemy: t.e.uid, amount: Math.ceil(base * t.f - 1e-9) })); // до крита — для Повтора
     const crit = card.weapon && !card.weak ? hero.crit[card.weapon] : null; // слабые удары не двигают крит и не критуют (18.10)
     let counter = crit ? crit.count : 0;
     const hits = [];
     for (let i = 0; i < (dmgEff.hits || 1); i++) {
       let weaponCrit = false;
-      if (crit) { counter++; if (counter >= crit.every) { weaponCrit = true; counter = 0; } }
+      if (card.alwaysCrit) weaponCrit = true; // Верный выстрел: всегда крит, счётчик не трогает
+      else if (crit) { counter++; if (counter >= crit.every) { weaponCrit = true; counter = 0; } }
       targets.forEach(({ e }, k) => {
-        const cond = rules.conditionalCrit && (e.stunned || e.pushedThisTurn);
-        const mult = weaponCrit || cond ? rules.critMultiplier : 1;
+        // card-mechanics-1: условного крита по оглушённому/толкнутому нет; столкнувшиеся враги получают +50% (складывается с критом)
+        const cond = !!(rules.collisionBonus && e.vuln);
+        const mult = 1 + (weaponCrit ? rules.critMultiplier - 1 : 0) + (cond ? rules.collisionBonus : 0);
         const exec = BP.Gifts ? BP.Gifts.executeMult(card, e) : 1; // дар «Добивание»
         const zone = targets[k].f !== 1; // клетка Взрыва
         let amount = areaHits[k].amount * mult * exec * (card.mult || 1); // mult — эволюции (Палач, Цепной крюк)
         if (card.finisher) amount = e.hp * 2 <= e.maxHp ? Math.max(amount, e.hp + e.block) : amount * 2; // Смертельный выстрел
-        hits.push({ enemy: e.uid, amount, nb: !!card.ignoreBlock, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "",
+        amount = Math.ceil(amount - 1e-9);
+        hits.push({ enemy: e.uid, amount, nb: !!card.ignoreBlock, ab: !!card.armorBreak, crit: weaponCrit, critReason: weaponCrit ? "оружие" : cond ? "столкновение" : "",
           src: zone ? "blast" : "card", step: zone && BP.Gifts ? BP.Gifts.stepOf(card, "blast") : 0 });
       });
     }
@@ -222,6 +240,7 @@ BP.Cards = (function () {
   function critInfo(hero, card) {
     const dmg = (card.effects || []).find((e) => e.type === "damage");
     const c = card.weapon && !card.weak && hero.crit ? hero.crit[card.weapon] : null;
+    if (dmg && card.alwaysCrit) return { left: 1, every: 1, willCrit: true, always: true };
     if (!dmg || !c) return null;
     const left = c.every - c.count;
     return { left, every: c.every, willCrit: left <= (dmg.hits || 1) };
@@ -292,7 +311,7 @@ BP.Cards = (function () {
     const t = (card.effects || []).map((e) => e.type);
     if (t.includes("sharedPool") || card.questCard || /^q_/.test(card.id || "")) return "special";
     if (card.weak || card.adaptive) return "filler";
-    if (card.target === "hero" || card.target === "ally" || t.includes("taunt") || t.includes("cleanse")) return "coop";
+    if (card.target === "hero" || card.target === "ally" || t.includes("taunt") || t.includes("cleanse") || t.includes("pick") || t.includes("tutor")) return "coop";
     if (card.attack === "aoe") return "aoe";
     if (card.attack) return card.attack;
     if (t.includes("block") || t.includes("blockSelf")) return "block";

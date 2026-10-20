@@ -10,7 +10,9 @@
 //   Родная фигура карты бьёт полным уроном, добавленные клетки — 50% за каждый Взрыв на карте.
 // Цепь: N цепей = N прыжков. Первый прыжок — N×50% урона, каждый следующий на 50% меньше (2 цепи: 100%, 50%).
 //   Прыгает от цели (клетки прицела) на соседнего врага с наименьшим ХП, которого карта ещё не била.
-// Пробой: враг прямо за каждой целью (в заднем ряду той же колонки) получает ещё N×50%.
+// card-mechanics-1 (21.10): Взрыв переименован в «Зону» (механика та же; от динамической массовки несёт её лучи/линию).
+// Пробой стал «Рикошетом» (id pierce): перед ударом игрок выбирает направление атаки, сосед каждой цели в эту сторону
+//   получает 100% урона (каждый следующий Рикошет +50%). Толчок на той же карте идёт в то же направление.
 // Слабые карты дара не имеют — отдать их нельзя. Дробное округляем вверх.
 window.BP = window.BP || {};
 
@@ -58,7 +60,11 @@ BP.Gifts = (function () {
   function incoming(state, src) {
     if (!src.gift || !info(state, src.gift)) return []; // нет родного дара (слабые карты) — отдать нельзя
     const own = { id: src.gift, from: null };
-    if (src.gift === "blast") own.steps = clone(nativeSteps(src));
+    if (src.gift === "blast") {
+      own.steps = clone(nativeSteps(src));
+      if (src.area === "rays") { own.steps = [[]]; own.rays = clone(src.rays); } // динамическая массовка (js/mech.js)
+      if (src.area === "level") { own.steps = [[]]; own.level = true; }
+    }
     return [own].concat(list(src).map((g) => Object.assign({}, g)));
   }
 
@@ -93,7 +99,7 @@ BP.Gifts = (function () {
     return true;
   }
 
-  const DERIVED = ["zone", "zoneSteps", "repeat", "execute", "chain", "pierce", "pushDist"];
+  const DERIVED = ["zone", "zoneSteps", "zoneRays", "zoneLevel", "repeat", "execute", "chain", "pierce", "pushDist"];
 
   // Снять с карты все дары и прибавку
   function clean(card) {
@@ -121,7 +127,7 @@ BP.Gifts = (function () {
     if (n("repeat")) card.repeat = 0.5 * n("repeat");
     if (n("execute")) card.execute = n("execute");
     if (n("chain")) card.chain = n("chain");
-    if (n("pierce")) card.pierce = 0.5 * n("pierce");
+    if (n("pierce")) card.pierce = n("pierce"); // Рикошет: число даров (сила — BP.Mech.rico)
     // Взрыв: фигуры даров складываются с родной; новые клетки бьют 50% за каждый Взрыв
     if (n("blast")) {
       card.zone = 0.5 * n("blast");
@@ -131,6 +137,10 @@ BP.Gifts = (function () {
         if (!seen.has(k)) { seen.add(k); steps.push(p); }
       }));
       card.zoneSteps = steps;
+      const rays = [];
+      list(card).filter((g) => g.id === "blast").forEach((g) => (g.rays || []).forEach((d) => { if (!rays.includes(d)) rays.push(d); }));
+      if (rays.length) card.zoneRays = rays;
+      if (list(card).some((g) => g.id === "blast" && g.level)) card.zoneLevel = true;
     }
     // Толчок: N толчков (свой + дары) = толчок на N клеток. У массовки — враг в клетке прицела, ДО удара.
     if (n("push")) {
@@ -168,11 +178,13 @@ BP.Gifts = (function () {
     src = "repeat";
     if (card.repeat) areaHits.forEach((h) => push(byUid(h.enemy), up(h.amount * card.repeat)));
     src = "pierce";
-    if (card.pierce) {
-      const done = new Set();
+    const rico = BP.Mech.rico(card), dir = target && target.dir;
+    if (rico && dir !== undefined && dir !== null) { // Рикошет: сосед каждой цели в выбранном направлении
+      const done = new Set(areaHits.map((h) => h.enemy));
       areaHits.forEach((h) => {
-        const e = byUid(h.enemy), back = e && e.row + 1 < r.rows && BP.Cards.enemyAt(state, e.col, e.row + 1);
-        if (back && !done.has(back.uid)) { done.add(back.uid); push(back, up(amount * card.pierce)); }
+        const e = byUid(h.enemy), n = e && BP.Hex.neighbor(e.col, e.row, dir, r.cols, r.rows);
+        const nb = n && BP.Cards.enemyAt(state, n.col, n.row);
+        if (nb && !done.has(nb.uid)) { done.add(nb.uid); push(nb, up(amount * rico)); }
       });
     }
     src = "chain";
@@ -203,7 +215,7 @@ BP.Gifts = (function () {
     return k < 0 ? 0 : k + 1;
   }
 
-  const hasExtra = (card) => !!(card.repeat || card.chain || card.pierce);
+  const hasExtra = (card) => !!(card.repeat || card.chain || card.pierce || card.ricochet);
 
   // Плашки даров на карте: иконка + одно число (в порядке первого мерджа — в том же порядке идёт урон)
   function badges(state, card) {
@@ -220,6 +232,7 @@ BP.Gifts = (function () {
         case "push": v = String(card.pushDist || 1); break;
         case "taunt": v = ""; break;
         case "armor": case "cover": v = dmg ? pct(0.5 * n) : "×" + (1 + 0.5 * n); break;
+        case "pierce": v = pct(BP.Mech.rico(card)); break;
         default: v = pct(0.5 * n);
       }
       out.push({ id, icon: g.icon || "★", color: g.color, value: v, name: g.name });
@@ -232,10 +245,10 @@ BP.Gifts = (function () {
     const dmg = (card.effects || []).find((e) => e.type === "damage");
     const out = [];
     if (!dmg) return out;
-    if (card.zone) out.push(card.zoneSteps.length ? `взрыв: ещё ${card.zoneSteps.length} кл. по ${up(dmg.amount * card.zone)}` : `взрыв ${Math.round(card.zone * 100)}% (новых клеток нет)`);
+    if (card.zone) out.push(`зона: добавленные клетки по ${up(dmg.amount * card.zone)}${card.zoneRays || card.zoneLevel ? " (линии до края поля)" : ""}`);
     if (card.chain) out.push(`цепь: ${Array.from({ length: card.chain }, (_, i) => up(dmg.amount * 0.5 * (card.chain - i))).join(" → ")}`);
     if (card.repeat) out.push(`повтор: ещё удар ${Math.round(card.repeat * 100)}%`);
-    if (card.pierce) out.push(`пробой: врагу за целью ${up(dmg.amount * card.pierce)}`);
+    if (card.pierce) out.push(`рикошет: соседу цели по направлению атаки ${up(dmg.amount * BP.Mech.rico(card))}`);
     if (card.execute) out.push(`добивание: ×${1 + card.execute} по врагу с ≤50% ХП`);
     return out;
   }

@@ -51,8 +51,9 @@ BP.UIGame = (function () {
     switch (it.type) {
       case "stunned": return `<div class="intent stun">💫 оглушён</div>`;
       case "covered": return `<div class="intent covered">🚫 закрыт, ждёт</div>`;
-      case "attack": return `<div class="intent atk">⚔ ${it.damage}${it.hits > 1 ? "×" + it.hits : ""}${esc(tgt)}${taunt}</div>`;
-      case "curse": return `<div class="intent curse">☠ −${it.amount}${esc(tgt)}</div>`;
+      case "attack": return `<div class="intent atk">⚔ ${it.damage}${it.hits > 1 ? "×" + it.hits : ""}${it.armor ? ` ⬢+${it.armor}` : ""}${esc(tgt)}${taunt}</div>`;
+      case "disable": return `<div class="intent curse">⛓ выведет${esc(tgt)}</div>`;
+      case "arriving": return `<div class="intent covered">👀 осматривается</div>`;
       case "block": return `<div class="intent def">🛡 +${it.amount}</div>`;
     }
     return "";
@@ -72,11 +73,11 @@ BP.UIGame = (function () {
           const marked = state.quest && !state.quest.done && state.quest.mark === e.uid;
           // на выборе квеста: какие варианты отмечают этого врага
           const pickMarks = state.questPick ? state.questPick.options.map((q, i) => (q.mark === e.uid ? "🎯" + (i + 1) : "")).filter(Boolean).join(" ") : "";
-          const badges = [marked ? "🎯 квест" : "", pickMarks, e.stunned ? "оглушён" : "", e.pushedThisTurn ? "толкнут" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
+          const badges = [marked ? "🎯 квест" : "", pickMarks, e.stunned ? "оглушён" : "", e.vuln ? "💥 +50%" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
           html += `<div class="hex enemy row${row}${lane} ${state.actingEnemy === e.uid ? "acting" : ""}" data-drop="enemy" data-tip="enemy" data-enemy="${e.uid}" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner"><div class="etype">${ed.melee ? "мили" : "дальн."}</div><div class="ename">${esc(e.name)}</div>
             <div class="bar"><i style="width:${(100 * e.hp) / e.maxHp}%"></i></div>
-            <div class="ehp">❤ ${e.hp}/${e.maxHp}${e.block ? ` <span class="eblock">🛡${e.block}</span>` : ""}</div>${intentHtml(state, e)}<div class="badges">${badges}</div></div>
+            <div class="ehp">❤ ${e.hp}/${e.maxHp}${e.armor ? ` <span class="earmor" title="Броня: не сгорает, сначала урон идёт в неё">⬢${e.armor}</span>` : ""}${e.block ? ` <span class="eblock">🛡${e.block}</span>` : ""}</div>${intentHtml(state, e)}<div class="badges">${badges}</div></div>
             <div class="preview"></div></div>`;
         } else {
           // подкрепление (js/reinforce.js): клетка, куда выйдет враг в начале следующего хода
@@ -112,7 +113,8 @@ BP.UIGame = (function () {
     state.heroes.forEach((h, i) => {
       const owner = state.players[h.owner];
       const inc = incomingFor(state, h);
-      const weak = (h.debuffs || []).map((d) => `☠ −${d.amount} урона (${d.turns} х.)`).join(" ");
+      // card-mechanics-1: выведен Жрецом, промах (Дымовая завеса), бафы Силы и Стойкости
+      const weak = [h.out ? "⛓ выведен" : "", h.disableNext ? "⛓ след. ход" : "", h.miss ? `🌫${h.miss > 1 ? h.miss : ""} промах` : "", h.dmgBuff ? `⚔+${h.dmgBuff}` : "", h.blockBuff ? `🛡+${h.blockBuff}` : ""].filter(Boolean).join(" ");
       const tgt = state.actingTargets && state.actingTargets.includes(h.id) ? "targeted" : "";
       html += `<div class="hero token ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"} ${tgt}" data-drop="hero" data-tip="hero" data-hero="${h.id}" style="width:${g.width / 3 - 14}px">
         ${portrait(state, h)}

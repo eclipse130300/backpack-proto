@@ -69,13 +69,13 @@ BP.Engine = (function () {
       if (!h.alive) { h.alive = true; h.hp = Math.max(1, cfg.rules.reviveHp || 10); }
       if (!cfg.rules.hpCarriesOver) h.hp = h.maxHp;
       h.startBlock = h.startBlockMax; h.block = 0; h.debuffs = []; h.bonusEnergy = 0;
-      h.crit = {};
+      h.crit = {}; h.dmgBuff = 0; h.blockBuff = 0; h.miss = 0; h.out = false; h.disableNext = false; // card-mechanics-1 (js/mech.js)
       (hc.weapons || []).forEach((w) => { if (cfg.weapons[w] && cfg.weapons[w].critEvery > 0) h.crit[w] = { every: cfg.weapons[w].critEvery, count: 0 }; });
       h.stats = { cards: 0, energy: 0, damage: 0, blockGiven: 0, merges: 0, taken: 0 };
     });
     BP.Deck.buildFight(state, makeCard); // колоды героев (и общая) — js/deck.js
     state.fightStats = { collisions: 0, turns: 0, crits: 0, aoeBest: 0 };
-    state.summary = null;
+    state.summary = null; state.choice = null;
     log(state, "—", `Бой ${index + 1}: ${enc.name}`);
     // квест боя (tests.fightQuest): сначала голосование за 1 из 3 — фаза questPick, бой начнётся после выбора (js/quests.js)
     if (BP.Quests.offer(state)) { state.phase = "questPick"; return; }
@@ -84,9 +84,9 @@ BP.Engine = (function () {
 
   function makeEnemy(state, type, col, row) {
     const ed = state.config.enemies[type];
-    return { uid: "e" + state.seq++, type, name: ed.name, hp: ed.hp, maxHp: ed.hp, block: 0,
-      col, row, actions: clone(ed.actions), actionIndex: 0, intent: null,
-      stunned: false, pushedThisTurn: false, alive: true };
+    return { uid: "e" + state.seq++, type, name: ed.name, hp: ed.hp, maxHp: ed.hp, block: 0, armor: ed.armor || 0, // броня — js/mech.js
+      col, row, actions: clone(ed.actions), actionIndex: 0, intent: null, lastAct: -1,
+      stunned: false, pushedThisTurn: false, vuln: false, skip: false, alive: true };
   }
 
   // Подкрепления вышли на поле: враги + намерения + лог
@@ -119,11 +119,13 @@ BP.Engine = (function () {
 
   function computeIntent(state, e) {
     if (e.stunned) { e.intent = { type: "stunned" }; return; }
-    const a = e.actions[e.actionIndex % e.actions.length];
+    if (e.skip) { e.intent = { type: "arriving" }; return; } // вышел посреди хода игроков — осматривается (js/mech.js)
+    e.intentIdx = BP.Mech.pickAction(state, e); // раненый выбирает действие с бронёй
+    const a = e.actions[e.intentIdx];
     // враг-мили за чужой спиной не дотягивается до героев и ждёт
     if (a.type === "attack" && isMeleeEnemy(state, e) && !C().isExposed(state, e)) { e.intent = { type: "covered", damage: a.damage, hits: a.hits }; return; }
     const it = Object.assign({}, a);
-    if (a.type === "attack" || a.type === "curse") it.targets = pickTargets(state, e, a.targets || 1);
+    if (a.type === "attack" || a.type === "disable") it.targets = pickTargets(state, e, a.targets || 1);
     e.intent = it;
   }
 
@@ -133,21 +135,22 @@ BP.Engine = (function () {
     state.phase = "players"; state.pool = null; state.actingEnemy = null;
     state.turnStats = { played: [], damageBy: {}, kills: 0, merges: {}, mergesTotal: 0 };
     aliveHeroes(state).forEach((h) => {
+      if (BP.Mech.heroTurnStart(h)) { h.energy = 0; h.bonusEnergy = 0; log(state, h.name, "выведен из игры на этот ход"); return; } // Жрец
       h.energy = state.config.rules.energy + h.bonusEnergy; h.bonusEnergy = 0;
       drawCards(state, h, state.config.rules.drawPerTurn); // фиксированный добор, не «до N»
     });
     arrive(state, BP.Reinforce.onTurnStart(state, maker(state)));
-    state.enemies.forEach((e) => { if (e.alive) { e.pushedThisTurn = false; computeIntent(state, e); } });
+    state.enemies.forEach((e) => { if (e.alive) { e.pushedThisTurn = false; e.vuln = false; computeIntent(state, e); } });
     Object.values(state.players).forEach((p) => (p.ready = false));
   }
 
   // ---------- Урон ----------
-  function hurtEnemy(state, e, amount, heroId, crit, src, step, noBlock) {
+  function hurtEnemy(state, e, amount, heroId, crit, src, step, noBlock, armorBreak) {
     if (!e.alive || amount <= 0) return 0;
-    const absorbed = noBlock ? 0 : Math.min(e.block, amount); // noBlock — урон сквозь блок (эволюции)
-    e.block -= absorbed;
-    e.hp -= amount - absorbed;
-    fx(state, { k: "enemy", uid: e.uid, col: e.col, row: e.row, amount: Math.min(amount - absorbed, e.hp + amount - absorbed), blocked: absorbed, crit: !!crit, src: src || "", step: step || 0, play: state.playSeq || 0 });
+    // блок → броня → ХП (js/mech.js). noBlock — сквозь блок и броню (эволюции), armorBreak — по броне ×2
+    const ab = BP.Mech.absorb(e, amount, noBlock, armorBreak), toHp = ab.toHp, absorbed = amount - toHp;
+    e.hp -= toHp;
+    fx(state, { k: "enemy", uid: e.uid, col: e.col, row: e.row, amount: Math.min(toHp, e.hp + toHp), blocked: ab.blocked, armor: ab.armorHit, ab: !!armorBreak, crit: !!crit, src: src || "", step: step || 0, play: state.playSeq || 0 });
     if (heroId) {
       const h = state.heroes.find((x) => x.id === heroId);
       if (h) h.stats.damage += amount - absorbed;
@@ -200,9 +203,12 @@ BP.Engine = (function () {
       hurtEnemy(state, e, r.collisionDamage, heroId);
       hurtEnemy(state, other, r.collisionDamage, heroId);
       state.fightStats.collisions++;
-      return `${e.name} столкнулся с ${other.name} (оба −${r.collisionDamage})`;
+      // card-mechanics-1: оба столкнувшихся до конца хода получают +50% урона (rules.collisionBonus)
+      if (r.collisionBonus) { e.vuln = true; other.vuln = true; }
+      return `${e.name} столкнулся с ${other.name} (оба −${r.collisionDamage}${r.collisionBonus ? `, до конца хода +${Math.round(r.collisionBonus * 100)}% урона по ним` : ""})`;
     }
     e.col = n.col; e.row = n.row;
+    BP.Reinforce.fixMarks(state); // встал на клетку подкрепления — метка сдвигается
     // РЕШЕНО (17.10): толчок меняет цель — враг пересчитывает её по новому коридору (провокация «Вызов» сильнее).
     // Прикрытие тоже пересчитывается у всех: вытолкнули переднего — задний мили открылся и будет бить, и наоборот.
     const before = (e.intent && e.intent.targets || []).join(",");
@@ -218,6 +224,7 @@ BP.Engine = (function () {
     const f = C().enemyAt(state, e.col, 0);
     if (f) f.row = 1;
     e.row = 0;
+    BP.Reinforce.fixMarks(state);
     state.enemies.forEach((x) => { if (x.alive) reintent(state, x, x === e || x === f); });
     return `${e.name} притянут вперёд${f ? `, ${f.name} отступил назад` : ""}`;
   }
@@ -266,7 +273,7 @@ BP.Engine = (function () {
   function playCard(state, hero, card, target) {
     const t = target || {};
     const err = C().checkTarget(state, hero, card, t);
-    if (err) return err === "NEED_DIR" ? "Выберите направление толчка" : err;
+    if (err) return err === "NEED_DIR" ? "Выберите направление атаки" : err;
     if (!payCost(state, hero, card.cost)) return "Не хватает энергии";
 
     hero.hand = hero.hand.filter((c) => c.uid !== card.uid);
@@ -289,22 +296,24 @@ BP.Engine = (function () {
       const per = {};
       hits.forEach((h) => {
         const e = state.enemies.find((x) => x.uid === h.enemy);
-        hurtEnemy(state, e, h.amount, hero.id, h.crit, h.src, h.step, h.nb);
+        hurtEnemy(state, e, h.amount, hero.id, h.crit, h.src, h.step, h.nb, h.ab);
         per[e.name] = (per[e.name] || []).concat(h.amount + (h.crit ? "!" : ""));
       });
       notes.push(Object.entries(per).map(([n, a]) => `${n}: ${a.join("+")}`).join(", "));
     }
 
+    const BO = (a) => BP.Mech.blockOf(hero, a); // + Стойкость героя (js/mech.js)
     card.effects.forEach((ef) => {
+      const mine = BP.Mech.applyEffect(state, hero, card, ef, tHero, primary, hits); // Сила, Стойкость, промах, выбор карты, оглушение
+      if (mine !== null) { if (mine) notes.push(mine); return; }
       switch (ef.type) {
-        case "block": { const to = tHero || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; }
-        case "blockSelf": hero.block += ef.amount; notes.push(`+${ef.amount} блока себе`); break;
-        case "blockHero": { const to = state.heroes.find((x) => x.id === ef.hero && x.alive) || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; } // дар «Прикрытие»
+        case "block": { const to = tHero || hero, a = BO(ef.amount); to.block += a; hero.stats.blockGiven += a; notes.push(`${to.name} +${a} блока`); break; }
+        case "blockSelf": { const a = BO(ef.amount); hero.block += a; notes.push(`+${a} блока себе`); break; }
+        case "blockHero": { const to = state.heroes.find((x) => x.id === ef.hero && x.alive) || hero, a = BO(ef.amount); to.block += a; hero.stats.blockGiven += a; notes.push(`${to.name} +${a} блока`); break; } // дар «Прикрытие»
         case "push": if (primary && primary.alive) notes.push(pushN(state, primary, t.dir, hero.id, card.pushDist)); break;
         case "pull": if (primary && primary.alive) notes.push(pull(state, primary)); break;
-        case "blockPartyPct": { const d = card.effects.find((x) => x.type === "damage"), a = Math.ceil((d ? d.amount : 0) * ef.pct - 1e-9); aliveHeroes(state).forEach((h) => (h.block += a)); hero.stats.blockGiven += a * aliveHeroes(state).length; notes.push(`всем +${a} блока`); break; }
-        case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a, hero.id, false, "sparks", 1))); break;
-        case "stun": if (primary && primary.alive) { primary.stunned = true; primary.intent = { type: "stunned" }; notes.push(`${primary.name} оглушён`); } break;
+        case "blockPartyPct": { const d = card.effects.find((x) => x.type === "damage"), a = BO(Math.ceil((d ? d.amount : 0) * ef.pct - 1e-9)); aliveHeroes(state).forEach((h) => (h.block += a)); hero.stats.blockGiven += a * aliveHeroes(state).length; notes.push(`всем +${a} блока`); break; }
+        case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a + (hero.dmgBuff || 0), hero.id, false, "sparks", 1))); break;
         case "taunt": if (primary && primary.alive && retarget(state, primary, hero.id)) notes.push(`${primary.name} теперь целит в ${hero.name}`); break;
         case "cleanse": if (tHero) { tHero.debuffs = []; notes.push(`${tHero.name} очищен`); } break;
         case "draw": drawCards(state, hero, ef.amount); break;
@@ -313,7 +322,7 @@ BP.Engine = (function () {
           if (state.pool && to === hero) state.pool.amount += ef.amount; else to.energy += ef.amount;
           notes.push(`${to.name} +${ef.amount} энергии`); break;
         }
-        case "blockParty": aliveHeroes(state).forEach((h) => (h.block += ef.amount)); hero.stats.blockGiven += ef.amount * aliveHeroes(state).length; notes.push(`всем +${ef.amount} блока`); break;
+        case "blockParty": { const a = BO(ef.amount); aliveHeroes(state).forEach((h) => (h.block += a)); hero.stats.blockGiven += a * aliveHeroes(state).length; notes.push(`всем +${a} блока`); break; }
         case "damageAllEnemies": state.enemies.filter((e) => e.alive).forEach((e) => hurtEnemy(state, e, ef.amount, hero.id)); notes.push(`всем врагам ${ef.amount} урона`); break;
         case "sharedPool": {
           if (!state.pool) {
@@ -370,7 +379,10 @@ BP.Engine = (function () {
   function checkFightEnd(state) {
     if (state.phase === "won" || state.phase === "lost" || state.phase === "victory") return true;
     if (!state.enemies.some((e) => e.alive) && BP.Reinforce.pending(state)) {
-      arrive(state, BP.Reinforce.spawnNow(state, maker(state))); // поле пустое, а резерв нет — волна выходит сразу
+      // поле пустое, а резерв нет — волна выходит сразу. card-mechanics-1: такие враги в этот ход не атакуют, зато получают броню
+      const late = BP.Reinforce.spawnNow(state, maker(state)), la = (state.config.tests.reinforcements || {}).lateArmor || 0;
+      if (state.phase === "players") late.forEach((e) => { e.skip = true; e.armor += la; });
+      arrive(state, late);
       if (state.enemies.some((e) => e.alive)) return false;
     }
     if (!state.enemies.some((e) => e.alive)) {
@@ -412,7 +424,9 @@ BP.Engine = (function () {
   }
 
   function endPlayerTurn(state) {
+    if (state.choice) { const u = BP.Mech.autoPick(state); BP.Mech.choose(state, u); } // выбор карты не сделан — берём сами
     aliveHeroes(state).forEach((h) => {
+      h.out = false;
       const keep = h.hand.filter((c) => c.retain);
       BP.Deck.discardAll(state, h, h.hand.filter((c) => !c.retain));
       h.hand = keep;
@@ -441,6 +455,7 @@ BP.Engine = (function () {
 
   function actEnemy(state, e) {
     if (e.stunned) { e.stunned = false; log(state, e.name, "оглушён — пропускает действие"); return; }
+    if (e.skip) { e.skip = false; log(state, e.name, "только вышел — осматривается"); return; }
     e.block = 0;
     const it = e.intent || {};
     if (it.type === "covered" || (it.type === "attack" && isMeleeEnemy(state, e) && !C().isExposed(state, e))) {
@@ -449,22 +464,24 @@ BP.Engine = (function () {
     }
     const targets = (it.targets || []).map((id) => state.heroes.find((h) => h.id === id)).filter((h) => h && h.alive);
     const actual = targets.length || !it.targets ? targets : pickTargets(state, e, it.targets.length).map((id) => state.heroes.find((h) => h.id === id));
-    if (it.type === "attack" || it.type === "curse") state.actingTargets = actual.map((h) => h.id);
+    if (it.type === "attack" || it.type === "disable") state.actingTargets = actual.map((h) => h.id);
     if (it.type === "attack") {
-      actual.forEach((h) => { for (let i = 0; i < (it.hits || 1); i++) hurtHero(state, h, it.damage); });
-      log(state, e.name, `атакует ${actual.map((h) => h.name).join(", ")}`, { detail: `${it.damage}${it.hits > 1 ? "×" + it.hits : ""} урона` });
-    } else if (it.type === "curse") {
+      const missed = [];
       actual.forEach((h) => {
-        const d = h.debuffs.find((x) => x.type === "weak");
-        if (d) { d.amount = Math.max(d.amount, it.amount); d.turns = Math.max(d.turns, it.turns); }
-        else h.debuffs.push({ type: "weak", amount: it.amount, turns: it.turns });
+        if (h.miss > 0) { h.miss--; missed.push(h.name); fx(state, { k: "hero", hero: h.id, amount: 0, blocked: 0, miss: true }); return; } // Дымовая завеса
+        for (let i = 0; i < (it.hits || 1); i++) hurtHero(state, h, it.damage);
       });
-      log(state, e.name, `проклинает ${actual.map((h) => h.name).join(", ")}`, { detail: `−${it.amount} к урону на ${it.turns} х.` });
+      if (it.armor) e.armor += it.armor; // удар с бронёй
+      log(state, e.name, `атакует ${actual.map((h) => h.name).join(", ")}`, { detail: `${it.damage}${it.hits > 1 ? "×" + it.hits : ""} урона${missed.length ? ` (промах по ${missed.join(", ")})` : ""}${it.armor ? `, себе +${it.armor} брони` : ""}` });
+    } else if (it.type === "disable") {
+      actual.forEach((h) => (h.disableNext = true));
+      log(state, e.name, `выводит из игры ${actual.map((h) => h.name).join(", ")} на следующий ход`);
     } else if (it.type === "block") {
       e.block += it.amount;
       log(state, e.name, `защищается (+${it.amount} блока)`);
     }
-    e.actionIndex++;
+    e.lastAct = e.intentIdx !== undefined ? e.intentIdx : e.actionIndex % e.actions.length;
+    e.actionIndex = e.lastAct + 1;
   }
 
   function endEnemyPhase(state) {
@@ -502,13 +519,23 @@ BP.Engine = (function () {
         if (state.phase !== "players") return "Сейчас не ход игроков";
         if (!owns) return "Это не ваш герой";
         if (!hero.alive) return "Герой пал";
+        if (hero.out) return "Герой выведен из игры на этот ход";
+        if (state.choice) return "Сначала выберите карту";
         const card = hero.hand.find((c) => c.uid === act.card);
         if (!card) return "Карты нет в руке";
         return playCard(state, hero, card, act.target);
       }
+      case "choose": { // выбор карты после Прозрения / Поиска (js/mech.js)
+        if (state.phase !== "players" || !state.choice) return "Нечего выбирать";
+        const ch = state.choice.hero && state.heroes.find((h) => h.id === state.choice.hero);
+        if (!ch || (ch.owner !== pid && !isHost)) return "Выбирает другой игрок";
+        return BP.Mech.choose(state, act.card);
+      }
       case "merge": {
         if (state.phase !== "players") return "Сейчас не ход игроков";
         if (!owns || !hero.alive) return "Это не ваш герой";
+        if (hero.out) return "Герой выведен из игры на этот ход";
+        if (state.choice) return "Сначала выберите карту";
         const card = hero.hand.find((c) => c.uid === act.card);
         const ally = state.heroes.find((h) => h.id === act.ally);
         const allyCard = ally && ally.hand.find((c) => c.uid === act.allyCard);

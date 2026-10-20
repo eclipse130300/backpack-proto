@@ -47,10 +47,10 @@ BP.FX = (function () {
     const r = ev.k === "enemy" ? enemyRect(s, ev) : (document.querySelector(`.hero.token[data-hero="${ev.hero}"]`) || { getBoundingClientRect: () => null }).getBoundingClientRect();
     if (!r) return;
     const d = document.createElement("div");
-    const main = ev.amount > 0 ? `−${ev.amount}` : ev.blocked > 0 ? "блок" : "0";
+    const main = ev.miss ? "промах" : ev.amount > 0 ? `−${ev.amount}` : ev.blocked > 0 ? "блок" : ev.armor > 0 ? "броня" : "0";
     d.className = `dmg-num ${ev.k} ${ev.crit ? "crit" : ""} ${ev.amount > 0 ? "" : "blocked-only"}`;
     const ic = ev.k === "enemy" ? srcIcon(s, ev) : "";
-    d.innerHTML = `${ev.crit ? '<span class="critword">КРИТ!</span>' : ""}<span class="nrow">${ic ? `<span class="src">${ic}</span>` : ""}<span class="n">${main}</span></span>${ev.blocked > 0 ? `<span class="b">🛡${ev.blocked}</span>` : ""}`;
+    d.innerHTML = `${ev.crit ? '<span class="critword">КРИТ!</span>' : ""}<span class="nrow">${ic ? `<span class="src">${ic}</span>` : ""}<span class="n">${main}</span></span>${ev.blocked > 0 ? `<span class="b">🛡${ev.blocked}</span>` : ""}${ev.armor > 0 ? `<span class="b">⬢−${ev.armor}${ev.ab ? " ×2" : ""}</span>` : ""}`;
     d.style.left = r.left + r.width / 2 + (shift || 0) + (Math.random() * 10 - 5) + "px";
     d.style.top = r.top + (ev.k === "enemy" ? r.height * 0.35 : -18) + "px";
     layer.appendChild(d);
@@ -124,7 +124,7 @@ BP.FX = (function () {
     const pairs = [];
     const add = (e, heroId, strong) => {
       const from = document.querySelector(`.hex[data-enemy="${e.uid}"]`), to = document.querySelector(`.hero.token[data-hero="${heroId}"]`);
-      if (from && to && !pairs.some((p) => p.from === from && p.to === to)) pairs.push({ from, to, strong, curse: e.intent && e.intent.type === "curse" });
+      if (from && to && !pairs.some((p) => p.from === from && p.to === to)) pairs.push({ from, to, strong, curse: e.intent && e.intent.type === "disable" });
     };
     if (s.phase === "enemies" && s.actingEnemy) {
       const e = s.enemies.find((x) => x.uid === s.actingEnemy);
@@ -149,8 +149,9 @@ BP.FX = (function () {
     switch (it.type) {
       case "stunned": return "Оглушён — пропустит действие.";
       case "covered": return `Хочет ударить (⚔ ${it.damage}${it.hits > 1 ? "×" + it.hits : ""}), но закрыт своими — мили не дотягивается до героев. Ждёт, пока впереди освободится место.`;
-      case "attack": return `Атакует <b>${esc(names)}</b>: ${it.damage} урона${it.hits > 1 ? " × " + it.hits : ""}${it.taunted ? " (вызов)" : ""}.`;
-      case "curse": return `Проклинает <b>${esc(names)}</b>: −${it.amount} к урону на ${it.turns} х.`;
+      case "attack": return `Атакует <b>${esc(names)}</b>: ${it.damage} урона${it.hits > 1 ? " × " + it.hits : ""}${it.taunted ? " (вызов)" : ""}.${it.armor ? ` Потом себе +${it.armor} брони.` : ""}`;
+      case "disable": return `Выводит из игры <b>${esc(names)}</b>: в следующий ход герой не берёт карт и не ходит.`;
+      case "arriving": return "Только что вышел — в этот ход не атакует.";
       case "block": return `Защищается: +${it.amount} блока.`;
     }
     return "—";
@@ -158,8 +159,8 @@ BP.FX = (function () {
 
   function actionShort(a) {
     switch (a.type) {
-      case "attack": return `⚔ ${a.damage}${a.hits > 1 ? "×" + a.hits : ""}${a.targets > 1 ? ` по ${a.targets} героям` : ""}`;
-      case "curse": return `☠ проклятие −${a.amount} (${a.turns} х.)${a.targets > 1 ? ` на ${a.targets}` : ""}`;
+      case "attack": return `⚔ ${a.damage}${a.hits > 1 ? "×" + a.hits : ""}${a.targets > 1 ? ` по ${a.targets} героям` : ""}${a.armor ? ` + ⬢${a.armor} брони` : ""}`;
+      case "disable": return "⛓ вывести героя из игры на ход";
       case "block": return `🛡 +${a.amount} блока`;
     }
     return a.type;
@@ -189,7 +190,7 @@ BP.FX = (function () {
         ${BP.Evolve.evolvable(s, c) ? `<div class="tip-note evo">✦ Эволюция: «${esc(s.config.cards[c.evolve].name)}». Нужна ещё одна мерджнутая (★) эволюционная карта союзника — перетащи её на эту.</div>` : ""}
         ${c.evolvedFrom ? `<div class="tip-note evo">✦ Эволюция из «${esc(c.evolvedFrom[0])}» и «${esc(c.evolvedFrom[1])}» — до конца боя.</div>` : ""}
         ${c.area === "shape" ? `<div class="tip-note row">${BP.Icons.shapeSvg(c.shapeSteps, c.fixed ? 0 : rot, c.zoneSteps)}<span>Фигура «${esc(c.shapeName)}». ${c.fixed ? "Не крутится: клетка прицела — передняя клетка фигуры." : "<b>Правая кнопка мыши</b> — повернуть по часовой."} Задетые клетки подсвечиваются красным, клетки за краем поля — ✕.</span></div>` : ""}
-        ${c.area !== "shape" && c.zoneSteps && c.zoneSteps.length ? `<div class="tip-note row">${BP.Icons.shapeSvg([[]], 0, c.zoneSteps)}<span>Взрыв добавил клетки вокруг цели (жёлтые): они получают ${Math.round(c.zone * 100)}% урона.</span></div>` : ""}
+        ${c.area !== "shape" && c.zoneSteps && c.zoneSteps.length ? `<div class="tip-note row">${BP.Icons.shapeSvg([[]], 0, c.zoneSteps)}<span>Зона добавила клетки вокруг цели (жёлтые): они получают ${Math.round(c.zone * 100)}% урона.</span></div>` : ""}
         ${c.questCard ? `<div class="tip-note good">Квестовая карта: одноразовая (после розыгрыша пропадает), в конце хода не сгорает.</div>` : ""}
         ${c.area === "adjacent" ? `<div class="tip-note">Бьёт клетку и все соседние (до 7 клеток).</div>` : ""}
         ${ci ? `<div class="tip-note ${ci.willCrit ? "good" : ""}">Крит ×${s.config.rules.critMultiplier} каждый ${ci.every}-й удар оружием «${esc(c.weaponName)}». ${ci.willCrit ? "<b>Эта карта критует!</b>" : `До крита: ${ci.left} уд.`}</div>` : ""}
@@ -200,10 +201,12 @@ BP.FX = (function () {
       if (!e) return null;
       const ed = s.config.enemies[e.type] || {};
       const exposed = BP.Cards.isExposed(s, e);
-      const cur = e.actionIndex % e.actions.length;
+      const cur = e.intentIdx !== undefined ? e.intentIdx : e.actionIndex % e.actions.length;
       const list = e.actions.map((a, i) => `<li class="${i === cur ? "cur" : ""}">${actionShort(a)}${i === cur ? " ← сейчас" : i === (cur + 1) % e.actions.length ? " ← потом" : ""}</li>`).join("");
       return `<div class="tip-title">${esc(e.name)} <span class="muted">${ed.melee ? "мили" : "дальний бой"}</span></div>
-        <div>❤ ${e.hp}/${e.maxHp}${e.block ? ` · 🛡 ${e.block}` : ""}${e.stunned ? " · оглушён" : ""}${e.pushedThisTurn ? " · толкнут (по нему крит)" : ""}</div>
+        <div>❤ ${e.hp}/${e.maxHp}${e.armor ? ` · ⬢ броня ${e.armor}` : ""}${e.block ? ` · 🛡 ${e.block}` : ""}${e.stunned ? " · оглушён" : ""}${e.vuln ? " · столкнулся: +50% урона до конца хода" : ""}</div>
+        ${e.armor ? `<div class="tip-note">Броня не сгорает: урон сначала идёт в неё. Сокрушение и Прицельный выстрел бьют по броне ×2.</div>` : ""}
+        ${s.config.enemies[e.type] && s.config.enemies[e.type].actions.some(BP.Mech.armorAct) ? `<div class="muted small">Раненый (≤50% ХП) выбирает действие с бронёй.</div>` : ""}
         <div class="tip-note ${exposed ? "" : "bad"}">${exposed ? "Открыт: мили-герои могут его бить." : "Прикрыт спереди: мили-герои его не достанут. Нужны дальние атаки, массовки или толчок."}</div>
         <div class="tip-sec">Сейчас</div><div>${intentLong(s, e)}</div>
         <div class="tip-sec">Действия по кругу</div><ol class="tip-actions">${list}</ol>`;
@@ -216,7 +219,9 @@ BP.FX = (function () {
       return `<div class="tip-title">${esc(h.name)}</div>
         <div>❤ ${h.hp}/${h.maxHp} · 🛡 блок ${h.block} · ⛨ стартовый блок ${h.startBlock}</div>
         ${crit ? `<div class="muted">${crit}</div>` : ""}
-        ${(h.debuffs || []).map((d) => `<div class="tip-note bad">☠ Проклятие: −${d.amount} к урону, ещё ${d.turns} х.</div>`).join("")}
+        ${h.out ? `<div class="tip-note bad">⛓ Выведен из игры на этот ход.</div>` : ""}${h.disableNext ? `<div class="tip-note bad">⛓ Пропустит следующий ход.</div>` : ""}
+        ${h.miss ? `<div class="tip-note good">🌫 Следующ${h.miss > 1 ? "ие " + h.miss + " атаки" : "ая атака"} врага по нему промахнётся.</div>` : ""}
+        ${h.dmgBuff ? `<div class="tip-note good">⚔ Сила: +${h.dmgBuff} урона каждой картой до конца боя.</div>` : ""}${h.blockBuff ? `<div class="tip-note good">🛡 Стойкость: +${h.blockBuff} блока от каждой карты до конца боя.</div>` : ""}
         <div class="tip-sec">Его будут бить</div>${inc.length ? inc.map((e) => `<div>⚔ ${esc(e.name)}: ${e.intent.damage}${e.intent.hits > 1 ? "×" + e.intent.hits : ""}</div>`).join("") : '<div class="muted">никто</div>'}`;
     }
     if (kind === "fquest" && s.quest) {

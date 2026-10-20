@@ -5,6 +5,7 @@
 //   урон = урон обеих карт без даров (×удары) + прибавки обеих; дары обеих и родной дар отданной переходят (неподходящие не ложатся);
 //   стоимость = стоимость карты, которая эволюционировала; оружие (крит) — её же.
 // Эволюция живёт до конца боя (переживает сброс, как бонус мерджа). Отданная карта уходит в сброс чистой.
+// card-mechanics-1 (21.10): эволюция остаётся в руке между ходами, пока её не сыграют (можно копить под комбо).
 // Рецептов нет: направление (какую карту на какую тащить) и есть выбор игрока.
 window.BP = window.BP || {};
 
@@ -49,6 +50,7 @@ BP.Evolve = (function () {
     const dmg = (ev.effects || []).find((e) => e.type === "damage");
     if (dmg) dmg.amount = Math.max(1, Math.ceil((baseDamage(dst) + baseDamage(src)) / (dmg.hits || 1)));
     ev.evolvedFrom = [dst.name, src.name];
+    ev.retain = true; // card-mechanics-1: эволюция не сгорает в конце хода — лежит в руке, пока её не сыграют
     // дары: полученные целевой картой + всё, что передаёт отданная (её родной дар и её полученные)
     const gifts = (dst.gifts || []).concat(BP.Gifts.incoming(state, src).map((g) => Object.assign({}, g, { from: g.from || giverId || null })));
     ev.giftBase = { effects: clone(ev.effects), attack: ev.attack, area: ev.area };
@@ -70,7 +72,7 @@ BP.Evolve = (function () {
     if (card.ignoreCover) out.push("бьёт и закрытого врага");
     if (card.mult) out.push(`урон ×${card.mult}`);
     if (card.finisher) out.push("враг с ≤50% ХП погибает, иначе урон ×2");
-    if (card.ignoreBlock) out.push("сквозь блок");
+    if (card.ignoreBlock) out.push("сквозь блок и броню");
     if (card.returnOnKill) out.push("убил цель — карта вернётся в руку");
     return out;
   }

@@ -42,6 +42,9 @@ BP.CardTip = (function () {
       all: { icon: "☄", short: "все враги", long: "Бьёт всех врагов на поле." },
       withCover: { icon: "⛨", short: "и прикрывающий", long: "Бьёт цель и врага, который её прикрывает." },
       adjacent: { icon: "✳", short: "клетка и соседи", long: "Бьёт клетку и все соседние." },
+      // card-mechanics-1: динамические массовки — от клетки прицела до края поля
+      rays: { icon: (c.rays || []).map((d) => BP.Mech.DIR_ARROW[d]).join(""), short: "до края поля", long: "Динамическая массовка: от клетки прицела до края поля по направлениям " + (c.rays || []).map((d) => BP.Mech.DIR_ARROW[d]).join(" ") + ". Чем дальше от края целишься, тем больше клеток." },
+      level: { icon: "↔", short: "вся линия поперёк", long: "Бьёт всю линию поперёк поля — 3 клетки на той же высоте, что и прицел. Таких линий 4: передние клетки колонок 1-3-5, передние 2-4-6, задние 1-3-5, задние 2-4-6." },
     };
     if (AREA[c.area]) add(Object.assign({ face: true, cls: c.evolved ? "evo" : "" }, AREA[c.area]));
     // эффекты карты (толчок/вызов от даров показаны плашкой дара)
@@ -49,12 +52,17 @@ BP.CardTip = (function () {
       switch (e.type) {
         case "push": if (!giftIds.has("push")) add({ icon: "⇧", face: true, short: "толчок", long: "Толкнуть врага на 1 клетку, сторону выбираешь сам. Врезался в край или врага — урон обоим. Толкнутый враг меняет цель." }); break;
         case "pull": add({ icon: "⇩", face: true, cls: c.evolved ? "evo" : "", short: "притяжение", long: "Притягивает врага из заднего ряда вперёд. Впереди кто-то есть — меняются местами." }); break;
-        case "stun": add({ icon: "💫", face: true, cls: c.evolved ? "evo" : "", short: "оглушение", long: "Враг пропустит своё следующее действие." }); break;
+        case "stun": add({ icon: "💫", face: true, cls: c.evolved ? "evo" : "", short: c.target === "cell" ? "оглушение всех задетых" : "оглушение", long: "Враг пропустит своё следующее действие." }); break;
+        case "buffDamage": add({ icon: "⚔️", value: "+" + e.amount, face: true, short: "Сила до конца боя", long: `Цель до конца боя наносит +${e.amount} урона каждой картой (каждым выстрелом Искр тоже). Складывается. Нельзя отдать в мердж.` }); break;
+        case "buffBlock": add({ icon: "🛡️", value: "+" + e.amount, face: true, short: "Стойкость до конца боя", long: `Каждая карта блока цели до конца боя даёт +${e.amount} блока. Складывается. Нельзя отдать в мердж.` }); break;
+        case "miss": add({ icon: "🌫", face: true, short: "промах врага", long: "Следующая атака врага по цели промахнётся (одна атака). Можно сыграть на себя или союзника." }); break;
+        case "pick": add({ icon: "🔮", value: "1/" + (e.count || 3), face: true, short: "выбрать карту", long: `Открываются ${e.count || 3} случайные карты из колод всех героев — берёшь одну, она уходит в руку своему владельцу.` }); break;
+        case "tutor": add({ icon: "🔍", face: true, short: "найти карту", long: "Открываются все карты колод всех героев — берёшь любую, она уходит в руку своему владельцу." }); break;
         case "taunt": if (!giftIds.has("taunt")) add({ icon: "📣", face: true, short: "вызов", long: "Враг атакует тебя." }); break;
         case "cleanse": add({ icon: "✚", face: true, short: "очищение", long: "Снимает проклятия с героя." }); break;
-        case "sparks": add({ icon: "✨", value: `${e.count}×${e.amount}`, face: true, short: "искры", long: `${e.count} искры по ${e.amount} урона в случайных врагов рядом с целью (не в саму цель).` }); break;
+        case "sparks": add({ icon: "✨", value: `${e.count}×${e.amount}`, face: true, short: "искры", long: `${e.count} выстрела по ${e.amount} урона. Каждый с шансом ${Math.round((e.stray || 0) * 100)}% уходит в случайного врага рядом с целью.` }); break;
         case "draw": add({ icon: "🂠", value: "+" + e.amount, face: true, short: "добор", long: `Взять ${e.amount} карты.` }); break;
-        case "energy": add({ icon: "⚡", value: "+" + e.amount, face: true, short: c.target === "ally" ? "энергия союзнику" : "энергия", long: `+${e.amount} энергии ${c.target === "ally" ? "союзнику" : "себе"}.` }); break;
+        case "energy": add({ icon: "⚡", value: "+" + e.amount, face: true, short: c.target === "ally" ? "энергия союзнику" : c.target === "hero" ? "энергия себе или союзнику" : "энергия", long: `+${e.amount} энергии ${c.target === "ally" ? "союзнику" : c.target === "hero" ? "себе или союзнику (на фишку героя)" : "себе"}.` }); break;
         case "sharedPool": add({ icon: "∑", face: true, short: "общий пул", long: "Остаток энергии всех героев складывается, любой тратит из пула до конца хода." }); break;
         case "blockParty": add({ icon: "🛡️", value: e.amount, face: true, short: "блок всем", long: `Всем героям ${e.amount} блока.` }); break;
         case "damageAllEnemies": add({ icon: "☄", value: e.amount, face: true, short: "урон всем", long: `Всем врагам ${e.amount} урона.` }); break;
@@ -66,7 +74,10 @@ BP.CardTip = (function () {
     if (c.ignoreCover && c.area !== "withCover") add({ icon: "🎯", face: true, cls: ev, short: "бьёт закрытого", long: "Мили, но бьёт и врага, которого прикрывают спереди." });
     if (c.mult) add({ icon: "✖", value: c.mult, face: true, cls: ev, short: `урон ×${c.mult}`, long: `Урон карты ×${c.mult}.` });
     if (c.finisher) add({ icon: "☠", face: true, cls: ev, short: "добить", long: "Враг с ≤50% ХП погибает, иначе урон ×2." });
-    if (c.ignoreBlock) add({ icon: "⊘", face: true, cls: ev, short: "сквозь блок", long: "Блок врага не поглощает урон." });
+    if (c.ignoreBlock) add({ icon: "⊘", face: true, cls: ev, short: "сквозь блок и броню", long: "Блок и броня врага не поглощают урон." });
+    if (c.armorBreak) add({ icon: "⬢", value: "×2", face: true, short: "по броне ×2", long: "Урон по броне врага удваивается: броня сносится вдвое быстрее, остаток идёт в ХП." });
+    if (c.alwaysCrit) add({ icon: "💥", value: "!", face: true, cls: ev, short: "всегда крит", long: `Всегда крит ×${state.config.rules.critMultiplier}. Счётчик крита оружия не двигает.` });
+    if (c.ricochet && !giftIds.has("pierce")) add({ icon: "↯", value: "100%", face: true, short: "рикошет", long: "Перед ударом выбираешь направление атаки: сосед цели в эту сторону получает 100% урона. Толчок карты (если есть) — туда же." });
     if (c.returnOnKill) add({ icon: "↩", face: true, cls: ev, short: "вернётся в руку", long: "Убил цель — карта возвращается в руку." });
     // полученные дары (в порядке первого мерджа)
     if (BP.Gifts.isOn(state)) BP.Gifts.badges(state, c).forEach((b) => {
@@ -75,7 +86,7 @@ BP.CardTip = (function () {
     });
     // крит
     const ci = BP.Cards.critInfo(hero, c);
-    if (ci) add({ icon: "💥", value: ci.willCrit ? "!" : ci.left, short: ci.willCrit ? "крит!" : `крит через ${ci.left}`, long: `Каждый ${ci.every}-й удар этим оружием — крит ×${state.config.rules.critMultiplier}. Слабые удары не считаются.` });
+    if (ci && !ci.always) add({ icon: "💥", value: ci.willCrit ? "!" : ci.left, short: ci.willCrit ? "крит!" : `крит через ${ci.left}`, long: `Каждый ${ci.every}-й удар этим оружием — крит ×${state.config.rules.critMultiplier}. Слабые удары не считаются.` });
     // родной дар
     if (BP.Gifts.isOn(state) && c.gift && state.config.gifts[c.gift]) {
       const g = state.config.gifts[c.gift];
@@ -88,7 +99,7 @@ BP.CardTip = (function () {
       add({ icon: "✦", short: "→ " + to.name, cls: "evo", long: `${to.name}: ${to.special || ""}.` });
     }
     if (c.evolvedFrom) {
-      add({ icon: "✦", short: `из ${c.evolvedFrom[0]} + ${c.evolvedFrom[1]}`, long: "Эволюция живёт до конца боя." });
+      add({ icon: "✦", short: `из ${c.evolvedFrom[0]} + ${c.evolvedFrom[1]}`, long: "Эволюция живёт до конца боя и не сгорает в конце хода — лежит в руке, пока её не сыграешь." });
       if (c.special) add({ icon: "✦", short: c.special, cls: "evo", long: c.special.charAt(0).toUpperCase() + c.special.slice(1) + "." });
     }
     if (c.questCard) add({ icon: "?", short: "квестовая", long: "Одноразовая: после розыгрыша пропадает, в конце хода не сгорает." });

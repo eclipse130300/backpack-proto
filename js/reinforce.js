@@ -64,6 +64,32 @@ BP.Reinforce = (function () {
     return out;
   }
 
+  // card-mechanics-1: врага толкнули/притянули на помеченную клетку — метка переезжает на ближайшую свободную
+  // (поиск в ширину по соседям: сначала соседние клетки, потом через одну и т. д.). Свободной нет — метка пропадает.
+  function fixMarks(state) {
+    const rf = state.reinf;
+    if (!rf || !rf.marks || !rf.marks.length) return;
+    const r = state.config.rules;
+    const taken = (c, self) => !!BP.Cards.enemyAt(state, c.col, c.row) || rf.marks.some((m) => m !== self && m.col === c.col && m.row === c.row);
+    rf.marks.forEach((m) => {
+      if (!BP.Cards.enemyAt(state, m.col, m.row)) return;
+      const seen = new Set([m.col + ":" + m.row]), queue = [{ col: m.col, row: m.row }];
+      let found = null;
+      while (queue.length && !found) {
+        const cur = queue.shift();
+        for (const n of BP.Hex.neighbors(cur.col, cur.row, r.cols, r.rows)) {
+          const k = n.col + ":" + n.row;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          if (!taken(n, m)) { found = n; break; }
+          queue.push(n);
+        }
+      }
+      if (found) { m.col = found.col; m.row = found.row; } else m.gone = true;
+    });
+    rf.marks = rf.marks.filter((m) => !m.gone);
+  }
+
   // Для счётчика над полем: сколько в резерве и через сколько ходов выход
   function info(state) {
     const rf = state.reinf;
@@ -71,5 +97,5 @@ BP.Reinforce = (function () {
     return { left: rf.left.length, inTurns: Math.max(1, rf.next - state.turn), marks: rf.marks };
   }
 
-  return { isOn, setup, pending, onTurnStart, spawnNow, info };
+  return { isOn, setup, pending, onTurnStart, spawnNow, info, fixMarks };
 })();

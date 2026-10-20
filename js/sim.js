@@ -17,7 +17,12 @@ BP.Sim = (function () {
     c.config = config; c.log = []; c.fightLog = []; c.fx = [];
     return c;
   }
-  const act = (s, a) => BP.Engine.applyAction(s, "host", a, true);
+  // После каждого действия бот сразу делает выбор карты (Прозрение / Поиск): самую дорогую (js/mech.js)
+  const act = (s, a) => {
+    const err = BP.Engine.applyAction(s, "host", a, true);
+    if (!err && s.choice) BP.Engine.applyAction(s, "host", { a: "choose", card: BP.Mech.autoPick(s) }, true);
+    return err;
+  };
   const energyOf = (s, h) => (s.pool ? s.pool.amount : h.energy);
 
   // Угроза врага = средний урон по героям за ход (для бонуса за убийство)
@@ -26,7 +31,7 @@ BP.Sim = (function () {
     let sum = 0;
     acts.forEach((a) => {
       if (a.type === "attack") sum += a.damage * (a.hits || 1) * (a.targets || 1);
-      if (a.type === "curse") sum += a.amount * 2 * (a.targets || 1);
+      if (a.type === "disable") sum += 8;
     });
     return sum / acts.length;
   }
@@ -42,7 +47,7 @@ BP.Sim = (function () {
         const out = [];
         s.enemies.filter((e) => e.alive).forEach((e) => {
           if (card.attack === "melee" && !C.isExposed(s, e)) return;
-          if (C.has(card, "push")) for (let d = 0; d < 6; d++) out.push({ enemy: e.uid, dir: d });
+          if (C.has(card, "push") || BP.Mech.rico(card)) for (let d = 0; d < 6; d++) out.push({ enemy: e.uid, dir: d }); // толчок / рикошет
           else out.push({ enemy: e.uid });
         });
         return out;
@@ -55,7 +60,9 @@ BP.Sim = (function () {
             const t = { cell: { col, row }, rot };
             const key = C.areaEnemies(s, hero, card, t).map((e) => e.uid).sort().join(",");
             if (!key || seen.has(key)) return;
-            seen.add(key); out.push(t);
+            seen.add(key);
+            if (C.checkTarget(s, hero, card, t) === "NEED_DIR") for (let d = 0; d < 6; d++) out.push(Object.assign({ dir: d }, t));
+            else out.push(t);
           });
         }
         return out;
@@ -65,7 +72,7 @@ BP.Sim = (function () {
   }
 
   function playable(s, h) {
-    return h.alive ? h.hand.filter((c) => BP.Engine.canPay(s, h, c.cost)) : [];
+    return h.alive && !h.out ? h.hand.filter((c) => BP.Engine.canPay(s, h, c.cost)) : [];
   }
 
   // ---------- оценка позиции для smart ----------
@@ -176,14 +183,14 @@ BP.Sim = (function () {
     let pick = null;
     for (const h of s.heroes) {
       const items = [];
-      (h.alive ? h.hand : []).forEach((card) => {
+      (h.alive && !h.out ? h.hand : []).forEach((card) => {
         if (BP.Cards.has(card, "sharedPool")) return;
         let best = bestMerge(s, h, card, base); // мердж и розыгрыш одной карты — взаимоисключающие, берём лучшее
         if (!BP.Engine.canPay(s, h, card.cost)) { if (best && best.score > 0.01) items.push(best); return; }
         targetsFor(s, h, card, true).forEach((t) => {
           const after = tryPlay(s, h, card, t);
           if (!after) return;
-          const sc = evaluate(after) - base;
+          const sc = evaluate(after) - base + BP.Mech.botBonus(s, h, card, t); // энергия, добор, бафы, промах (js/mech.js)
           if (!best || sc > best.score) best = { hero: h, card, target: t, score: sc, cost: card.cost };
         });
         if (best && best.score > 0.01) items.push(best);

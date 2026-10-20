@@ -1,7 +1,7 @@
 // Слабые удары оружия (17.10, эксперимент): колода героя добивается до rules.minDeck слабым ударом его оружия
 // (weapons.*.weakCard: меч — «Слабый удар», лук — «Слабый выстрел», посох — «Искры»). Слабые удары не двигают крит оружия и не критуют (18.10).
 // В общей колоде (tests.sharedDeck) лежит «слабый удар», который при доборе превращается в слабый удар вытянувшего героя.
-// Эффект sparks («Искры»): после удара N искр по 1 урона в случайных врагов на соседних с целью клетках (не в саму цель).
+// Эффект sparks («Искры»): N выстрелов по 1 урона, каждый с шансом 50% уходит в случайного соседа цели.
 window.BP = window.BP || {};
 
 BP.Weak = (function () {
@@ -50,7 +50,8 @@ BP.Weak = (function () {
     return fresh;
   }
 
-  // Искры: hurt(enemy, amount) — нанести урон. Возвращает заметку для лога.
+  // Искры (card-mechanics-1, 21.10): count выстрелов по amount урона. Каждый с шансом stray (50%) уходит
+  // в случайного врага на соседней с целью клетке, иначе — в цель. Соседей нет — в цель. hurt(enemy, amount) — нанести урон.
   function sparks(state, card, primary, hurt) {
     const ef = (card.effects || []).find((e) => e.type === "sparks");
     if (!ef || !primary) return "";
@@ -59,13 +60,14 @@ BP.Weak = (function () {
     const hitBy = {};
     for (let i = 0; i < (ef.count || 0); i++) {
       const cand = cells.map((c) => BP.Cards.enemyAt(state, c.col, c.row)).filter((e) => e && e.alive && e.uid !== primary.uid);
-      if (!cand.length) break;
-      const e = cand[Math.floor(Math.random() * cand.length)];
-      hurt(e, ef.amount);
-      hitBy[e.name] = (hitBy[e.name] || 0) + ef.amount;
+      const stray = cand.length && Math.random() < (ef.stray || 0);
+      const e = stray ? cand[Math.floor(Math.random() * cand.length)] : primary.alive ? primary : null;
+      if (!e) break;
+      const dealt = hurt(e, ef.amount) || ef.amount; // с Силой выстрел сильнее
+      hitBy[e.name] = (hitBy[e.name] || 0) + dealt;
     }
     const parts = Object.entries(hitBy).map(([n, a]) => `${n} −${a}`);
-    return parts.length ? `искры: ${parts.join(", ")}` : "искры: рядом никого";
+    return parts.length ? `искры: ${parts.join(", ")}` : "";
   }
 
   return { weaponOf, fillerFor, placeholder, adapt, sparks };

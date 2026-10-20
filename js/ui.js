@@ -85,13 +85,14 @@ BP.UI = (function () {
     </div></div>`;
   }
 
-  // ---------- Выбор направления толчка ----------
+  // ---------- Выбор направления атаки (толчок и рикошет) ----------
   function placeDirPick(s) {
     if (!ui.dirPick) return;
-    const e = s.enemies.find((x) => x.uid === ui.dirPick.enemy && x.alive);
+    const e = ui.dirPick.enemy ? s.enemies.find((x) => x.uid === ui.dirPick.enemy && x.alive) : null;
+    const at = e || ui.dirPick.cell;
     const field = document.querySelector(".field");
-    if (!e || !field) { ui.dirPick = null; return; }
-    const g = BP.UIGame.geometry(s), p = BP.UIGame.cellPos(g, e.col, e.row);
+    if (!at || !field) { ui.dirPick = null; return; }
+    const g = BP.UIGame.geometry(s), p = BP.UIGame.cellPos(g, at.col, at.row);
     const cx = p.left + g.hw / 2, cy = p.top + g.hh / 2, R = g.hw * 0.78;
     const box = document.createElement("div");
     box.className = "dirpick";
@@ -99,7 +100,7 @@ BP.UI = (function () {
     box.innerHTML = BP.Hex.DIRS.map((d) => {
       const a = (d.angle * Math.PI) / 180;
       return `<button data-act="dir" data-dir="${d.id}" title="${d.name}" style="left:${cx + Math.cos(a) * R}px;top:${cy - Math.sin(a) * R}px">${d.label}</button>`;
-    }).join("") + `<div class="hint" style="left:${g.width / 2}px;top:-46px">Куда толкнуть «${BP.UIGame.esc(e.name)}»? Край поля или другой враг = столкновение <button data-act="dir-cancel">Отмена (Esc)</button></div>`;
+    }).join("") + `<div class="hint" style="left:${g.width / 2}px;top:-46px">Направление атаки${e ? ` по «${BP.UIGame.esc(e.name)}»` : ""}: рикошет и толчок — в эту сторону <button data-act="dir-cancel">Отмена (Esc)</button></div>`;
     field.appendChild(box);
   }
 
@@ -131,6 +132,7 @@ BP.UI = (function () {
       else if (ui.modal !== "hide-summary") html += renderSummary(s);
     }
     if (ui.modal === "deck" || ui.modal === "discard") html += BP.UIDeck.render(s, ui.modal);
+    if (s.choice && s.phase === "players") html += BP.UIDeck.renderChoice(s, me); // Прозрение / Поиск (js/mech.js)
     if (ui.modal === "settings") html += renderSettings(s);
     app().innerHTML = html;
     const nd = document.getElementById("deck-scroll");
@@ -200,7 +202,8 @@ BP.UI = (function () {
         break;
       }
       case "reset-config": BP.Session.clearOverride(); ui.modal = null; BP.Session.restart(window.GAME_CONFIG); toast("Снова используется config.js", "good"); break;
-      case "dir": { const d = ui.dirPick; ui.dirPick = null; BP.Session.dispatch({ a: "play", hero: d.hero, card: d.card, target: Object.assign({ enemy: d.enemy }, d.target || {}, { dir: +el.dataset.dir }) }); break; }
+      case "dir": { const d = ui.dirPick; ui.dirPick = null; BP.Session.dispatch({ a: "play", hero: d.hero, card: d.card, target: Object.assign({}, d.target || {}, { dir: +el.dataset.dir }) }); break; }
+      case "choose": BP.Session.dispatch({ a: "choose", card: el.dataset.card }); break;
       case "dir-cancel": ui.dirPick = null; render(); break;
       case "play-self": {
         const cardEl = el.closest(".card");

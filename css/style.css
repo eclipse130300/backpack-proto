@@ -448,3 +448,12 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
   .card .cbadge { font-size: 10px; line-height: 15px; padding: 0 2px; }
   .card .cbadge b { font-size: 10px; }
 }
+
+/* card-mechanics-1 (21.10): броня врагов, выбор карты (Прозрение / Поиск) */
+.hex .earmor { color: #c8b48a; font-weight: 700; }
+.modal.choice { max-width: 980px; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; margin-top: 10px; max-height: 64vh; overflow-y: auto; }
+.choice-item { cursor: pointer; border-radius: 8px; padding: 3px; }
+.choice-item:hover { outline: 2px solid #d4a94f; }
+.choice-item.off { cursor: default; opacity: .7; }
+.choice-item.off:hover { outline: none; }

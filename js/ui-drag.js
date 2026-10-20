@@ -69,8 +69,8 @@ BP.Drag = (function () {
     if (!box) return;
     const s = st(), c = cc && cc.card, parts = [];
     if (ui().dirPick) {
-      parts.push("Выбери стрелкой, куда толкнуть врага");
-      parts.push("Край поля или другой враг — столкновение");
+      parts.push("Выбери стрелкой направление атаки: туда летит рикошет и толкается враг");
+      parts.push("Толчок в другого врага — столкновение, оба получают +50% урона до конца хода");
       parts.push("Esc — отмена");
     } else if (c) {
       if (c.attack === "melee") parts.push("Мили: только открытые враги (никто не стоит перед ними)");
@@ -137,13 +137,13 @@ BP.Drag = (function () {
     if (!(el.dataset.drop === "enemy" || el.dataset.drop === "cell")) return;
     const target = targetFrom(el, cc.card);
     // массовки и «насквозь»: красным все задетые клетки
-    if ((cc.card.area && cc.card.area !== "single") || (cc.card.zoneSteps && cc.card.zoneSteps.length)) {
+    if ((cc.card.area && cc.card.area !== "single") || (cc.card.zoneSteps && cc.card.zoneSteps.length) || cc.card.zoneRays || cc.card.zoneLevel) {
       const mark = (cells, cls) => cells.forEach((c) => {
         const h = document.querySelector(`.hex[data-col="${c.col}"][data-row="${c.row}"]`);
         if (h) h.classList.add(...cls);
       });
       mark(BP.Cards.nativeCells(st(), cc.hero, cc.card, target), ["aoe"]);
-      mark(BP.Cards.zoneCells(st(), cc.hero, cc.card, target), ["aoe", "zone"]); // клетки Взрыва — жёлтые
+      mark(BP.Cards.zoneCells(st(), cc.hero, cc.card, target), ["aoe", "zone"]); // клетки Зоны — жёлтые
       ghostCells(cc, target);
     }
     const pv = BP.Cards.preview(st(), cc.hero, cc.card, target);
@@ -180,10 +180,9 @@ BP.Drag = (function () {
       return;
     }
     const target = targetFrom(el, card);
-    // толчок: сначала выбрать направление (у массовки с даром «Толчок» — для врага в клетке прицела)
-    const pushed = card.target === "enemy" ? target.enemy : card.target === "cell" && (BP.Cards.enemyAt(st(), target.cell.col, target.cell.row) || {}).uid;
-    if (BP.Cards.has(card, "push") && pushed) {
-      ui().dirPick = { hero: hero.id, card: card.uid, enemy: pushed, target };
+    // толчок и рикошет: сначала выбрать направление атаки (одно на оба эффекта, js/mech.js)
+    if (BP.Cards.checkTarget(st(), hero, card, target) === "NEED_DIR") {
+      ui().dirPick = { hero: hero.id, card: card.uid, enemy: target.enemy, cell: target.cell, target };
       BP.UI.render();
       return;
     }

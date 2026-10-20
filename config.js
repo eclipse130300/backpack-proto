@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 13,
+  version: 14,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -20,7 +20,9 @@ window.GAME_CONFIG = {
     fillerCard: "weak_strike",   // запасная добивка: герою без weakCard у оружия; в общей колоде — «слабый удар», который подстраивается под вытянувшего героя
     endFightDelayMs: 2500,       // после конца боя экран ~2.5 с заблокирован (досмотреть цифры урона), потом окно итогов
     critMultiplier: 2,           // множитель крита
-    conditionalCrit: true,       // x2 по оглушённому или вытолкнутому в этот ход
+    // card-mechanics-1 (21.10): условного крита ×2 по оглушённому/толкнутому больше нет. Вместо него:
+    collisionBonus: 0.5,         // толкнули врага в другого врага — ОБА до конца хода получают +50% урона (край поля не считается).
+                                 // Складывается с критом (×2 + 50% = ×2.5). 0 — выключить
     collisionDamage: 3,          // урон при столкновении после толчка (обоим)
     // РЕШЕНО: мили (и герои, и враги) бьют только ОТКРЫТЫХ — тех, кого никто не прикрывает спереди.
     // РЕШЕНО (17.10): хексы смотрят на героев ровной стороной, задний враг стоит прямо за передним в своей колонке
@@ -79,7 +81,9 @@ window.GAME_CONFIG = {
     // Каждые every ходов выходят perWave врагов из резерва: сначала на свободные клетки заднего ряда, потом переднего.
     // За ход до выхода клетки помечены. Поле пустое, а резерв нет — следующая волна выходит сразу.
     // Бой выигран, когда пусто и на поле, и в резерве. Подробно — js/reinforce.js.
-    reinforcements: { enabled: true, every: 2, perWave: 2 }
+    // card-mechanics-1 (21.10): волна, вышедшая посреди хода игроков (поле зачистили), в этот ход не атакует
+    // («осматривается»), зато получает lateArmor брони. Толкнул врага на клетку ⚠ — метка переезжает на ближайшую свободную.
+    reinforcements: { enabled: true, every: 2, perWave: 2, lateArmor: 5 }
   },
 
   // ---------- Дары (мердж в режиме tests.merge.mode = "gift"), версия merge-2 (19.10) ----------
@@ -91,8 +95,9 @@ window.GAME_CONFIG = {
   gifts: {
     // color — цвет фона карты с этим даром и плашки дара; icon — значок на плашке
     power:  { name: "Мощь",       icon: "💪", color: "#d83a3a", text: "урон ×1.5 (дальше ×2, ×2.5)" },
-    blast:  { name: "Взрыв",      icon: "💣", color: "#e8822a", text: "добавляет карте фигуру своей массовки; новые клетки — 50% урона (дальше 100%, 150%)" },
-    pierce: { name: "Пробой",     icon: "➹", color: "#e0c040", text: "враг прямо за целью получает 50% урона (дальше 100%, 150%)" },
+    // card-mechanics-1 (21.10): «Взрыв» → «Зона» (механика та же); «Пробой» → «Рикошет» (id оставлены прежними)
+    blast:  { name: "Зона",       icon: "⬡", color: "#e8822a", text: "добавляет карте фигуру своей массовки (у линий до края поля — всю линию); новые клетки — 50% урона (дальше 100%, 150%)" },
+    pierce: { name: "Рикошет",    icon: "↯", color: "#e0c040", text: "перед ударом выбираешь направление атаки: сосед цели в эту сторону получает 100% урона (дальше 150%); толчок карты — туда же" },
     repeat: { name: "Повтор",     icon: "🔁", color: "#4cb35a", text: "ещё удар по тем же целям: 50% урона (дальше 100%, 150%)" },
     push:   { name: "Толчок",     icon: "⇧", color: "#9a6a3e", text: "толкнуть цель на 1 клетку (дальше 2, 3); у массовки — врага в клетке прицела" },
     armor:  { name: "Броня",      icon: "🛡", color: "#4a78d8", text: "блок себе = 50% урона карты (дальше 100%); у карты блока — блок ×1.5" },
@@ -124,6 +129,9 @@ window.GAME_CONFIG = {
     strikeR: { name: "удар справа: 2 клетки вглубь + 1 справа", steps: [[], [1], [0]] },
     strikeL: { name: "удар слева: 2 клетки вглубь + 1 слева", steps: [[], [1], [2]] },
     arc5:    { name: "широкий уголок из 5 клеток", steps: [[], [2], [2, 2], [0], [0, 0]] }
+    // card-mechanics-1 (21.10): динамические массовки — не фигуры, а поле карты area:
+    //   area: "rays", rays: [направления] — клетка прицела + лучи от неё до края поля (Диагональ: [0, 3] = ↗ и ↙)
+    //   area: "level" — вся линия поперёк: клетки на той же высоте, что и прицел (поле делится на 4 линии по 3 клетки)
   },
 
   // ---------- Карты ----------
@@ -152,18 +160,30 @@ window.GAME_CONFIG = {
   // added:  "17.10.2026" — когда добавлена (видно в подробностях карты на странице «Карты»)
   // Все карты удобно смотреть на странице «Карты»: https://eclipse130300.github.io/backpack-proto/cards.html
   cards: {
+    // card-mechanics-1 (21.10): новые поля и эффекты карт —
+    //   ricochet: true — родной Рикошет (как дар «Рикошет»): перед ударом выбрать направление, сосед цели туда — 100%
+    //   armorBreak: true — по броне врага ×2 | alwaysCrit: true — всегда крит (счётчик оружия не трогает)
+    //   area: "rays" + rays / "level" — динамические массовки (см. shapes выше)
+    //   effects: buffDamage {amount} — цель до конца боя +amount урона каждой картой (складывается)
+    //            buffBlock {amount} — цель до конца боя +amount к блоку от каждой своей карты (складывается)
+    //            miss — следующая атака врага по цели промахнётся | stun у массовки — оглушает всех задетых
+    //            pick {count} — выбрать 1 из count случайных карт колод всех героев (уходит владельцу в руку)
+    //            tutor — найти любую карту в колодах всех героев (уходит владельцу в руку)
+    //   Карты поддержки без gift — их нельзя отдать в мердж.
     // Слабые удары оружия (17.10, эксперимент): ими добивается колода до minDeck. Двигают счётчик крита своего оружия.
     weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee",  weak: true, effects: [{ type: "damage", amount: 3 }] },
     weak_shot:     { name: "Слабый выстрел",    cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 2 }], isNew: true, added: "17.10.2026" },
-    sparks:        { name: "Искры",             cost: 1, icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "damage", amount: 1 }, { type: "sparks", count: 2, amount: 1 }], isNew: true, added: "17.10.2026" },
+    // card-mechanics-1: Искры — 3 выстрела по 1, каждый с шансом 50% уходит в случайного соседа цели
+    sparks:        { name: "Искры",             cost: 1, icon: "sparks", target: "enemy", attack: "ranged", weak: true, effects: [{ type: "sparks", count: 3, amount: 1, stray: 0.5 }], isNew: true, added: "21.10.2026" },
 
-    // Меч
+    // Меч. card-mechanics-1: Размах заменён Диагональю, добавлено Сотрясение
     cleave:        { name: "Рубящий удар",      cost: 1, gift: "execute", icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
     sweep:         { name: "Размах",            cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "arc3", evolve: "blade_storm", effects: [{ type: "damage", amount: 8 }] },
     great_sweep:   { name: "Мощный размах",     cost: 3, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "wave4", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
-    // merge-3 (20.10): Мощный размах убран из колоды меча (массовок меньше), его место занял Рывок
+    diagonal:      { name: "Диагональ",         cost: 3, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "rays", rays: [0, 3], evolve: "cross", effects: [{ type: "damage", amount: 8 }], isNew: true, added: "21.10.2026" },
     rush:          { name: "Рывок",             cost: 2, gift: "power", icon: "rush",   target: "enemy", attack: "melee", ignoreCover: true, evolve: "breakthrough", effects: [{ type: "damage", amount: 10 }], isNew: true, added: "20.10.2026" },
-    crush:         { name: "Сокрушение",        cost: 2, gift: "power", icon: "crush",  target: "enemy", attack: "melee", evolve: "executioner", effects: [{ type: "damage", amount: 13 }] },
+    crush:         { name: "Сокрушение",        cost: 2, gift: "power", icon: "crush",  target: "enemy", attack: "melee", armorBreak: true, evolve: "executioner", effects: [{ type: "damage", amount: 13 }] },
+    quake:         { name: "Сотрясение",        cost: 3, gift: "push", icon: "stun",   target: "cell",  attack: "aoe", area: "rays", rays: [1], evolve: "earthquake", effects: [{ type: "damage", amount: 4 }, { type: "stun" }], isNew: true, added: "21.10.2026" },
 
     // Щит
     shield_bash:   { name: "Удар щитом",        cost: 1, gift: "push", icon: "bash",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 4 }, { type: "push" }] },
@@ -174,44 +194,62 @@ window.GAME_CONFIG = {
     fireball:      { name: "Огненный шар",      cost: 3, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", evolve: "meteor", effects: [{ type: "damage", amount: 6 }] },
     stun_bolt:     { name: "Оглушающий разряд", cost: 2, gift: "power", icon: "stun",   target: "enemy", attack: "ranged", evolve: "thunderer", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
     flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "strikeL", evolve: "fire_rampart", effects: [{ type: "damage", amount: 6 }] },
-    // merge-3 (20.10): Огненное кольцо убрано из колоды посоха (массовок меньше), его место заняло Притяжение
     pull:          { name: "Притяжение",        cost: 2, gift: "push", icon: "pull",   target: "enemy", attack: "ranged", evolve: "chain_hook", effects: [{ type: "damage", amount: 7 }, { type: "pull" }], isNew: true, added: "20.10.2026" },
     nova:          { name: "Огненное кольцо",   cost: 2, gift: "blast", icon: "nova",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "tri3l", effects: [{ type: "damage", amount: 6 }] },
 
-    // Лук
+    // Лук. card-mechanics-1: Пробивающая стрела → Рикошетная стрела; Град стрел бьёт всю линию поперёк; Верный выстрел
     double_shot:   { name: "Двойной выстрел",   cost: 1, gift: "repeat", icon: "arrows", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3, hits: 2 }] },
-    pierce_arrow:  { name: "Пробивающая стрела", cost: 2, gift: "pierce", icon: "pierce", target: "enemy", attack: "ranged", area: "line", evolve: "light_spear", effects: [{ type: "damage", amount: 7 }] },
+    pierce_arrow:  { name: "Рикошетная стрела", cost: 2, gift: "pierce", icon: "pierce", target: "enemy", attack: "ranged", ricochet: true, evolve: "light_spear", effects: [{ type: "damage", amount: 7 }], isNew: true, added: "21.10.2026" },
     knock_arrow:   { name: "Отбрасывающая стрела", cost: 1, gift: "push", icon: "knock", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "push" }] },
-    arrow_rain:    { name: "Град стрел",        cost: 2, gift: "blast", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "strikeR", evolve: "arrow_storm", effects: [{ type: "damage", amount: 6 }] },
-    aimed_shot:    { name: "Прицельный выстрел", cost: 2, gift: "power", icon: "aim",   target: "enemy", attack: "ranged", evolve: "deadshot", effects: [{ type: "damage", amount: 10 }] },
+    arrow_rain:    { name: "Град стрел",        cost: 2, gift: "blast", icon: "rain",   target: "cell",  attack: "aoe", area: "level", evolve: "arrow_storm", effects: [{ type: "damage", amount: 6 }], isNew: true, added: "21.10.2026" },
+    aimed_shot:    { name: "Прицельный выстрел", cost: 2, gift: "power", icon: "aim",   target: "enemy", attack: "ranged", armorBreak: true, evolve: "deadshot", effects: [{ type: "damage", amount: 10 }] },
+    true_shot:     { name: "Верный выстрел",    cost: 3, gift: "power", icon: "aim",    target: "enemy", attack: "ranged", alwaysCrit: true, evolve: "heart_shot", effects: [{ type: "damage", amount: 9 }], isNew: true, added: "21.10.2026" },
 
     // ---------- Эволюции (merge-3, 20.10, эксперимент — tests.evolution) ----------
     // evolved: true — получается только эволюцией, в колоды не кладётся. Стоимость и урон берутся при эволюции:
     // стоимость = стоимость карты, которая эволюционировала; урон = урон обеих карт (без даров) + их прибавки,
     // все дары обеих карт и родной дар отданной переходят. amount ниже — 0, он заменяется.
+    // card-mechanics-1: эволюция не сгорает в конце хода — лежит в руке, пока её не сыграют.
     // special — особое свойство эволюции одной строкой (фиолетовым в подсказке карты)
     // Свойства: mult — множитель урона | returnOnKill — убил цель → карта возвращается в руку
-    //   ignoreCover — мили бьёт и закрытого врага | ignoreBlock — урон сквозь блок врага
+    //   ignoreCover — мили бьёт и закрытого врага | ignoreBlock — урон сквозь блок и броню врага
     //   finisher — враг с ≤50% ХП погибает, иначе урон ×2
     // area: "row" — весь ряд клетки прицела | "all" — все враги | "withCover" — цель и тот, кто её прикрывает
     // effects: pull — притянуть врага из заднего ряда вперёд (впереди кто-то есть — меняются местами)
     //          blockPartyPct {pct} — блок всем героям = pct от урона карты
     blade_storm:   { name: "Вихрь клинков",     evolved: true, special: "бьёт весь ряд, в который целишься", icon: "sweep",  target: "cell",  attack: "aoe", area: "row", effects: [{ type: "damage", amount: 0 }] },
-    executioner:   { name: "Палач",             evolved: true, special: "урон ×2; убил цель — карта возвращается в руку", icon: "crush",  target: "enemy", attack: "melee", mult: 2, returnOnKill: true, effects: [{ type: "damage", amount: 0 }] },
+    cross:         { name: "Крест",             evolved: true, special: "бьёт обе диагонали через клетку прицела до края поля", icon: "sweep", target: "cell", attack: "aoe", area: "rays", rays: [0, 3, 2, 5], effects: [{ type: "damage", amount: 0 }] },
+    earthquake:    { name: "Землетрясение",     evolved: true, special: "бьёт и оглушает всю линию поперёк", icon: "stun", target: "cell", attack: "aoe", area: "level", effects: [{ type: "damage", amount: 0 }, { type: "stun" }] },
+    executioner:   { name: "Палач",             evolved: true, special: "урон ×2; убил цель — карта возвращается в руку", icon: "crush",  target: "enemy", attack: "melee", mult: 2, returnOnKill: true, armorBreak: true, effects: [{ type: "damage", amount: 0 }] },
     breakthrough:  { name: "Прорыв",            evolved: true, special: "бьёт и закрытого врага, и того, кто его прикрывает", icon: "rush",   target: "enemy", attack: "melee", ignoreCover: true, area: "withCover", effects: [{ type: "damage", amount: 0 }] },
     meteor:        { name: "Метеоритный дождь", evolved: true, special: "бьёт всех врагов на поле", icon: "fire",   target: "cell",  attack: "aoe", area: "all", effects: [{ type: "damage", amount: 0 }] },
     fire_rampart:  { name: "Огненный вал",      evolved: true, special: "всем героям блок = 50% урона карты", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "strikeL", fixedShape: "strikeL", effects: [{ type: "damage", amount: 0 }, { type: "blockPartyPct", pct: 0.5 }] },
     thunderer:     { name: "Громовержец",       evolved: true, special: "бьёт цель и весь её ряд, цель оглушена", icon: "stun",   target: "enemy", attack: "ranged", area: "row", effects: [{ type: "damage", amount: 0 }, { type: "stun" }] },
-    chain_hook:    { name: "Цепной крюк",       evolved: true, special: "притягивает врага из заднего ряда вперёд (впереди кто-то есть — меняются местами); урон ×2 сквозь блок", icon: "pull",   target: "enemy", attack: "ranged", mult: 2, ignoreBlock: true, effects: [{ type: "damage", amount: 0 }, { type: "pull" }] },
-    arrow_storm:   { name: "Ливень стрел",      evolved: true, special: "фигура бьёт дважды", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "strikeR", fixedShape: "strikeR", effects: [{ type: "damage", amount: 0, hits: 2 }] },
-    light_spear:   { name: "Копьё света",       evolved: true, special: "бьёт цель и врага за ней, сквозь блок", icon: "pierce", target: "enemy", attack: "ranged", area: "line", ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
+    chain_hook:    { name: "Цепной крюк",       evolved: true, special: "притягивает врага из заднего ряда вперёд (впереди кто-то есть — меняются местами); урон ×2 сквозь блок и броню", icon: "pull",   target: "enemy", attack: "ranged", mult: 2, ignoreBlock: true, effects: [{ type: "damage", amount: 0 }, { type: "pull" }] },
+    arrow_storm:   { name: "Ливень стрел",      evolved: true, special: "линия поперёк бьёт дважды", icon: "rain",   target: "cell",  attack: "aoe", area: "level", effects: [{ type: "damage", amount: 0, hits: 2 }] },
+    light_spear:   { name: "Копьё света",       evolved: true, special: "бьёт цель и врага за ней, сквозь блок и броню", icon: "pierce", target: "enemy", attack: "ranged", area: "line", ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
     deadshot:      { name: "Смертельный выстрел", evolved: true, special: "враг с ≤50% ХП погибает, иначе урон ×2", icon: "aim",  target: "enemy", attack: "ranged", finisher: true, effects: [{ type: "damage", amount: 0 }] },
+    heart_shot:    { name: "Выстрел в сердце",  evolved: true, special: "всегда крит, сквозь блок и броню", icon: "aim", target: "enemy", attack: "ranged", alwaysCrit: true, ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
 
     // Кооп-сейвы
     cover:         { name: "Прикрыть",          cost: 1, gift: "cover", icon: "cover",   target: "hero",  effects: [{ type: "block", amount: 6 }] },
     challenge:     { name: "Вызов",             cost: 1, gift: "taunt", icon: "taunt",   target: "enemy", attack: "ranged", effects: [{ type: "taunt" }, { type: "blockSelf", amount: 4 }] },
+    // card-mechanics-1: Очищение и Барьер убраны из колоды мага (проклятия больше нет)
     purify:        { name: "Очищение",          cost: 1, icon: "purify",  target: "hero",  effects: [{ type: "cleanse" }, { type: "block", amount: 3 }] },
     barrier:       { name: "Барьер",            cost: 1, gift: "armor", icon: "barrier", target: "hero",  effects: [{ type: "block", amount: 5 }] },
+
+    // ---------- Поддержка (card-mechanics-1, 21.10, эксперимент). Без дара — в мердж не отдаются ----------
+    // Маг
+    flow:          { name: "Поток",             cost: 0, icon: "bolt",    target: "ally", effects: [{ type: "energy", amount: 1 }], isNew: true, added: "21.10.2026" },
+    insight:       { name: "Прозрение",         cost: 0, icon: "purify",  target: "none", effects: [{ type: "pick", count: 3 }], isNew: true, added: "21.10.2026" },
+    might:         { name: "Сила",              cost: 1, icon: "unity",   target: "hero", effects: [{ type: "buffDamage", amount: 1 }], isNew: true, added: "21.10.2026" },
+    // Милишник
+    battle_cry:    { name: "Боевой клич",       cost: 1, icon: "taunt",   target: "hero", effects: [{ type: "energy", amount: 2 }], isNew: true, added: "21.10.2026" },
+    search:        { name: "Поиск",             cost: 1, icon: "oath",    target: "none", effects: [{ type: "tutor" }], isNew: true, added: "21.10.2026" },
+    fortitude:     { name: "Стойкость",         cost: 1, icon: "barrier", target: "hero", effects: [{ type: "buffBlock", amount: 1 }], isNew: true, added: "21.10.2026" },
+    // Стрелок
+    quiver:        { name: "Колчан",            cost: 1, icon: "arrows",  target: "self", effects: [{ type: "draw", amount: 2 }], isNew: true, added: "21.10.2026" },
+    smoke:         { name: "Дымовая завеса",    cost: 1, icon: "cover",   target: "hero", effects: [{ type: "miss", amount: 1 }], isNew: true, added: "21.10.2026" },
 
     // «Единение» — только награда квеста (см. questRewards), отдельной настройки нет.
     unity:         { name: "Единение",          cost: 0, icon: "unity", target: "none",  effects: [{ type: "sharedPool" }], note: "Остаток энергии всех героев складывается, любой тратит из пула" },
@@ -232,10 +270,10 @@ window.GAME_CONFIG = {
   // У щита слабого удара нет (щиты разберём позже).
   // Пока щит только у милишника (щиты разберём позже).
   weapons: {
-    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, weakCard: "weak_strike", cards: { cleave: 2, sweep: 1, rush: 1, crush: 1 } },
+    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, weakCard: "weak_strike", cards: { cleave: 2, diagonal: 1, rush: 1, crush: 1, quake: 1 } },
     shield: { name: "Щит",   kind: "shield", icon: "w_shield", critEvery: 0, cards: { shield_bash: 1, shield_wall: 1 } },
     staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, weakCard: "sparks", cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, pull: 1 } },
-    bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, weakCard: "weak_shot", cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1 } }
+    bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, weakCard: "weak_shot", cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1, true_shot: 1 } }
   },
 
   // ---------- Герои ----------
@@ -246,9 +284,11 @@ window.GAME_CONFIG = {
   // icon — портрет (см. js/icons.js)
   // Баланс (ХП героев и врагов, состав боёв) подобран симулятором: node tools/balance-sim.js — см. README.
   heroes: [
-    { id: "melee",  name: "Милишник", icon: "helm", hp: 85, startBlock: 4, weapons: ["sword", "shield"], cards: { cover: 1, challenge: 1 } },
-    { id: "mage",   name: "Маг",      icon: "hat",  hp: 60, startBlock: 2, weapons: ["staff"],        cards: { purify: 1, barrier: 1 } },
-    { id: "ranger", name: "Стрелок",  icon: "hood", hp: 68, startBlock: 2, weapons: ["bow"],          cards: { cover: 1 } }
+    // card-mechanics-1 (21.10): карты поддержки — у мага Поток, Прозрение, Сила; у милишника Боевой клич, Поиск, Стойкость;
+    // у стрелка Колчан и Дымовая завеса. Блок только у милишника и стрелка (Барьер и Очищение у мага убраны).
+    { id: "melee",  name: "Милишник", icon: "helm", hp: 85, startBlock: 4, weapons: ["sword", "shield"], cards: { cover: 1, challenge: 1, battle_cry: 1, search: 1, fortitude: 1 } },
+    { id: "mage",   name: "Маг",      icon: "hat",  hp: 60, startBlock: 2, weapons: ["staff"],        cards: { flow: 1, insight: 1, might: 1 } },
+    { id: "ranger", name: "Стрелок",  icon: "hood", hp: 68, startBlock: 2, weapons: ["bow"],          cards: { cover: 1, quiver: 1, smoke: 1 } }
   ],
 
   // ---------- Враги ----------
@@ -263,17 +303,18 @@ window.GAME_CONFIG = {
   // Баланс прототипа (17.10, бот medium, цель 70% побед): ХП обычных врагов +10% (Упырь 50→55, Гончая 30→33, Культист 34→37, Лучник 28→31, Громила 80→88).
   enemies: {
     // 20.10 (ветка merge-3, бот medium): бои стали длиннее из-за подкреплений (8 врагов за бой) — урон врагов ×0.65
-    // (Упырь 8/4 → 5/3, Гончая 5/7 → 3/5, Культист 9 → 6, Лучник 3/6 → 2/4, Громила 9 → 6); Жрец — ниже
-    ghoul:   { name: "Упырь",        hp: 55, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 3, targets: 2 }] },
-    hound:   { name: "Гончая",       hp: 33, melee: true,  actions: [{ type: "attack", damage: 3 }, { type: "attack", damage: 5 }] },
-    cultist: { name: "Культист",     hp: 37, melee: false, actions: [{ type: "curse", amount: 2, turns: 2 }, { type: "attack", damage: 6 }] },
-    archer:  { name: "Костяной лучник", hp: 31, melee: false, actions: [{ type: "attack", damage: 2, targets: 3 }, { type: "attack", damage: 4 }] },
-    brute:   { name: "Громила",      hp: 88, melee: true,  actions: [{ type: "block", amount: 8 }, { type: "attack", damage: 6, targets: 3 }] },
-    // баланс 18.10 (ветка merge, бот medium): Жрец ХП 150→110, удары 17→14 и 10×2→8×2 — с мерджем medium выигрывал 30%;
-    // 18.10 13:45 после «прибавка в базовый урон» мердж стал сильнее (79%) — ХП 110→120, удары вернули 17 и 10×2
-    // 19.10 (ветка merge-2, бот medium): после упрощения даров medium выигрывал 55% — удары 17→15 и 10×2→9×2 (≈70%)
-    // 20.10 (ветка merge-3, подкрепления): ХП 120→125, удары 15→12 и 9×2→7×2 — medium ≈70% (2×60 забегов: 73% и 67%), бой ≈8.4 хода
-    priest:  { name: "Падший жрец",  hp: 125, melee: false, actions: [{ type: "attack", damage: 12 }, { type: "attack", damage: 7, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
+    // card-mechanics-1 (21.10, эксперимент): armor — стартовая броня (≈четверть прежнего ХП перешла в броню).
+    //   Урон идёт: блок → броня → ХП. Броня не сгорает в конце хода. Карты с armorBreak бьют по броне ×2.
+    //   attack {..., armor: N} — удар, после которого враг получает N брони. Раненый враг (≤50% ХП) выбирает действие
+    //   с бронёй (не два раза подряд). Проклятие убрано (заменено ударом с бронёй).
+    //   disable {targets} — вывести героя из игры на его следующий ход (только Жрец).
+    ghoul:   { name: "Упырь",        hp: 40, armor: 15, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 3, targets: 2, armor: 4 }] },
+    hound:   { name: "Гончая",       hp: 25, armor: 8,  melee: true,  actions: [{ type: "attack", damage: 3 }, { type: "attack", damage: 5 }] },
+    cultist: { name: "Культист",     hp: 28, armor: 9,  melee: false, actions: [{ type: "attack", damage: 4, armor: 5 }, { type: "attack", damage: 6 }] },
+    archer:  { name: "Костяной лучник", hp: 24, armor: 7, melee: false, actions: [{ type: "attack", damage: 2, targets: 3 }, { type: "attack", damage: 4 }] },
+    brute:   { name: "Громила",      hp: 58, armor: 30, melee: true,  actions: [{ type: "attack", damage: 3, armor: 8 }, { type: "attack", damage: 6, targets: 3 }] },
+    // Жрец (финальный босс): выводит героя из игры на ход, удар с бронёй вместо проклятия
+    priest:  { name: "Падший жрец",  hp: 95, armor: 30, melee: false, actions: [{ type: "attack", damage: 12 }, { type: "disable", targets: 1 }, { type: "attack", damage: 7, targets: 2 }, { type: "attack", damage: 5, targets: 3, armor: 10 }] }
   },
 
   // ---------- Квест боя (tests.fightQuest) ----------
