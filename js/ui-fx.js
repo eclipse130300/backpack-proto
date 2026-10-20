@@ -57,11 +57,22 @@ BP.FX = (function () {
     setTimeout(() => d.remove(), 1500);
   }
 
+  function evolveBanner(ev) {
+    const f = document.querySelector(".field"), r = f ? f.getBoundingClientRect() : { left: innerWidth / 2, top: 200, width: 0, height: 0 };
+    const d = document.createElement("div");
+    d.className = "evo-banner";
+    d.innerHTML = `<small>ЭВОЛЮЦИЯ</small>${BP.UIGame.esc(ev.name || "")}`;
+    d.style.left = r.left + r.width / 2 + "px"; d.style.top = r.top + r.height / 2 + "px";
+    layer.appendChild(d);
+    setTimeout(() => d.remove(), 1800);
+  }
+
   function processFx(s) {
     if (lastFx < 0 || s.fxSeq < lastFx) lastFx = s.fxSeq || 0; // первый показ / новый забег — не проигрываем старое
     const now = Date.now();
     (s.fx || []).forEach((ev) => {
       if (ev.id <= lastFx) return;
+      if (ev.k === "evolve") { evolveBanner(ev); return; } // эволюция (js/evolve.js) — надпись по центру поля
       const key = ev.k === "enemy" ? "e:" + ev.uid : "h:" + ev.hero;
       let q = numQueue[key] && numQueue[key].t > now ? numQueue[key] : { t: now, n: 0 };
       if (ev.play && ev.k === "enemy") { // шаг розыгрыша: не раньше, чем start + step × STEP_GAP
@@ -173,7 +184,9 @@ BP.FX = (function () {
       return `<div class="tip-title">${esc(c.name)} <span class="tip-cost">${c.cost}⚡</span></div>
         <div class="tip-tags">${esc(BP.Cards.tags(c).join(" · "))}</div>
         <div>${esc(c.text)}</div>
-        ${c.attack === "melee" ? `<div class="tip-note">Мили: бьёт только открытых врагов — тех, кого никто не прикрывает спереди.</div>` : ""}
+        ${c.attack === "melee" && !c.ignoreCover ? `<div class="tip-note">Мили: бьёт только открытых врагов — тех, кого никто не прикрывает спереди.</div>` : ""}
+        ${BP.Evolve.evolvable(s, c) ? `<div class="tip-note evo">✦ Эволюция: «${esc(s.config.cards[c.evolve].name)}». Нужна ещё одна мерджнутая (★) эволюционная карта союзника — перетащи её на эту.</div>` : ""}
+        ${c.evolvedFrom ? `<div class="tip-note evo">✦ Эволюция из «${esc(c.evolvedFrom[0])}» и «${esc(c.evolvedFrom[1])}» — до конца боя.</div>` : ""}
         ${c.area === "shape" ? `<div class="tip-note row">${BP.Icons.shapeSvg(c.shapeSteps, c.fixed ? 0 : rot, c.zoneSteps)}<span>Фигура «${esc(c.shapeName)}». ${c.fixed ? "Не крутится: клетка прицела — передняя клетка фигуры." : "<b>Правая кнопка мыши</b> — повернуть по часовой."} Задетые клетки подсвечиваются красным, клетки за краем поля — ✕.</span></div>` : ""}
         ${c.area !== "shape" && c.zoneSteps && c.zoneSteps.length ? `<div class="tip-note row">${BP.Icons.shapeSvg([[]], 0, c.zoneSteps)}<span>Взрыв добавил клетки вокруг цели (жёлтые): они получают ${Math.round(c.zone * 100)}% урона.</span></div>` : ""}
         ${c.questCard ? `<div class="tip-note good">Квестовая карта: одноразовая (после розыгрыша пропадает), в конце хода не сгорает.</div>` : ""}

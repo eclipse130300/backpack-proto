@@ -62,12 +62,8 @@ BP.Engine = (function () {
   function startFight(state, index) {
     const cfg = state.config, enc = cfg.encounters[index];
     state.fightIndex = index; state.turn = 0; state.phase = "players";
-    state.enemies = enc.enemies.map((ec) => {
-      const ed = cfg.enemies[ec.type];
-      return { uid: "e" + state.seq++, type: ec.type, name: ed.name, hp: ed.hp, maxHp: ed.hp, block: 0,
-        col: ec.col, row: ec.row, actions: clone(ed.actions), actionIndex: 0, intent: null,
-        stunned: false, pushedThisTurn: false, alive: true };
-    });
+    state.enemies = enc.enemies.map((ec) => makeEnemy(state, ec.type, ec.col, ec.row));
+    BP.Reinforce.setup(state, enc); // подкрепления (tests.reinforcements) — js/reinforce.js
     state.heroes.forEach((h, i) => {
       const hc = cfg.heroes[i];
       if (!h.alive) { h.alive = true; h.hp = Math.max(1, cfg.rules.reviveHp || 10); }
@@ -85,6 +81,20 @@ BP.Engine = (function () {
     if (BP.Quests.offer(state)) { state.phase = "questPick"; return; }
     startPlayerTurn(state);
   }
+
+  function makeEnemy(state, type, col, row) {
+    const ed = state.config.enemies[type];
+    return { uid: "e" + state.seq++, type, name: ed.name, hp: ed.hp, maxHp: ed.hp, block: 0,
+      col, row, actions: clone(ed.actions), actionIndex: 0, intent: null,
+      stunned: false, pushedThisTurn: false, alive: true };
+  }
+
+  // Подкрепления вышли на поле: враги + намерения + лог
+  function arrive(state, list) {
+    list.forEach((e) => { state.enemies.push(e); computeIntent(state, e); });
+    if (list.length) log(state, "—", `Подкрепление: ${list.map((e) => e.name).join(", ")}`);
+  }
+  const maker = (state) => (type, col, row) => makeEnemy(state, type, col, row);
 
   function drawCards(state, hero, n) { BP.Deck.draw(state, hero, n); }
 
@@ -126,14 +136,15 @@ BP.Engine = (function () {
       h.energy = state.config.rules.energy + h.bonusEnergy; h.bonusEnergy = 0;
       drawCards(state, h, state.config.rules.drawPerTurn); // фиксированный добор, не «до N»
     });
+    arrive(state, BP.Reinforce.onTurnStart(state, maker(state)));
     state.enemies.forEach((e) => { if (e.alive) { e.pushedThisTurn = false; computeIntent(state, e); } });
     Object.values(state.players).forEach((p) => (p.ready = false));
   }
 
   // ---------- Урон ----------
-  function hurtEnemy(state, e, amount, heroId, crit, src, step) {
+  function hurtEnemy(state, e, amount, heroId, crit, src, step, noBlock) {
     if (!e.alive || amount <= 0) return 0;
-    const absorbed = Math.min(e.block, amount);
+    const absorbed = noBlock ? 0 : Math.min(e.block, amount); // noBlock — урон сквозь блок (эволюции)
     e.block -= absorbed;
     e.hp -= amount - absorbed;
     fx(state, { k: "enemy", uid: e.uid, col: e.col, row: e.row, amount: Math.min(amount - absorbed, e.hp + amount - absorbed), blocked: absorbed, crit: !!crit, src: src || "", step: step || 0, play: state.playSeq || 0 });
@@ -199,6 +210,16 @@ BP.Engine = (function () {
     const after = (e.intent && e.intent.targets || []).join(",");
     const now = after && after !== before ? `, теперь целит в ${e.intent.targets.map((id) => (state.heroes.find((h) => h.id === id) || {}).name).join(", ")}` : "";
     return `${e.name} отброшен ${BP.Hex.DIRS[dir].label}${now}`;
+  }
+
+  // Притяжение: враг заднего ряда встаёт вперёд; впереди кто-то есть — меняются местами. Цели и прикрытие пересчитываются.
+  function pull(state, e) {
+    if (e.row === 0) return `${e.name} уже в переднем ряду`;
+    const f = C().enemyAt(state, e.col, 0);
+    if (f) f.row = 1;
+    e.row = 0;
+    state.enemies.forEach((x) => { if (x.alive) reintent(state, x, x === e || x === f); });
+    return `${e.name} притянут вперёд${f ? `, ${f.name} отступил назад` : ""}`;
   }
 
   // Толчок на n клеток (дар «Толчок» в карту с толчком = 2). Упёрся (край/враг) — урон столкновения и стоп, без рикошета.
@@ -268,7 +289,7 @@ BP.Engine = (function () {
       const per = {};
       hits.forEach((h) => {
         const e = state.enemies.find((x) => x.uid === h.enemy);
-        hurtEnemy(state, e, h.amount, hero.id, h.crit, h.src, h.step);
+        hurtEnemy(state, e, h.amount, hero.id, h.crit, h.src, h.step, h.nb);
         per[e.name] = (per[e.name] || []).concat(h.amount + (h.crit ? "!" : ""));
       });
       notes.push(Object.entries(per).map(([n, a]) => `${n}: ${a.join("+")}`).join(", "));
@@ -280,6 +301,8 @@ BP.Engine = (function () {
         case "blockSelf": hero.block += ef.amount; notes.push(`+${ef.amount} блока себе`); break;
         case "blockHero": { const to = state.heroes.find((x) => x.id === ef.hero && x.alive) || hero; to.block += ef.amount; hero.stats.blockGiven += ef.amount; notes.push(`${to.name} +${ef.amount} блока`); break; } // дар «Прикрытие»
         case "push": if (primary && primary.alive) notes.push(pushN(state, primary, t.dir, hero.id, card.pushDist)); break;
+        case "pull": if (primary && primary.alive) notes.push(pull(state, primary)); break;
+        case "blockPartyPct": { const d = card.effects.find((x) => x.type === "damage"), a = Math.ceil((d ? d.amount : 0) * ef.pct - 1e-9); aliveHeroes(state).forEach((h) => (h.block += a)); hero.stats.blockGiven += a * aliveHeroes(state).length; notes.push(`всем +${a} блока`); break; }
         case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a, hero.id, false, "sparks", 1))); break;
         case "stun": if (primary && primary.alive) { primary.stunned = true; primary.intent = { type: "stunned" }; notes.push(`${primary.name} оглушён`); } break;
         case "taunt": if (primary && primary.alive && retarget(state, primary, hero.id)) notes.push(`${primary.name} теперь целит в ${hero.name}`); break;
@@ -304,7 +327,9 @@ BP.Engine = (function () {
       }
     });
 
-    BP.Deck.discard(state, hero, card); // квестовая (exhaust) карта не сбрасывается — пропадает
+    // Палач (эволюция): убил цель — карта возвращается в руку; иначе в сброс (квестовая — пропадает)
+    if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(card); notes.push(`«${card.name}» вернулась в руку`); }
+    else BP.Deck.discard(state, hero, card);
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
     const qn = BP.Quests.afterPlay(state, hero, card, hits, t); // квест боя: прогресс и награда
@@ -331,7 +356,9 @@ BP.Engine = (function () {
     BP.Deck.discard(state, hero, card);
     hero.stats.merges++; hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id, merge: true });
-    log(state, hero.name, `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost, merge: true, detail: `${before.text} ⇒ ${allyCard.text}` });
+    const evo = allyCard.evolvedFrom && !before.evolvedFrom; // эволюция (js/evolve.js)
+    if (evo) fx(state, { k: "evolve", hero: ally.id, card: allyCard.uid, name: allyCard.name });
+    log(state, hero.name, evo ? `ЭВОЛЮЦИЯ «${before.name}» + «${card.name}» → «${allyCard.name}» (${ally.name})` : `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost, merge: true, evolve: !!evo, detail: `${before.text} ⇒ ${allyCard.text}` });
     afterChange(state, false);
     return null;
   }
@@ -342,6 +369,10 @@ BP.Engine = (function () {
 
   function checkFightEnd(state) {
     if (state.phase === "won" || state.phase === "lost" || state.phase === "victory") return true;
+    if (!state.enemies.some((e) => e.alive) && BP.Reinforce.pending(state)) {
+      arrive(state, BP.Reinforce.spawnNow(state, maker(state))); // поле пустое, а резерв нет — волна выходит сразу
+      if (state.enemies.some((e) => e.alive)) return false;
+    }
     if (!state.enemies.some((e) => e.alive)) {
       const last = state.fightIndex >= state.config.encounters.length - 1;
       state.phase = last ? "victory" : "won";

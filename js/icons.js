@@ -20,6 +20,8 @@ BP.Icons = (function () {
     bash: `${shield(6, 6, 0.8)}<path d="M50 20 H60 M48 32 H62 M50 44 H60" ${S}/>`,
     shield: `${shield(0, 0, 1)}<path d="M32 16 V48 M20 28 H44" stroke="#2a0d0a" stroke-width="4"/>`,
     sweep: `<path d="M6 46 C12 16 52 16 58 46" ${S}/><polygon points="58,48 49,38 62,36" ${F}/><path d="M29 10 H35 V38 H29 Z" ${F}/><path d="M23 40 H41 M32 42 V56" ${S}/>`,
+    rush: `${sword}<path d="M4 20 H18 M2 30 H14 M6 40 H16" ${S}/>`,
+    pull: `<path d="M44 8 V30 C44 44 24 44 24 32" ${S}/><path d="M24 32 L18 26 M24 32 L30 26" ${S}/>` + arrow(56, 54, 12, 54),
     crush: `<path d="M27 4 H37 V36 H27 Z" ${F}/><path d="M18 36 H46 M32 38 V50" ${S}/><path d="M10 58 H54 M14 52 L6 46 M50 52 L58 46" ${S}/>`,
     bolt: `<path d="M36 4 L14 36 H30 L24 60 L50 24 H34 Z" ${F}/>`,
     sparks: `<path d="M34 10 L20 34 H31 L26 54 L44 28 H33 Z" ${F}/><path d="M10 14 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z" ${F}/><path d="M54 40 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z" ${F}/>`,

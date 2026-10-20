@@ -270,7 +270,7 @@ BP.Sim = (function () {
           act(s, { a: "ready" });
           while (BP.Engine.enemyStep(s)) {}
         }
-        s.log.forEach((l) => { if (l.card) { if (l.merge) { cc(l.card).merged++; cur.merges = (cur.merges || 0) + 1; } else cc(l.card).played++; } });
+        s.log.forEach((l) => { if (l.card) { if (l.merge) { cc(l.card).merged++; cur.merges = (cur.merges || 0) + 1; if (l.evolve) cur.evolves = (cur.evolves || 0) + 1; } else cc(l.card).played++; } });
         s.log = []; s.fx = [];
         continue;
       }
@@ -329,6 +329,7 @@ BP.Sim = (function () {
       runLost: wl.length ? { avg: avg(wl), p10: wl[Math.floor(wl.length * 0.1)], p90: wl[Math.floor(wl.length * 0.9)] } : null,
       turnsPerFight: avg(allF.map((f) => f.turns)),
       mergesPerFight: avg(allF.map((f) => f.merges || 0)),
+      evolvesPerFight: avg(allF.map((f) => f.evolves || 0)),
       deathsPerRun: avg(runs.map((r) => r.fights.reduce((a, f) => a + f.deaths, 0))),
       fights: per, cards,
     };

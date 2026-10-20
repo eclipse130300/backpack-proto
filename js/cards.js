@@ -4,7 +4,7 @@ window.BP = window.BP || {};
 BP.Cards = (function () {
   const TARGET_LABEL = { enemy: "враг", cell: "клетка", self: "себя", hero: "себя или союзника", ally: "союзник", none: "" };
   const ATTACK_LABEL = { melee: "Мили", ranged: "Дальний", aoe: "Массовая" };
-  const AREA_LABEL = { adjacent: "по клетке и всем соседям", row: "по всему ряду", line: "насквозь (цель и враг за ней; у края поля — рикошет в соседнюю колонку)" };
+  const AREA_LABEL = { adjacent: "по клетке и всем соседям", row: "по всему ряду", all: "по всем врагам", withCover: "по цели и тому, кто её прикрывает", line: "насквозь (цель и враг за ней; у края поля — рикошет в соседнюю колонку)" };
   // card.shapeName кладёт engine.makeCard из config.shapes
   function areaLabel(card) {
     if (card.area === "shape") return card.shapeName ? "по фигуре: " + card.shapeName : "";
@@ -23,6 +23,8 @@ BP.Cards = (function () {
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
         case "blockSelf": parts.push(`себе ${e.amount} блока`); break;
         case "blockHero": parts.push(`отдавшему дар ${e.amount} блока`); break;
+        case "pull": parts.push("притянуть врага из заднего ряда вперёд (впереди кто-то есть — меняются местами)"); break;
+        case "blockPartyPct": parts.push(`всем героям блок ${Math.round(e.pct * 100)}% урона`); break;
         case "push": parts.push(`${card.target === "cell" ? "сначала толкнуть врага в клетке прицела" : "толкнуть"}${card.pushDist > 1 ? ` на ${card.pushDist} клетки` : ""} (выбор стороны)`); break;
         case "sparks": parts.push(`${e.count} искры по ${e.amount} в случайных соседних врагов (не в цель)`); break;
         case "stun": parts.push("оглушить (пропустит действие)"); break;
@@ -35,6 +37,7 @@ BP.Cards = (function () {
         case "damageAllEnemies": parts.push(`всем врагам ${e.amount} урона`); break;
       }
     });
+    if (BP.Evolve) parts.push(...BP.Evolve.textExtra(card)); // эволюции и Рывок (js/evolve.js)
     if (BP.Gifts) parts.push(...BP.Gifts.textExtra(card)); // взрыв / цепь / повтор / пробой от даров (js/gifts.js)
     let t = parts.join(", ");
     t = t.charAt(0).toUpperCase() + t.slice(1);
@@ -77,7 +80,7 @@ BP.Cards = (function () {
       case "enemy": {
         const e = state.enemies.find((x) => x.uid === t.enemy && x.alive);
         if (!e) return "Нужна цель-враг";
-        if (card.attack === "melee" && !isExposed(state, e)) return "Мили бьёт только открытых врагов: этого прикрывают спереди";
+        if (card.attack === "melee" && !card.ignoreCover && !isExposed(state, e)) return "Мили бьёт только открытых врагов: этого прикрывают спереди";
         if (has(card, "push") && (t.dir === undefined || t.dir === null)) return "NEED_DIR";
         return null;
       }
@@ -128,6 +131,8 @@ BP.Cards = (function () {
     }
     if (card.area === "adjacent") cells = cells.concat(BP.Hex.neighbors(c.col, c.row, r.cols, r.rows));
     if (card.area === "row") { cells = []; for (let i = 0; i < r.cols; i++) cells.push({ col: i, row: c.row }); }
+    if (card.area === "all") { cells = []; for (let i = 0; i < r.cols; i++) for (let j = 0; j < r.rows; j++) cells.push({ col: i, row: j }); }
+    if (card.area === "withCover") cells = cells.concat(BP.Hex.frontCells(c.col, c.row)); // Прорыв: цель и тот, кто её прикрывает
     if (card.area === "line") cells = cells.concat(lineCells(state, hero, c));
     return cells;
   }
@@ -198,7 +203,9 @@ BP.Cards = (function () {
         const mult = weaponCrit || cond ? rules.critMultiplier : 1;
         const exec = BP.Gifts ? BP.Gifts.executeMult(card, e) : 1; // дар «Добивание»
         const zone = targets[k].f !== 1; // клетка Взрыва
-        hits.push({ enemy: e.uid, amount: areaHits[k].amount * mult * exec, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "",
+        let amount = areaHits[k].amount * mult * exec * (card.mult || 1); // mult — эволюции (Палач, Цепной крюк)
+        if (card.finisher) amount = e.hp * 2 <= e.maxHp ? Math.max(amount, e.hp + e.block) : amount * 2; // Смертельный выстрел
+        hits.push({ enemy: e.uid, amount, nb: !!card.ignoreBlock, crit: mult > 1, critReason: weaponCrit ? "оружие" : cond ? "условный" : "",
           src: zone ? "blast" : "card", step: zone && BP.Gifts ? BP.Gifts.stepOf(card, "blast") : 0 });
       });
     }
@@ -237,6 +244,7 @@ BP.Cards = (function () {
   // ---------- Мердж ----------
   function canMerge(state, src, dst) {
     const m = state.config.tests.merge;
+    if (BP.Evolve && BP.Evolve.can(state, src, dst)) return true; // эволюция (js/evolve.js) — вместо обычного мерджа
     if (m.mode === "gift") return BP.Gifts.canMerge(state, src, dst); // дары — js/gifts.js
     const types = (c) => c.effects.map((e) => (e.type === "blockSelf" ? "block" : e.type));
     const d = types(dst);
@@ -247,6 +255,7 @@ BP.Cards = (function () {
 
   function mergeInto(state, src, dst, giverId) {
     const m = state.config.tests.merge;
+    if (BP.Evolve && BP.Evolve.can(state, src, dst)) return BP.Evolve.apply(state, src, dst, giverId);
     if (m.mode === "gift") return BP.Gifts.mergeInto(state, src, dst, giverId);
     let changed = false;
     const srcDmg = src.effects.find((e) => e.type === "damage");

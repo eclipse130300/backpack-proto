@@ -252,5 +252,5 @@ BP.Gifts = (function () {
     };
   }
 
-  return { isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf };
+  return { isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
 })();

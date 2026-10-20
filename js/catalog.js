@@ -37,6 +37,11 @@ BP.Catalog = (function () {
       let c;
       try { c = BP.Engine.makeCard(st, id); } catch (e) { c = Object.assign({ id, name: id, text: "Ошибка в карте: " + e.message, effects: [] }, cfg.cards[id]); }
       c.src = src[id] || [];
+      if (c.evolved) { // эволюция (merge-3): стоимость — как у карты, из которой она получается; урон складывается при эволюции
+        const from = Object.keys(cfg.cards).find((k) => cfg.cards[k].evolve === id);
+        c.cost = from ? cfg.cards[from].cost : "?";
+        c.text = (c.text || "").replace(/^0 урона/, "Урон двух карт");
+      }
       c.kind = BP.Cards.kind(c);
       return c;
     });
@@ -58,13 +63,15 @@ BP.Catalog = (function () {
       const heroes = cfg.heroes.filter((h) => (h.weapons || []).includes(wid)).map((h) => h.name);
       add(w.weakCard, { type: "filler", label: "добивка: " + w.name, n: 0, heroes });
     });
+    // эволюции (merge-3): получаются только эволюцией карты с полем evolve
+    Object.entries(cfg.cards).forEach(([cid, c]) => { if (c.evolve && cfg.cards[c.evolve]) add(c.evolve, { type: "evolved", label: "эволюция: " + c.name, n: 0, heroes: [] }); });
     if (cfg.rules.fillerCard && !map[cfg.rules.fillerCard]) add(cfg.rules.fillerCard, { type: "filler", label: "добивка колоды", n: 0, heroes: [] });
     return map;
   }
 
   function srcText(c) {
     if (!c.src.length) return "не в колодах";
-    return c.src.map((s) => s.type === "filler" ? s.label : s.type === "special" ? "особая" : s.type === "quest" ? "награда квеста" : `${s.label}${s.n > 1 ? " ×" + s.n : ""}`).join(", ");
+    return c.src.map((s) => s.type === "filler" ? s.label : s.type === "special" ? "особая" : s.type === "quest" ? "награда квеста" : s.type === "evolved" ? s.label : `${s.label}${s.n > 1 ? " ×" + s.n : ""}`).join(", ");
   }
 
   // Простая «сила» карты: урон / блок и сколько это на 1 энергию
@@ -95,6 +102,7 @@ BP.Catalog = (function () {
       });
       out.push({ key: "hero", title: "Кооп-карты героев", sub: "доп. карты сверх оружия", cards: cards.filter((c) => c.src.some((s) => s.type === "hero")) });
       out.push({ key: "quest", title: "Награды квеста боя", sub: "одноразовые, получает герой, выполнивший квест", cards: cards.filter((c) => c.src.some((s) => s.type === "quest")) });
+      out.push({ key: "evolved", title: "Эволюции", sub: "две мерджнутые эволюционные карты разных героев: перетащи одну на другую — та, на которую тащили, эволюционирует", cards: cards.filter((c) => c.src.some((s) => s.type === "evolved")) });
       out.push({ key: "filler", title: "Добивка колоды", sub: `слабые удары оружия, до ${cfg.rules.minDeck} карт`, cards: cards.filter((c) => c.src.some((s) => s.type === "filler")) });
       out.push({ key: "none", title: "Не в колодах", sub: "есть в конфиге, но ни у кого не лежит", cards: cards.filter((c) => !c.src.length) });
     } else if (ui.group === "type") {
@@ -114,8 +122,8 @@ BP.Catalog = (function () {
     const r = sim && sim.cards[c.id];
     const pill = v ? `<span class="pill v-${v}" title="Боты играли эту карту в ${Math.round(r.playRate * 100)}% случаев, когда она была в руке">${Math.round(r.playRate * 100)}%</span>` : "";
     return `<div class="ctile${ui.open === c.id ? " open" : ""}" data-card="${esc(c.id)}">
-      <div class="card readonly k-${c.kind}" style="--kc:${kc}">
-        ${BP.Icons.costHtml(c)}${BP.Icons.statsHtml(c)}
+      <div class="card readonly k-${c.kind}${c.evolve ? " evo" : ""}${c.evolved ? " evolved" : ""}" style="--kc:${kc}">
+        ${BP.Icons.costHtml(c)}${c.evolved ? "" : BP.Icons.statsHtml(c)}
         ${c.isNew ? `<div class="cnew">🆕</div>` : ""}
         <div class="cart">${BP.Icons.svg(c.icon)}${c.area === "shape" ? BP.Icons.shapeSvg(c.shapeSteps, 0) : ""}</div>
         <div class="cname">${esc(c.name)}</div>

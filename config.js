@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 12,
+  version: 13,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -67,7 +67,19 @@ window.GAME_CONFIG = {
 
     // Фигуры массовок без поворота (17.10): у каждой массовки своя фигура (fixedShape у карты), ПКМ не крутит.
     // Фигуры из 3+ клеток симметричные и «смотрят» на героев. false — старый режим: фигуры shape, поворот ПКМ.
-    fixedShapes: { enabled: true }
+    fixedShapes: { enabled: true },
+
+    // Эволюция (merge-3, 20.10, эксперимент). Карта с полем evolve (эволюционная, золотая рамка) — это все карты за 2+ энергии.
+    // Две эволюционные карты РАЗНЫХ героев, обе уже мерджнутые (★), светятся фиолетовым. Перетащил одну на другую —
+    // та, НА КОТОРУЮ тащили, превращается в свою эволюцию (cards.<evolve>): урон обеих складывается, дары переходят.
+    // Эволюция живёт до конца боя. Отданная карта уходит в сброс чистой. Подробно — js/evolve.js.
+    evolution: { enabled: true },
+
+    // Подкрепления (merge-3, 20.10, эксперимент): у боя есть резерв врагов (encounters.*.reserve).
+    // Каждые every ходов выходят perWave врагов из резерва: сначала на свободные клетки заднего ряда, потом переднего.
+    // За ход до выхода клетки помечены. Поле пустое, а резерв нет — следующая волна выходит сразу.
+    // Бой выигран, когда пусто и на поле, и в резерве. Подробно — js/reinforce.js.
+    reinforcements: { enabled: true, every: 2, perWave: 2 }
   },
 
   // ---------- Дары (мердж в режиме tests.merge.mode = "gift"), версия merge-2 (19.10) ----------
@@ -108,6 +120,9 @@ window.GAME_CONFIG = {
     tri3l:   { name: "треугольник из 3 клеток", steps: [[], [2], [1]] },
     diamond4:{ name: "ромб из 4 клеток", steps: [[], [2], [0], [1]] },      // уголок + клетка за прицелом
     wave4:   { name: "волна из 4 клеток поперёк", steps: [[], [2], [0], [0, 5]] },
+    // merge-3 (20.10): фигуры смотрят от героя вглубь. Каталог на будущее (копьё, вилы…) — в GDD «На будущее».
+    strikeR: { name: "удар справа: 2 клетки вглубь + 1 справа", steps: [[], [1], [0]] },
+    strikeL: { name: "удар слева: 2 клетки вглубь + 1 слева", steps: [[], [1], [2]] },
     arc5:    { name: "широкий уголок из 5 клеток", steps: [[], [2], [2, 2], [0], [0, 0]] }
   },
 
@@ -122,6 +137,8 @@ window.GAME_CONFIG = {
   // fixedShape: id фигуры из shapes, когда включён tests.fixedShapes (не крутится)
   // icon:   картинка на карте (см. js/icons.js). Цвет картинки — по типу карты: мили красный, дальний зелёный,
   //         массовка оранжевый, блок синий, кооп золотой, особые фиолетовый, слабый удар серый.
+  // evolve: id эволюции карты (merge-3, tests.evolution): карта эволюционная — золотая рамка
+  // ignoreCover: true — мили бьёт и закрытого врага (Рывок)
   // gift:   дар карты для мерджа в режиме «дар» (id из gifts выше): что получит карта союзника, если отдать ему эту карту
   // weak:   true — слабый удар (серая картинка); у каждого оружия свой (weapons.*.weakCard)
   // effects: damage {amount, hits} | block {amount} | push | stun | taunt | cleanse
@@ -129,6 +146,7 @@ window.GAME_CONFIG = {
   //                 (не в саму цель; всегда ровно amount: без крита, мерджа и проклятия; нет соседей — искры пропадают)
   //          blockSelf {amount} (блок себе) | draw {amount} | energy {amount} (цели-герою или себе) | sharedPool
   //          blockHero {amount, hero} — блок конкретному герою (так работает дар «Прикрытие»)
+  //          pull — притянуть врага из заднего ряда вперёд, впереди кто-то есть — меняются местами (Притяжение)
   //          blockParty {amount} (блок всем героям) | damageAllEnemies {amount} (урон всем врагам, без крита)
   // isNew:  true — значок 🆕 на странице «Карты» (cards.html): карта добавлена по заявке и ещё тестируется
   // added:  "17.10.2026" — когда добавлена (видно в подробностях карты на странице «Карты»)
@@ -141,9 +159,11 @@ window.GAME_CONFIG = {
 
     // Меч
     cleave:        { name: "Рубящий удар",      cost: 1, gift: "execute", icon: "slash",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 6 }] },
-    sweep:         { name: "Размах",            cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "arc3", effects: [{ type: "damage", amount: 8 }] },
+    sweep:         { name: "Размах",            cost: 2, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "line2", fixedShape: "arc3", evolve: "blade_storm", effects: [{ type: "damage", amount: 8 }] },
     great_sweep:   { name: "Мощный размах",     cost: 3, gift: "blast", icon: "sweep",  target: "cell",  attack: "aoe", area: "shape", shape: "arc5", fixedShape: "wave4", effects: [{ type: "damage", amount: 5 }], isNew: true, added: "17.10.2026" },
-    crush:         { name: "Сокрушение",        cost: 2, gift: "power", icon: "crush",  target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 13 }] },
+    // merge-3 (20.10): Мощный размах убран из колоды меча (массовок меньше), его место занял Рывок
+    rush:          { name: "Рывок",             cost: 2, gift: "power", icon: "rush",   target: "enemy", attack: "melee", ignoreCover: true, evolve: "breakthrough", effects: [{ type: "damage", amount: 10 }], isNew: true, added: "20.10.2026" },
+    crush:         { name: "Сокрушение",        cost: 2, gift: "power", icon: "crush",  target: "enemy", attack: "melee", evolve: "executioner", effects: [{ type: "damage", amount: 13 }] },
 
     // Щит
     shield_bash:   { name: "Удар щитом",        cost: 1, gift: "push", icon: "bash",   target: "enemy", attack: "melee", effects: [{ type: "damage", amount: 4 }, { type: "push" }] },
@@ -151,17 +171,40 @@ window.GAME_CONFIG = {
 
     // Посох
     bolt:          { name: "Разряд",            cost: 1, gift: "chain", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
-    fireball:      { name: "Огненный шар",      cost: 3, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", effects: [{ type: "damage", amount: 6 }] },
-    stun_bolt:     { name: "Оглушающий разряд", cost: 2, gift: "power", icon: "stun",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
-    flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "line3r", effects: [{ type: "damage", amount: 6 }] },
+    fireball:      { name: "Огненный шар",      cost: 3, gift: "blast", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "diamond4", evolve: "meteor", effects: [{ type: "damage", amount: 6 }] },
+    stun_bolt:     { name: "Оглушающий разряд", cost: 2, gift: "power", icon: "stun",   target: "enemy", attack: "ranged", evolve: "thunderer", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
+    flame_wall:    { name: "Стена огня",        cost: 2, gift: "blast", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "line3", fixedShape: "strikeL", evolve: "fire_rampart", effects: [{ type: "damage", amount: 6 }] },
+    // merge-3 (20.10): Огненное кольцо убрано из колоды посоха (массовок меньше), его место заняло Притяжение
+    pull:          { name: "Притяжение",        cost: 2, gift: "push", icon: "pull",   target: "enemy", attack: "ranged", evolve: "chain_hook", effects: [{ type: "damage", amount: 7 }, { type: "pull" }], isNew: true, added: "20.10.2026" },
     nova:          { name: "Огненное кольцо",   cost: 2, gift: "blast", icon: "nova",   target: "cell",  attack: "aoe", area: "shape", shape: "tri", fixedShape: "tri3l", effects: [{ type: "damage", amount: 6 }] },
 
     // Лук
     double_shot:   { name: "Двойной выстрел",   cost: 1, gift: "repeat", icon: "arrows", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3, hits: 2 }] },
-    pierce_arrow:  { name: "Пробивающая стрела", cost: 2, gift: "pierce", icon: "pierce", target: "enemy", attack: "ranged", area: "line", effects: [{ type: "damage", amount: 7 }] },
+    pierce_arrow:  { name: "Пробивающая стрела", cost: 2, gift: "pierce", icon: "pierce", target: "enemy", attack: "ranged", area: "line", evolve: "light_spear", effects: [{ type: "damage", amount: 7 }] },
     knock_arrow:   { name: "Отбрасывающая стрела", cost: 1, gift: "push", icon: "knock", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }, { type: "push" }] },
-    arrow_rain:    { name: "Град стрел",        cost: 2, gift: "blast", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "line3l", effects: [{ type: "damage", amount: 6 }] },
-    aimed_shot:    { name: "Прицельный выстрел", cost: 2, gift: "power", icon: "aim",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 10 }] },
+    arrow_rain:    { name: "Град стрел",        cost: 2, gift: "blast", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "fan", fixedShape: "strikeR", evolve: "arrow_storm", effects: [{ type: "damage", amount: 6 }] },
+    aimed_shot:    { name: "Прицельный выстрел", cost: 2, gift: "power", icon: "aim",   target: "enemy", attack: "ranged", evolve: "deadshot", effects: [{ type: "damage", amount: 10 }] },
+
+    // ---------- Эволюции (merge-3, 20.10, эксперимент — tests.evolution) ----------
+    // evolved: true — получается только эволюцией, в колоды не кладётся. Стоимость и урон берутся при эволюции:
+    // стоимость = стоимость карты, которая эволюционировала; урон = урон обеих карт (без даров) + их прибавки,
+    // все дары обеих карт и родной дар отданной переходят. amount ниже — 0, он заменяется.
+    // Свойства: mult — множитель урона | returnOnKill — убил цель → карта возвращается в руку
+    //   ignoreCover — мили бьёт и закрытого врага | ignoreBlock — урон сквозь блок врага
+    //   finisher — враг с ≤50% ХП погибает, иначе урон ×2
+    // area: "row" — весь ряд клетки прицела | "all" — все враги | "withCover" — цель и тот, кто её прикрывает
+    // effects: pull — притянуть врага из заднего ряда вперёд (впереди кто-то есть — меняются местами)
+    //          blockPartyPct {pct} — блок всем героям = pct от урона карты
+    blade_storm:   { name: "Вихрь клинков",     evolved: true, icon: "sweep",  target: "cell",  attack: "aoe", area: "row", effects: [{ type: "damage", amount: 0 }] },
+    executioner:   { name: "Палач",             evolved: true, icon: "crush",  target: "enemy", attack: "melee", mult: 2, returnOnKill: true, effects: [{ type: "damage", amount: 0 }] },
+    breakthrough:  { name: "Прорыв",            evolved: true, icon: "rush",   target: "enemy", attack: "melee", ignoreCover: true, area: "withCover", effects: [{ type: "damage", amount: 0 }] },
+    meteor:        { name: "Метеоритный дождь", evolved: true, icon: "fire",   target: "cell",  attack: "aoe", area: "all", effects: [{ type: "damage", amount: 0 }] },
+    fire_rampart:  { name: "Огненный вал",      evolved: true, icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "strikeL", fixedShape: "strikeL", effects: [{ type: "damage", amount: 0 }, { type: "blockPartyPct", pct: 0.5 }] },
+    thunderer:     { name: "Громовержец",       evolved: true, icon: "stun",   target: "enemy", attack: "ranged", area: "row", effects: [{ type: "damage", amount: 0 }, { type: "stun" }] },
+    chain_hook:    { name: "Цепной крюк",       evolved: true, icon: "pull",   target: "enemy", attack: "ranged", mult: 2, ignoreBlock: true, effects: [{ type: "damage", amount: 0 }, { type: "pull" }] },
+    arrow_storm:   { name: "Ливень стрел",      evolved: true, icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "strikeR", fixedShape: "strikeR", effects: [{ type: "damage", amount: 0, hits: 2 }] },
+    light_spear:   { name: "Копьё света",       evolved: true, icon: "pierce", target: "enemy", attack: "ranged", area: "line", ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
+    deadshot:      { name: "Смертельный выстрел", evolved: true, icon: "aim",  target: "enemy", attack: "ranged", finisher: true, effects: [{ type: "damage", amount: 0 }] },
 
     // Кооп-сейвы
     cover:         { name: "Прикрыть",          cost: 1, gift: "cover", icon: "cover",   target: "hero",  effects: [{ type: "block", amount: 6 }] },
@@ -188,9 +231,9 @@ window.GAME_CONFIG = {
   // У щита слабого удара нет (щиты разберём позже).
   // Пока щит только у милишника (щиты разберём позже).
   weapons: {
-    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, weakCard: "weak_strike", cards: { cleave: 2, sweep: 1, great_sweep: 1, crush: 1 } },
+    sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, weakCard: "weak_strike", cards: { cleave: 2, sweep: 1, rush: 1, crush: 1 } },
     shield: { name: "Щит",   kind: "shield", icon: "w_shield", critEvery: 0, cards: { shield_bash: 1, shield_wall: 1 } },
-    staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, weakCard: "sparks", cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, nova: 1 } },
+    staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, weakCard: "sparks", cards: { bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, pull: 1 } },
     bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, weakCard: "weak_shot", cards: { double_shot: 2, pierce_arrow: 1, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1 } }
   },
 
@@ -218,15 +261,18 @@ window.GAME_CONFIG = {
   //       Громила — танк с блоком и ударом по всей пати; Падший жрец — минибосс, самый опасный.
   // Баланс прототипа (17.10, бот medium, цель 70% побед): ХП обычных врагов +10% (Упырь 50→55, Гончая 30→33, Культист 34→37, Лучник 28→31, Громила 80→88).
   enemies: {
-    ghoul:   { name: "Упырь",        hp: 55, melee: true,  actions: [{ type: "attack", damage: 8 }, { type: "attack", damage: 4, targets: 2 }] },
-    hound:   { name: "Гончая",       hp: 33, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 7 }] },
-    cultist: { name: "Культист",     hp: 37, melee: false, actions: [{ type: "curse", amount: 2, turns: 2 }, { type: "attack", damage: 9 }] },
-    archer:  { name: "Костяной лучник", hp: 31, melee: false, actions: [{ type: "attack", damage: 3, targets: 3 }, { type: "attack", damage: 6 }] },
-    brute:   { name: "Громила",      hp: 88, melee: true,  actions: [{ type: "block", amount: 8 }, { type: "attack", damage: 9, targets: 3 }] },
+    // 20.10 (ветка merge-3, бот medium): бои стали длиннее из-за подкреплений (8 врагов за бой) — урон врагов ×0.65
+    // (Упырь 8/4 → 5/3, Гончая 5/7 → 3/5, Культист 9 → 6, Лучник 3/6 → 2/4, Громила 9 → 6); Жрец — ниже
+    ghoul:   { name: "Упырь",        hp: 55, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 3, targets: 2 }] },
+    hound:   { name: "Гончая",       hp: 33, melee: true,  actions: [{ type: "attack", damage: 3 }, { type: "attack", damage: 5 }] },
+    cultist: { name: "Культист",     hp: 37, melee: false, actions: [{ type: "curse", amount: 2, turns: 2 }, { type: "attack", damage: 6 }] },
+    archer:  { name: "Костяной лучник", hp: 31, melee: false, actions: [{ type: "attack", damage: 2, targets: 3 }, { type: "attack", damage: 4 }] },
+    brute:   { name: "Громила",      hp: 88, melee: true,  actions: [{ type: "block", amount: 8 }, { type: "attack", damage: 6, targets: 3 }] },
     // баланс 18.10 (ветка merge, бот medium): Жрец ХП 150→110, удары 17→14 и 10×2→8×2 — с мерджем medium выигрывал 30%;
     // 18.10 13:45 после «прибавка в базовый урон» мердж стал сильнее (79%) — ХП 110→120, удары вернули 17 и 10×2
     // 19.10 (ветка merge-2, бот medium): после упрощения даров medium выигрывал 55% — удары 17→15 и 10×2→9×2 (≈70%)
-    priest:  { name: "Падший жрец",  hp: 120, melee: false, actions: [{ type: "attack", damage: 15 }, { type: "attack", damage: 9, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
+    // 20.10 (ветка merge-3, подкрепления): ХП 120→125, удары 15→12 и 9×2→7×2 — medium ≈70% (2×60 забегов: 73% и 67%), бой ≈8.4 хода
+    priest:  { name: "Падший жрец",  hp: 125, melee: false, actions: [{ type: "attack", damage: 12 }, { type: "attack", damage: 7, targets: 2 }, { type: "curse", amount: 3, turns: 2, targets: 3 }] }
   },
 
   // ---------- Квест боя (tests.fightQuest) ----------
@@ -263,10 +309,15 @@ window.GAME_CONFIG = {
   //   2 «Стая» — 4 гончие в ряд + прикрытый лучник: бой для массовых атак;
   //   3 «Громила» — танк с блоком (распылять урон невыгодно) и два дальника по краям;
   //   4 «Минибосс: Жрец» — жрец в заднем ряду за упырём (рядом второй упырь), сбоку лучник.
+  // reserve — подкрепления (tests.reinforcements): типы врагов по порядку выхода, по perWave за волну.
   encounters: [
-    { name: "Трупоеды",          enemies: [{ type: "ghoul", col: 1, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 2, row: 1 }, { type: "archer", col: 4, row: 1 }] },
-    { name: "Стая",              enemies: [{ type: "hound", col: 0, row: 0 }, { type: "hound", col: 2, row: 0 }, { type: "hound", col: 3, row: 0 }, { type: "hound", col: 5, row: 0 }, { type: "archer", col: 2, row: 1 }] },
-    { name: "Громила",           enemies: [{ type: "brute", col: 2, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 0, row: 1 }, { type: "archer", col: 5, row: 1 }] },
-    { name: "Минибосс: Жрец",    enemies: [{ type: "priest", col: 2, row: 1 }, { type: "ghoul", col: 2, row: 0 }, { type: "ghoul", col: 3, row: 0 }, { type: "archer", col: 5, row: 1 }] }
+    { name: "Трупоеды",          enemies: [{ type: "ghoul", col: 1, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 2, row: 1 }, { type: "archer", col: 4, row: 1 }],
+      reserve: ["hound", "hound", "ghoul", "cultist", "hound", "ghoul", "hound", "hound"] },
+    { name: "Стая",              enemies: [{ type: "hound", col: 0, row: 0 }, { type: "hound", col: 2, row: 0 }, { type: "hound", col: 3, row: 0 }, { type: "hound", col: 5, row: 0 }, { type: "archer", col: 2, row: 1 }],
+      reserve: ["hound", "hound", "hound", "archer", "hound", "ghoul", "hound", "hound"] },
+    { name: "Громила",           enemies: [{ type: "brute", col: 2, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 0, row: 1 }, { type: "archer", col: 5, row: 1 }],
+      reserve: ["ghoul", "hound", "hound", "cultist", "hound", "ghoul", "hound", "hound"] },
+    { name: "Минибосс: Жрец",    enemies: [{ type: "priest", col: 2, row: 1 }, { type: "ghoul", col: 2, row: 0 }, { type: "ghoul", col: 3, row: 0 }, { type: "archer", col: 5, row: 1 }],
+      reserve: ["hound", "hound", "ghoul", "cultist"] }
   ]
 };

@@ -59,7 +59,7 @@ BP.UIGame = (function () {
   }
 
   function renderField(state) {
-    const g = geometry(state), lanes = corridors(state);
+    const g = geometry(state), lanes = corridors(state), rf = BP.Reinforce.info(state);
     let html = `<div class="field" style="width:${g.width}px;height:${g.height}px;--hw:${g.hw}px">`;
     for (let row = g.rows - 1; row >= 0; row--) {
       for (let col = 0; col < g.cols; col++) {
@@ -79,12 +79,16 @@ BP.UIGame = (function () {
             <div class="ehp">❤ ${e.hp}/${e.maxHp}${e.block ? ` <span class="eblock">🛡${e.block}</span>` : ""}</div>${intentHtml(state, e)}<div class="badges">${badges}</div></div>
             <div class="preview"></div></div>`;
         } else {
-          html += `<div class="hex row${row}${lane}" data-drop="cell" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
-            <div class="inner"><span class="rowlabel">${row === 0 ? "передний" : "задний"}</span></div><div class="preview"></div></div>`;
+          // подкрепление (js/reinforce.js): клетка, куда выйдет враг в начале следующего хода
+          const mk = rf && rf.marks.find((m) => m.col === col && m.row === row);
+          const label = mk ? `<span class="incoming-mark">⚠ ${esc((state.config.enemies[mk.type] || {}).name || mk.type)}</span>` : `<span class="rowlabel">${row === 0 ? "передний" : "задний"}</span>`;
+          html += `<div class="hex row${row}${lane}${mk ? " incoming" : ""}" data-drop="cell" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
+            <div class="inner">${label}</div><div class="preview"></div></div>`;
         }
       }
     }
     // Квест боя: «?» над полем. Серый — не выполнен, золотой — выполнен (как в WoW).
+    if (rf) html += `<div class="reinf" title="Подкрепление врагов: столько ещё в резерве; выходят на помеченные ⚠ клетки">👹 Подкрепление: ${rf.left} · ${rf.inTurns === 1 ? "в начале след. хода" : `через ${rf.inTurns} хода`}</div>`;
     if (state.quest) html += `<div class="fquest ${state.quest.done ? "done" : ""}" data-tip="fquest" style="left:${g.width / 2}px">?</div>`;
     return html + `</div>`;
   }
@@ -149,7 +153,9 @@ BP.UIGame = (function () {
       owner = c.shared ? `<div class="cowner shared">общая</div>` : `<div class="cowner hc${oi}">${esc((state.heroes[oi] || hero).name)}</div>`;
     }
     const mergeOk = !readonly && state.config.tests.merge.enabled && BP.Cards.mergeCost(state, hero, c) <= avail;
-    const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", !readonly && c.cost > avail ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : ""].join(" ");
+    const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", !readonly && c.cost > avail ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : "",
+      // эволюция (js/evolve.js): золотая рамка — эволюционная, фиолетовое свечение — можно эволюционировать сейчас
+      BP.Evolve.evolvable(state, c) ? "evo" : "", hero.alive && BP.Evolve.ready(state, hero, c) ? "evo-ready" : "", c.evolvedFrom ? "evolved" : ""].join(" ");
     const needsBtn = !readonly && ui.selected === c.uid && (c.target === "none" || c.target === "self");
     const ci = BP.Cards.critInfo(hero, c);
     const crit = ci ? `<div class="crit ${ci.willCrit ? "on" : ""}">${ci.willCrit ? "💥 КРИТ" : `💥 через ${ci.left}`}</div>` : "";

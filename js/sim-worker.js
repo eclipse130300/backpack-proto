@@ -1,7 +1,7 @@
 // Фоновый поток симулятора для страницы «Карты»: считает забеги, пока страница остаётся отзывчивой.
 // Получает {cfg, bot, runs}, присылает {type:"progress", done} после каждого забега и {type:"done", summary} в конце.
 self.window = self;
-importScripts("hex.js", "cards.js", "gifts.js", "weak.js", "deck.js", "engine.js", "quests.js", "sim.js");
+importScripts("hex.js", "cards.js", "gifts.js", "evolve.js", "reinforce.js", "weak.js", "deck.js", "engine.js", "quests.js", "sim.js");
 
 self.onmessage = (ev) => {
   const { cfg, bot, runs } = ev.data;
