@@ -142,6 +142,7 @@ BP.UI = (function () {
     if (nl && logAtBottom) nl.scrollTop = nl.scrollHeight;
     BP.Drag.refresh();
     BP.FX.afterRender(s);
+    BP.CardTip.refresh();
     BP.UIQuest.afterRender(s);
   }
 
@@ -240,6 +241,7 @@ BP.UI = (function () {
     BP.Session.onError((m) => toast(m, "bad"));
     BP.Drag.init();
     BP.FX.init();
+    BP.CardTip.init(); // подсказки карт в руке (js/ui-cardtip.js)
     render();
   }
 

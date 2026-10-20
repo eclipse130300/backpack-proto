@@ -137,11 +137,6 @@ BP.UIGame = (function () {
     return BP.Icons.shapeSvg(c.area === "shape" ? c.shapeSteps : [[]], 0, zone);
   }
 
-  // Плашки полученных даров: иконка + число, цветом дара
-  function badgesHtml(state, c) {
-    if (!BP.Gifts.isOn(state) || !c.gifts || !c.gifts.length) return "";
-    return `<div class="cbadges">${BP.Gifts.badges(state, c).map((b) => `<span class="cbadge" style="--bc:${b.color}" title="${esc(b.name)}">${b.icon}${b.value ? `<b>${esc(b.value)}</b>` : ""}</span>`).join("")}</div>`;
-  }
 
   function cardHtml(state, hero, c, ui, readonly, ml) {
     const avail = state.pool ? state.pool.amount : hero.energy;
@@ -164,10 +159,9 @@ BP.UIGame = (function () {
       ${BP.Icons.costHtml(c)}${BP.Icons.statsHtml(c)}${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
       <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${shapeMini(c)}${crit}</div>
       <div class="cname">${esc(c.name)}</div>
-      ${badgesHtml(state, c)}
-      <div class="ctext">${esc(shortText(state, c))}</div>
+      ${BP.CardTip.faceHtml(state, hero, c)}
       ${c.merged ? `<div class="cmerged">★${c.merged > 1 ? c.merged : ""}</div>` : ""}
-      ${BP.Gifts.isOn(state) && c.gift ? `<div class="cgift">🎁 ${esc(BP.Gifts.labels(state, c).ownIcon)} ${esc(BP.Gifts.labels(state, c).own)}</div>` : ""}
+      ${BP.Gifts.isOn(state) && c.gift ? `<div class="cgift">🎁${esc(BP.Gifts.labels(state, c).ownIcon)}</div>` : ""}
       ${needsBtn ? `<button class="play-btn primary" data-act="play-self">▶ Сыграть</button>` : ""}
     </div>`;
   }

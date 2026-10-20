@@ -177,6 +177,7 @@ BP.FX = (function () {
   function tipHtml(s, el) {
     const kind = el.dataset.tip;
     if (kind === "card") {
+      if (el.closest(".hand")) return null; // карта в руке — своя подсказка иконками (js/ui-cardtip.js)
       const h = s.heroes.find((x) => x.id === el.dataset.hero), c = h && h.hand.find((x) => x.uid === el.dataset.card);
       if (!c) return null;
       const ci = BP.Cards.critInfo(h, c);

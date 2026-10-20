@@ -90,16 +90,16 @@ window.GAME_CONFIG = {
   // (у массовки — во всю родную фигуру). Подробно — js/gifts.js.
   gifts: {
     // color — цвет фона карты с этим даром и плашки дара; icon — значок на плашке
-    power:  { name: "Мощь",       icon: "💪", color: "#d83a3a", text: "урон ×1.5 (две Мощи ×2, три ×2.5)" },
-    blast:  { name: "Взрыв",      icon: "💣", color: "#e8822a", text: "добавляет карте фигуру своей массовки (фигуры складываются по клетке прицела); новые клетки бьют 50% урона, каждый следующий Взрыв +50%" },
-    pierce: { name: "Пробой",     icon: "➹", color: "#e0c040", text: "враг прямо за каждой целью получает ещё 50% урона (каждый Пробой +50%)" },
-    repeat: { name: "Повтор",     icon: "🔁", color: "#4cb35a", text: "ещё удар по тем же целям на 50% (каждый Повтор +50%)" },
-    push:   { name: "Толчок",     icon: "⇧", color: "#9a6a3e", text: "толкнуть цель (у массовки — врага в клетке прицела, до удара); каждый следующий толчок — +1 клетка" },
-    armor:  { name: "Броня",      icon: "🛡", color: "#4a78d8", text: "блок себе = 50% урона карты (у карты блока — блок ×1.5); каждая Броня +50%" },
-    cover:  { name: "Прикрытие",  icon: "🤝", color: "#4a78d8", text: "блок отдавшему дар = 50% урона карты (у карты блока — блок ×1.5); каждое +50%" },
+    power:  { name: "Мощь",       icon: "💪", color: "#d83a3a", text: "урон ×1.5 (дальше ×2, ×2.5)" },
+    blast:  { name: "Взрыв",      icon: "💣", color: "#e8822a", text: "добавляет карте фигуру своей массовки; новые клетки — 50% урона (дальше 100%, 150%)" },
+    pierce: { name: "Пробой",     icon: "➹", color: "#e0c040", text: "враг прямо за целью получает 50% урона (дальше 100%, 150%)" },
+    repeat: { name: "Повтор",     icon: "🔁", color: "#4cb35a", text: "ещё удар по тем же целям: 50% урона (дальше 100%, 150%)" },
+    push:   { name: "Толчок",     icon: "⇧", color: "#9a6a3e", text: "толкнуть цель на 1 клетку (дальше 2, 3); у массовки — врага в клетке прицела" },
+    armor:  { name: "Броня",      icon: "🛡", color: "#4a78d8", text: "блок себе = 50% урона карты (дальше 100%); у карты блока — блок ×1.5" },
+    cover:  { name: "Прикрытие",  icon: "🤝", color: "#4a78d8", text: "блок отдавшему дар = 50% урона карты (дальше 100%); у карты блока — блок ×1.5" },
     taunt:  { name: "Вызов",      icon: "📣", color: "#d4a94f", text: "цель атакует тебя (только один на карте)" },
-    execute:{ name: "Добивание",  icon: "💀", color: "#9a4ad8", text: "×2 урона по врагу, у которого ≤50% ХП (каждое ещё +1: ×3, ×4…)" },
-    chain:  { name: "Цепь",       icon: "⚡", color: "#48b8e0", text: "молния прыгает от цели на соседнего врага с наименьшим ХП, которого карта ещё не била. N цепей = N прыжков: первый N×50% урона, каждый следующий на 50% меньше (2 цепи: 100% → 50%)" }
+    execute:{ name: "Добивание",  icon: "💀", color: "#9a4ad8", text: "×2 урона по врагу с ≤50% ХП (дальше ×3, ×4)" },
+    chain:  { name: "Цепь",       icon: "🌩", color: "#48b8e0", text: "молния прыгает на соседнего врага с наименьшим ХП: 50% урона (2 цепи: 100% → 50%)" }
   },
 
   // ---------- Фигуры массовых атак ----------
@@ -189,22 +189,23 @@ window.GAME_CONFIG = {
     // evolved: true — получается только эволюцией, в колоды не кладётся. Стоимость и урон берутся при эволюции:
     // стоимость = стоимость карты, которая эволюционировала; урон = урон обеих карт (без даров) + их прибавки,
     // все дары обеих карт и родной дар отданной переходят. amount ниже — 0, он заменяется.
+    // special — особое свойство эволюции одной строкой (фиолетовым в подсказке карты)
     // Свойства: mult — множитель урона | returnOnKill — убил цель → карта возвращается в руку
     //   ignoreCover — мили бьёт и закрытого врага | ignoreBlock — урон сквозь блок врага
     //   finisher — враг с ≤50% ХП погибает, иначе урон ×2
     // area: "row" — весь ряд клетки прицела | "all" — все враги | "withCover" — цель и тот, кто её прикрывает
     // effects: pull — притянуть врага из заднего ряда вперёд (впереди кто-то есть — меняются местами)
     //          blockPartyPct {pct} — блок всем героям = pct от урона карты
-    blade_storm:   { name: "Вихрь клинков",     evolved: true, icon: "sweep",  target: "cell",  attack: "aoe", area: "row", effects: [{ type: "damage", amount: 0 }] },
-    executioner:   { name: "Палач",             evolved: true, icon: "crush",  target: "enemy", attack: "melee", mult: 2, returnOnKill: true, effects: [{ type: "damage", amount: 0 }] },
-    breakthrough:  { name: "Прорыв",            evolved: true, icon: "rush",   target: "enemy", attack: "melee", ignoreCover: true, area: "withCover", effects: [{ type: "damage", amount: 0 }] },
-    meteor:        { name: "Метеоритный дождь", evolved: true, icon: "fire",   target: "cell",  attack: "aoe", area: "all", effects: [{ type: "damage", amount: 0 }] },
-    fire_rampart:  { name: "Огненный вал",      evolved: true, icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "strikeL", fixedShape: "strikeL", effects: [{ type: "damage", amount: 0 }, { type: "blockPartyPct", pct: 0.5 }] },
-    thunderer:     { name: "Громовержец",       evolved: true, icon: "stun",   target: "enemy", attack: "ranged", area: "row", effects: [{ type: "damage", amount: 0 }, { type: "stun" }] },
-    chain_hook:    { name: "Цепной крюк",       evolved: true, icon: "pull",   target: "enemy", attack: "ranged", mult: 2, ignoreBlock: true, effects: [{ type: "damage", amount: 0 }, { type: "pull" }] },
-    arrow_storm:   { name: "Ливень стрел",      evolved: true, icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "strikeR", fixedShape: "strikeR", effects: [{ type: "damage", amount: 0, hits: 2 }] },
-    light_spear:   { name: "Копьё света",       evolved: true, icon: "pierce", target: "enemy", attack: "ranged", area: "line", ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
-    deadshot:      { name: "Смертельный выстрел", evolved: true, icon: "aim",  target: "enemy", attack: "ranged", finisher: true, effects: [{ type: "damage", amount: 0 }] },
+    blade_storm:   { name: "Вихрь клинков",     evolved: true, special: "бьёт весь ряд, в который целишься", icon: "sweep",  target: "cell",  attack: "aoe", area: "row", effects: [{ type: "damage", amount: 0 }] },
+    executioner:   { name: "Палач",             evolved: true, special: "урон ×2; убил цель — карта возвращается в руку", icon: "crush",  target: "enemy", attack: "melee", mult: 2, returnOnKill: true, effects: [{ type: "damage", amount: 0 }] },
+    breakthrough:  { name: "Прорыв",            evolved: true, special: "бьёт и закрытого врага, и того, кто его прикрывает", icon: "rush",   target: "enemy", attack: "melee", ignoreCover: true, area: "withCover", effects: [{ type: "damage", amount: 0 }] },
+    meteor:        { name: "Метеоритный дождь", evolved: true, special: "бьёт всех врагов на поле", icon: "fire",   target: "cell",  attack: "aoe", area: "all", effects: [{ type: "damage", amount: 0 }] },
+    fire_rampart:  { name: "Огненный вал",      evolved: true, special: "всем героям блок = 50% урона карты", icon: "flames", target: "cell",  attack: "aoe", area: "shape", shape: "strikeL", fixedShape: "strikeL", effects: [{ type: "damage", amount: 0 }, { type: "blockPartyPct", pct: 0.5 }] },
+    thunderer:     { name: "Громовержец",       evolved: true, special: "бьёт цель и весь её ряд, цель оглушена", icon: "stun",   target: "enemy", attack: "ranged", area: "row", effects: [{ type: "damage", amount: 0 }, { type: "stun" }] },
+    chain_hook:    { name: "Цепной крюк",       evolved: true, special: "притягивает врага из заднего ряда вперёд (впереди кто-то есть — меняются местами); урон ×2 сквозь блок", icon: "pull",   target: "enemy", attack: "ranged", mult: 2, ignoreBlock: true, effects: [{ type: "damage", amount: 0 }, { type: "pull" }] },
+    arrow_storm:   { name: "Ливень стрел",      evolved: true, special: "фигура бьёт дважды", icon: "rain",   target: "cell",  attack: "aoe", area: "shape", shape: "strikeR", fixedShape: "strikeR", effects: [{ type: "damage", amount: 0, hits: 2 }] },
+    light_spear:   { name: "Копьё света",       evolved: true, special: "бьёт цель и врага за ней, сквозь блок", icon: "pierce", target: "enemy", attack: "ranged", area: "line", ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
+    deadshot:      { name: "Смертельный выстрел", evolved: true, special: "враг с ≤50% ХП погибает, иначе урон ×2", icon: "aim",  target: "enemy", attack: "ranged", finisher: true, effects: [{ type: "damage", amount: 0 }] },
 
     // Кооп-сейвы
     cover:         { name: "Прикрыть",          cost: 1, gift: "cover", icon: "cover",   target: "hero",  effects: [{ type: "block", amount: 6 }] },
