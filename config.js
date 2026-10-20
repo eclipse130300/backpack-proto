@@ -313,8 +313,9 @@ window.GAME_CONFIG = {
     cultist: { name: "Культист",     hp: 28, armor: 9,  melee: false, actions: [{ type: "attack", damage: 4, armor: 5 }, { type: "attack", damage: 6 }] },
     archer:  { name: "Костяной лучник", hp: 24, armor: 7, melee: false, actions: [{ type: "attack", damage: 2, targets: 3 }, { type: "attack", damage: 4 }] },
     brute:   { name: "Громила",      hp: 58, armor: 30, melee: true,  actions: [{ type: "attack", damage: 3, armor: 8 }, { type: "attack", damage: 6, targets: 3 }] },
-    // Жрец (финальный босс): выводит героя из игры на ход, удар с бронёй вместо проклятия
-    priest:  { name: "Падший жрец",  hp: 95, armor: 30, melee: false, actions: [{ type: "attack", damage: 12 }, { type: "disable", targets: 1 }, { type: "attack", damage: 7, targets: 2 }, { type: "attack", damage: 5, targets: 3, armor: 10 }] }
+    // Жрец (финальный босс): выводит героя из игры на ход, удар с бронёй вместо проклятия.
+    // Баланс 21.10 (card-mechanics-1, бот medium): с выводом героя medium выигрывал 33% — ХП 95→72, броня 30→25, удары 12→10 и 7×2→6×2 (≈66%)
+    priest:  { name: "Падший жрец",  hp: 72, armor: 25, melee: false, actions: [{ type: "attack", damage: 10 }, { type: "disable", targets: 1 }, { type: "attack", damage: 6, targets: 2 }, { type: "attack", damage: 5, targets: 3, armor: 10 }] }
   },
 
   // ---------- Квест боя (tests.fightQuest) ----------
