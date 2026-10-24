@@ -56,13 +56,10 @@ BP.UIDeck = (function () {
   function renderChoice(s, me) {
     const ch = s.choice, who = s.heroes.find((h) => h.id === ch.hero) || {};
     const mine = who.owner === me;
-    const cards = ch.options.map((o) => {
-      const h = s.heroes.find((x) => x.id === o.owner), c = h && h.draw.find((x) => x.uid === o.uid);
-      return c ? { c, h } : null;
-    }).filter(Boolean).sort((a, b) => a.h.name.localeCompare(b.h.name) || b.c.cost - a.c.cost);
+    const cards = ch.options.map((o) => BP.Mech.findOption(s, o)).filter(Boolean).sort((a, b) => a.h.name.localeCompare(b.h.name) || b.c.cost - a.c.cost);
     const list = cards.map(({ c, h }) => `<div class="choice-item${mine ? "" : " off"}" ${mine ? `data-act="choose" data-card="${c.uid}"` : ""}>${miniCard({ c, n: 1 })}<div class="muted small">→ ${esc(h.name)}</div></div>`).join("");
     return `<div class="modal-back"><div class="modal deckview choice">
-      <h2>${ch.kind === "pick" ? "Прозрение: возьми 1 из 3" : "Поиск: возьми любую карту из колод"}</h2>
+      <h2>${ch.kind === "pick" ? "Прозрение: возьми 1 из 3" : `Поиск для ${esc((s.heroes.find((h) => h.id === ch.target) || who).name)}: возьми 1 из ${cards.length}`}</h2>
       <div class="muted small">${mine ? "Карта уйдёт в руку своему владельцу." : `Выбирает ${esc(who.name)}…`}</div>
       <div class="choice-grid">${list || '<div class="muted">пусто</div>'}</div>
     </div></div>`;

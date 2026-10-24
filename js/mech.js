@@ -4,7 +4,8 @@
 //  - столкновение: толкнули врага в другого врага — оба получают +50% урона до конца хода (rules.collisionBonus).
 //  - динамические массовки: rays (лучи по направлениям от клетки прицела до края поля), level (вся линия поперёк).
 //  - поддержка: Сила (+1 урона всем картам героя до конца боя), Стойкость (+1 к блоку от его карт), Дымовая завеса (промах).
-//  - выбор карты: Прозрение (1 из 3 случайных из колод всех героев), Поиск (любая из колод всех героев) → владельцу в руку.
+//  - выбор карты: Прозрение (1 из 3 случайных из колод всех героев) → владельцу в руку;
+//    Поиск (24.10) — на героя: 1 из 3 случайных из колоды и сброса этого героя (рука не участвует) → ему в руку, с мердж-бонусами.
 //  - враги: раненый (≤50% ХП) выбирает действие с бронёй; Жрец выводит героя из игры на 1 ход (disable).
 window.BP = window.BP || {};
 
@@ -100,14 +101,26 @@ BP.Mech = (function () {
   // ---------- выбор карты (Прозрение / Поиск) ----------
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-  // Создать выбор. kind: "pick" (count случайных) | "tutor" (все). Возвращает заметку для лога.
-  function startChoice(state, hero, kind, count) {
+  // Создать выбор. kind: "pick" — count случайных из колод всех героев;
+  // "tutor" (Поиск) — count случайных из колоды и сброса героя-цели. Возвращает заметку для лога.
+  function startChoice(state, hero, kind, count, target) {
     const opts = [];
-    state.heroes.forEach((h) => { if (h.alive) h.draw.forEach((c) => opts.push({ uid: c.uid, owner: h.id })); });
-    const list = kind === "pick" ? shuffle(opts).slice(0, count || 3) : opts;
-    if (!list.length) return "в колодах пусто — выбирать нечего";
-    state.choice = { hero: hero.id, kind, options: list };
-    return kind === "pick" ? `выбирает 1 из ${list.length}` : `ищет карту в колодах (${list.length})`;
+    if (kind === "tutor") {
+      const t = target || hero;
+      t.draw.concat(t.discard).forEach((c) => opts.push({ uid: c.uid, owner: t.id }));
+    } else state.heroes.forEach((h) => { if (h.alive) h.draw.forEach((c) => opts.push({ uid: c.uid, owner: h.id })); });
+    const list = shuffle(opts).slice(0, count || 3);
+    if (!list.length) return kind === "tutor" ? "в колоде и сбросе пусто — выбирать нечего" : "в колодах пусто — выбирать нечего";
+    state.choice = { hero: hero.id, kind, options: list, target: kind === "tutor" ? (target || hero).id : null };
+    return kind === "pick" ? `выбирает 1 из ${list.length}` : `ищет карту для ${(target || hero).name}: 1 из ${list.length}`;
+  }
+
+  // Карта варианта выбора: в колоде или в сбросе владельца
+  function findOption(state, o) {
+    const h = state.heroes.find((x) => x.id === o.owner);
+    if (!h) return null;
+    const c = h.draw.find((x) => x.uid === o.uid) || h.discard.find((x) => x.uid === o.uid);
+    return c ? { h, c } : null;
   }
 
   // Взять выбранную карту из колоды владельца в его руку
@@ -116,13 +129,14 @@ BP.Mech = (function () {
     if (!ch) return "Нет выбора";
     const o = ch.options.find((x) => x.uid === uid);
     if (!o) return "Этой карты нет среди вариантов";
-    const owner = state.heroes.find((h) => h.id === o.owner);
-    const card = owner && owner.draw.find((c) => c.uid === uid);
+    const f = findOption(state, o), owner = f && f.h, card = f && f.c;
     state.choice = null;
     if (!card || !owner.alive) return null;
+    const from = owner.discard.some((c) => c.uid === uid) ? "из сброса" : "из колоды";
     owner.draw = owner.draw.filter((c) => c.uid !== uid);
-    owner.hand.push(card);
-    BP.Engine.log(state, (state.heroes.find((h) => h.id === ch.hero) || {}).name || "—", `взял «${card.name}» из колоды → ${owner.name}`);
+    owner.discard = owner.discard.filter((c) => c.uid !== uid);
+    owner.hand.push(card); // со всеми мердж-бонусами
+    BP.Engine.log(state, (state.heroes.find((h) => h.id === ch.hero) || {}).name || "—", `взял «${card.name}» ${from} → ${owner.name}`);
     return null;
   }
 
@@ -132,7 +146,7 @@ BP.Mech = (function () {
     if (!ch) return null;
     let best = null, bv = -1;
     ch.options.forEach((o) => {
-      const h = state.heroes.find((x) => x.id === o.owner), c = h && h.draw.find((x) => x.uid === o.uid);
+      const f = findOption(state, o), c = f && f.c;
       if (!c) return;
       const d = (c.effects || []).find((e) => e.type === "damage");
       const v = c.cost * 100 + (d ? d.amount : 0) - (c.weak ? 500 : 0);
@@ -150,7 +164,7 @@ BP.Mech = (function () {
       case "buffBlock": to.blockBuff = (to.blockBuff || 0) + ef.amount; return `${to.name}: +${to.blockBuff} блока каждой картой до конца боя`;
       case "miss": to.miss = (to.miss || 0) + (ef.amount || 1); return `${to.name}: следующая атака врага промахнётся`;
       case "pick": return startChoice(state, hero, "pick", ef.count || 3);
-      case "tutor": return startChoice(state, hero, "tutor");
+      case "tutor": return startChoice(state, hero, "tutor", ef.count || 3, tHero);
       case "stun": { // одиночка — цель, массовка — все задетые враги
         const list = primary ? [primary] : [...new Set((hits || []).map((h) => h.enemy))].map((uid) => state.enemies.find((e) => e.uid === uid));
         const out = [];
@@ -204,5 +218,5 @@ BP.Mech = (function () {
     return v;
   }
 
-  return { absorb, rayCells, levelCells, dynCells, zoneDynCells, dynLabel, rico, needsDir, startChoice, choose, autoPick, applyEffect, blockOf, pickAction, armorAct, heroTurnStart, botBonus, DIR_ARROW };
+  return { findOption, absorb, rayCells, levelCells, dynCells, zoneDynCells, dynLabel, rico, needsDir, startChoice, choose, autoPick, applyEffect, blockOf, pickAction, armorAct, heroTurnStart, botBonus, DIR_ARROW };
 })();

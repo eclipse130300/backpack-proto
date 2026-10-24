@@ -168,7 +168,7 @@ window.GAME_CONFIG = {
     //            buffBlock {amount} — цель до конца боя +amount к блоку от каждой своей карты (складывается)
     //            miss — следующая атака врага по цели промахнётся | stun у массовки — оглушает всех задетых
     //            pick {count} — выбрать 1 из count случайных карт колод всех героев (уходит владельцу в руку)
-    //            tutor — найти любую карту в колодах всех героев (уходит владельцу в руку)
+    //            tutor {count} — на героя: 1 из count случайных карт его колоды и сброса (рука не участвует) → ему в руку
     //   Карты поддержки без gift — их нельзя отдать в мердж.
     // Слабые удары оружия (17.10, эксперимент): ими добивается колода до minDeck. Двигают счётчик крита своего оружия.
     weak_strike:   { name: "Слабый удар",       cost: 1, icon: "fist",   target: "enemy", attack: "melee",  weak: true, effects: [{ type: "damage", amount: 3 }] },
@@ -245,7 +245,8 @@ window.GAME_CONFIG = {
     might:         { name: "Сила",              cost: 1, icon: "unity",   target: "hero", effects: [{ type: "buffDamage", amount: 1 }], isNew: true, added: "21.10.2026" },
     // Милишник
     battle_cry:    { name: "Боевой клич",       cost: 1, icon: "taunt",   target: "hero", effects: [{ type: "energy", amount: 2 }], isNew: true, added: "21.10.2026" },
-    search:        { name: "Поиск",             cost: 1, icon: "oath",    target: "none", effects: [{ type: "tutor" }], isNew: true, added: "21.10.2026" },
+    // Поиск (24.10): на себя или союзника — 1 из 3 случайных карт из колоды и сброса этого героя (рука не участвует), с мердж-бонусами
+    search:        { name: "Поиск",             cost: 1, icon: "oath",    target: "hero", effects: [{ type: "tutor", count: 3 }], isNew: true, added: "24.10.2026" },
     fortitude:     { name: "Стойкость",         cost: 1, icon: "barrier", target: "hero", effects: [{ type: "buffBlock", amount: 1 }], isNew: true, added: "21.10.2026" },
     // Стрелок
     quiver:        { name: "Колчан",            cost: 1, icon: "arrows",  target: "self", effects: [{ type: "draw", amount: 2 }], isNew: true, added: "21.10.2026" },

@@ -57,7 +57,7 @@ BP.CardTip = (function () {
         case "buffBlock": add({ icon: "🛡️", value: "+" + e.amount, face: true, short: "Стойкость до конца боя", long: `Каждая карта блока цели до конца боя даёт +${e.amount} блока. Складывается. Нельзя отдать в мердж.` }); break;
         case "miss": add({ icon: "🌫", face: true, short: "промах врага", long: "Следующая атака врага по цели промахнётся (одна атака). Можно сыграть на себя или союзника." }); break;
         case "pick": add({ icon: "🔮", value: "1/" + (e.count || 3), face: true, short: "выбрать карту", long: `Открываются ${e.count || 3} случайные карты из колод всех героев — берёшь одну, она уходит в руку своему владельцу.` }); break;
-        case "tutor": add({ icon: "🔍", face: true, short: "найти карту", long: "Открываются все карты колод всех героев — берёшь любую, она уходит в руку своему владельцу." }); break;
+        case "tutor": add({ icon: "🔍", value: "1/" + (e.count || 3), face: true, short: "найти карту герою", long: `Сыграй на себя или союзника: открываются ${e.count || 3} случайные карты из его колоды и сброса (карты в руке не участвуют). Берёшь одну — она уходит ему в руку со всеми мердж-бонусами.` }); break;
         case "taunt": if (!giftIds.has("taunt")) add({ icon: "📣", face: true, short: "вызов", long: "Враг атакует тебя." }); break;
         case "cleanse": add({ icon: "✚", face: true, short: "очищение", long: "Снимает проклятия с героя." }); break;
         case "sparks": add({ icon: "✨", value: `${e.count}×${e.amount}`, face: true, short: "искры", long: `${e.count} выстрела по ${e.amount} урона. Каждый с шансом ${Math.round((e.stray || 0) * 100)}% уходит в случайного врага рядом с целью.` }); break;

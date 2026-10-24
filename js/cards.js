@@ -33,7 +33,7 @@ BP.Cards = (function () {
         case "buffBlock": parts.push(`до конца боя каждая карта блока цели +${e.amount} блока (складывается)`); break;
         case "miss": parts.push("следующая атака врага по цели промахнётся"); break;
         case "pick": parts.push(`выбрать 1 из ${e.count || 3} случайных карт колод всех героев — она уйдёт владельцу в руку`); break;
-        case "tutor": parts.push("найти любую карту в колодах всех героев — она уйдёт владельцу в руку"); break;
+        case "tutor": parts.push(`выбрать 1 из ${e.count || 3} случайных карт колоды и сброса героя-цели — она уйдёт ему в руку`); break;
         case "taunt": parts.push("враг атакует тебя"); break;
         case "cleanse": parts.push("снять проклятия"); break;
         case "draw": parts.push(`взять ${e.amount} карт`); break;
