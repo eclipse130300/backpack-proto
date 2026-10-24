@@ -37,7 +37,7 @@ BP.Weak = (function () {
     const base = (id) => dmg(cfg.cards[id] || {});
     if (card.giftBase && BP.Gifts && dmg(fresh)) { // дары мерджа переезжают на слабый удар героя
       fresh.giftBase = { effects: JSON.parse(JSON.stringify(fresh.effects)), attack: fresh.attack, area: fresh.area };
-      fresh.gifts = card.gifts; fresh.bonus = card.bonus; fresh.merged = card.merged;
+      fresh.gifts = card.gifts; fresh.merged = card.merged;
       BP.Gifts.rebuild(fresh);
       fresh.text = BP.Cards.text(fresh);
     } else if (card.merged && dmg(card) && dmg(fresh)) {

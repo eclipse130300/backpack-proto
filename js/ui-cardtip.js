@@ -28,7 +28,7 @@ BP.CardTip = (function () {
     if (dmg) {
       const hits = dmg.hits > 1 ? `×${dmg.hits}` : "";
       add({ icon: "⚔️", value: dmg.amount + hits, short: "урон · " + (ATTACK_SHORT[c.attack] || ""),
-        long: `${dmg.amount} урона${dmg.hits > 1 ? `, ${dmg.hits} удара` : ""}${c.bonus ? ` (из них +${c.bonus} от мерджа)` : ""}. ${ATTACK_LONG[c.attack] || ""}` });
+        long: `${dmg.amount} урона${dmg.hits > 1 ? `, ${dmg.hits} удара` : ""}. ${ATTACK_LONG[c.attack] || ""}` });
     }
     // блок из самой карты (блок от даров показан плашкой дара)
     base.forEach((e) => {
@@ -90,7 +90,7 @@ BP.CardTip = (function () {
     // родной дар
     if (BP.Gifts.isOn(state) && c.gift && state.config.gifts[c.gift]) {
       const g = state.config.gifts[c.gift];
-      add({ icon: "🎁" + g.icon, short: "дар союзнику: " + g.name, long: `Дар союзнику — ${g.name}: ${g.text}. Атака в атаку ещё +50% урона. Твоя карта уйдёт в сброс.` });
+      add({ icon: "🎁" + g.icon, short: "дар союзнику: " + g.name, long: `Дар союзнику — ${g.name}: ${g.text}. Урон не передаётся — только дар. Твоя карта уйдёт в сброс.` });
     }
     if (c.merged && !c.evolved) add({ icon: "★", value: c.merged > 1 ? c.merged : "", short: "усилена мерджем", long: "Карта получила дары союзников — усиление до конца боя." });
     // эволюция

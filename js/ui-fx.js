@@ -171,7 +171,7 @@ BP.FX = (function () {
     if (!BP.Gifts.isOn(s)) return c.merged ? `<div class="tip-note">★ Усилена мерджем ×${c.merged}</div>` : "";
     const g = BP.Gifts.labels(s, c);
     let out = g.own ? `<div class="tip-note">🎁 Дар союзнику: <b>${esc(g.own)}</b> — ${esc(g.ownText)}</div>` : `<div class="tip-note">🎁 У этой карты нет дара — союзнику её не отдать.</div>`;
-    if (g.got.length || g.bonus) out += `<div class="tip-note good">★ Получено мерджем: ${esc(g.got.join(", ") || "—")}${g.bonus ? ` · прибавка +${g.bonus} урона` : ""}. Отдашь дальше — передашь все дары и +50% урона.</div>`;
+    if (g.got.length) out += `<div class="tip-note good">★ Получено мерджем: ${esc(g.got.join(", "))}. Отдашь дальше — передашь все дары (урон мердж не передаёт).</div>`;
     return out;
   }
 
