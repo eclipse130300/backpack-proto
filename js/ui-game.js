@@ -140,6 +140,13 @@ BP.UIGame = (function () {
   }
 
 
+  // Серая карта — герой не может сыграть её сейчас (не хватает энергии / выведен из игры / пал / не ход игроков).
+  // Считается одинаково для своих рук и для рук союзников — в мультиплеере все видят одно и то же.
+  function grey(state, hero, c, avail) {
+    if (state.phase !== "players") return false;
+    return !hero.alive || hero.out || c.cost > avail;
+  }
+
   function cardHtml(state, hero, c, ui, readonly, ml) {
     const avail = state.pool ? state.pool.amount : hero.energy;
     const kind = BP.Cards.kind(c), kc = BP.Icons.KIND_COLOR[kind];
@@ -150,7 +157,7 @@ BP.UIGame = (function () {
       owner = c.shared ? `<div class="cowner shared">общая</div>` : `<div class="cowner hc${oi}">${esc((state.heroes[oi] || hero).name)}</div>`;
     }
     const mergeOk = !readonly && state.config.tests.merge.enabled && BP.Cards.mergeCost(state, hero, c) <= avail;
-    const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", !readonly && c.cost > avail ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : "",
+    const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", grey(state, hero, c, avail) ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : "",
       // эволюция (js/evolve.js): золотая рамка — эволюционная, фиолетовое свечение — можно эволюционировать сейчас
       BP.Evolve.evolvable(state, c) ? "evo" : "", hero.alive && BP.Evolve.ready(state, hero, c) ? "evo-ready" : "", c.evolvedFrom ? "evolved" : ""].join(" ");
     const needsBtn = !readonly && ui.selected === c.uid && (c.target === "none" || c.target === "self");
@@ -186,7 +193,7 @@ BP.UIGame = (function () {
       return `<div class="hsec ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"}" data-drop="hero" data-hero="${h.id}">
         <div class="hsec-head">
           ${portrait(state, h, true)}
-          <div class="hs-name"><b>${esc(h.name)} ${weaponsHtml(state, h)}</b><span class="muted small">${owner ? esc(owner.name) : "без игрока"}${h.owner !== myPid ? " · смотреть" : ""}</span></div>
+          <div class="hs-name"><b>${esc(h.name)} ${weaponsHtml(state, h)}</b><span class="muted small">${owner ? esc(owner.name) : "без игрока"}${h.away && state.players[h.away] ? ` за ${esc(state.players[h.away].name)} (нет связи)` : ""}${h.owner !== myPid ? " · смотреть" : ""}</span></div>
           ${hpBar(h)}${en}
           <span class="pile" title="${state.shared ? "Своя колода (оружие и щит) / свой сброс" : "Колода / сброс"}">🂠 ${h.draw.length} · ♻ ${h.discard.length}</span>
         </div>
@@ -202,7 +209,8 @@ BP.UIGame = (function () {
     const readyBtn = iNeedReady && state.phase === "players"
       ? `<button class="readybtn ${me && me.ready ? "" : "primary"}" data-act="ready">${me && me.ready ? "Отменить готовность" : "Готов ✔"}</button>`
       : `<div class="muted">${state.phase === "enemies" ? "Ходят враги…" : ""}</div>`;
-    return `<div class="board-side">${readyBtn}${BP.Session.isHost() && state.phase === "players" && BP.Session.role !== "local" ? `<button class="small" data-act="force-end">Завершить ход за всех</button>` : ""}</div>`;
+    const lost = BP.Session.reconnecting ? `<div class="chip reconnecting">📡 Нет связи с хостом — переподключаюсь…</div>` : "";
+    return `<div class="board-side">${lost}${readyBtn}${BP.Session.isHost() && state.phase === "players" && BP.Session.role !== "local" ? `<button class="small" data-act="force-end">Завершить ход за всех</button>` : ""}</div>`;
   }
 
   function lastEnemyLine(state) {

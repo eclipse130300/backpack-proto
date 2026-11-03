@@ -457,3 +457,9 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 .choice-item:hover { outline: 2px solid #d4a94f; }
 .choice-item.off { cursor: default; opacity: .7; }
 .choice-item.off:hover { outline: none; }
+
+/* Союзнику можно дарить карты (мердж) даже без его энергии — пока тянешь свою карту, его серые карты не гасим */
+.hsec.dim-costs .card.unaffordable { filter: none; cursor: default; }
+/* Клиент потерял связь с хостом и переподключается */
+.chip.reconnecting { background: #5a1a10; border-color: #ff7a4a; color: #ffd2b8; animation: blinkLost 1.2s ease-in-out infinite; }
+@keyframes blinkLost { 50% { opacity: .55; } }

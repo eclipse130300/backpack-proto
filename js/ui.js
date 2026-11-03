@@ -242,6 +242,7 @@ BP.UI = (function () {
     window.addEventListener("resize", () => render());
     BP.Session.onChange(() => { if (ui.modal !== "settings") render(); });
     BP.Session.onError((m) => toast(m, "bad"));
+    BP.Session.onInfo((m) => toast(m, "good"));
     BP.Drag.init();
     BP.FX.init();
     BP.CardTip.init(); // подсказки карт в руке (js/ui-cardtip.js)

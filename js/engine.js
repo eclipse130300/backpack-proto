@@ -570,10 +570,23 @@ BP.Engine = (function () {
     return "Неизвестное действие";
   }
 
+  // Игрок отключился. Вне лобби его герои временно переходят хосту (h.away помнит хозяина),
+  // а сам игрок остаётся в списке с пометкой away — при переподключении всё вернётся (playerBack).
   function playerLeft(state, pid, hostPid) {
-    delete state.players[pid];
-    state.heroes.forEach((h) => { if (h.owner === pid) h.owner = state.phase === "lobby" ? null : hostPid; });
+    if (state.phase === "lobby") delete state.players[pid];
+    else if (state.players[pid]) { state.players[pid].away = true; state.players[pid].ready = false; }
+    state.heroes.forEach((h) => {
+      if (h.owner !== pid) return;
+      if (state.phase === "lobby") h.owner = null;
+      else { h.owner = hostPid; h.away = pid; }
+    });
     if (state.phase === "players" && allReady(state)) endPlayerTurn(state);
+  }
+
+  function playerBack(state, pid, name) {
+    const p = state.players[pid] || (state.players[pid] = { name, ready: false });
+    p.name = name || p.name; p.away = false; p.ready = false;
+    state.heroes.forEach((h) => { if (h.away === pid) { h.owner = pid; delete h.away; } });
   }
 
   // Состояние для рассылки: без полного лога
@@ -583,5 +596,5 @@ BP.Engine = (function () {
     return s;
   }
 
-  return { createRun, startFight, applyAction, enemyStep, playerLeft, publicState, requiredPlayers, canPay, log, makeCard };
+  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, canPay, log, makeCard };
 })();

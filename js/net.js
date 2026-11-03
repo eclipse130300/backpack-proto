@@ -35,20 +35,35 @@ BP.Net = (function () {
     host(code, onConn, onReady, onError) {
       if (!window.Peer) return onError("Не загрузилась библиотека PeerJS (нет интернета?)");
       const peer = new window.Peer(PREFIX + code);
-      peer.on("open", () => onReady(code));
+      let wasOpen = false, timer = null;
+      // Пропал интернет у хоста: связь с сервером PeerJS рвётся. Стучимся снова каждые 3 с, пока не вернётся,
+      // иначе после возвращения сети к комнате никто не сможет подключиться заново.
+      const retry = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (peer.destroyed || !peer.disconnected) return;
+          try { peer.reconnect(); } catch (e) { /* ignore */ }
+          retry();
+        }, 3000);
+      };
+      peer.on("open", () => { clearTimeout(timer); if (!wasOpen) { wasOpen = true; onReady(code); } });
       peer.on("connection", (dc) => dc.on("open", () => onConn(wrapPeerConn(dc))));
-      peer.on("error", (e) => onError(e.type === "unavailable-id" ? "Такая комната уже есть" : "Ошибка сети: " + e.type));
-      peer.on("disconnected", () => { try { peer.reconnect(); } catch (e) { /* ignore */ } });
+      peer.on("error", (e) => {
+        if (wasOpen) { console.warn("PeerJS:", e.type); retry(); return; } // комната уже была — это обрыв, а не ошибка
+        onError(e.type === "unavailable-id" ? "Такая комната уже есть" : "Ошибка сети: " + e.type);
+      });
+      peer.on("disconnected", () => { try { peer.reconnect(); } catch (e) { /* ignore */ } retry(); });
       return peer;
     },
     join(code, onConn, onError) {
       if (!window.Peer) return onError("Не загрузилась библиотека PeerJS (нет интернета?)");
       const peer = new window.Peer();
+      let dc = null;
       peer.on("open", () => {
-        const dc = peer.connect(PREFIX + code, { reliable: true });
+        dc = peer.connect(PREFIX + code, { reliable: true });
         dc.on("open", () => onConn(wrapPeerConn(dc)));
-        setTimeout(() => { if (!dc.open) onError("Не удалось подключиться к комнате " + code); }, 12000);
       });
+      setTimeout(() => { if (!dc || !dc.open) onError("Не удалось подключиться к комнате " + code); }, 12000);
       peer.on("error", (e) => onError(e.type === "peer-unavailable" ? "Комната " + code + " не найдена" : "Ошибка сети: " + e.type));
       return peer;
     },
@@ -82,7 +97,7 @@ BP.Net = (function () {
     join(code, onConn, onError) {
       const ch = new BroadcastChannel(PREFIX + code);
       const me = "bc" + Math.random().toString(36).slice(2, 8);
-      const dataFns = [];
+      const dataFns = [], closeFns = [];
       let opened = false;
       ch.onmessage = (ev) => {
         const m = ev.data;
@@ -93,8 +108,8 @@ BP.Net = (function () {
             id: me,
             send: (o) => ch.postMessage({ to: "host", from: me, kind: "data", data: o }),
             onData: (f) => dataFns.push(f),
-            onClose: () => {},
-            close: () => ch.postMessage({ to: "host", from: me, kind: "bye" }),
+            onClose: (f) => closeFns.push(f),
+            close: () => { ch.postMessage({ to: "host", from: me, kind: "bye" }); ch.onmessage = null; closeFns.forEach((f) => f()); },
           });
         } else if (m.kind === "data") dataFns.forEach((f) => f(m.data));
       };
