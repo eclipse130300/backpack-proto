@@ -329,14 +329,16 @@ window.GAME_CONFIG = {
     //   disable {targets} — вывести героя из игры на его следующий ход (только Жрец).
     // merge-4 (24.10, бот medium): мердж больше не передаёт урон — ХП врагов срезано: Упырь 40→36, Гончая 25→22,
     //   Культист 28→25, Лучник 24→22, Громила 58→52, Жрец 72→60 (medium 55% → ~67%)
-    ghoul:   { name: "Упырь",        hp: 36, armor: 15, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 3, targets: 2, armor: 4 }] },
-    hound:   { name: "Гончая",       hp: 22, armor: 8,  melee: true,  actions: [{ type: "attack", damage: 3 }, { type: "attack", damage: 5 }] },
-    cultist: { name: "Культист",     hp: 25, armor: 9,  melee: false, actions: [{ type: "attack", damage: 4, armor: 5 }, { type: "attack", damage: 6 }] },
-    archer:  { name: "Костяной лучник", hp: 22, armor: 7, melee: false, actions: [{ type: "attack", damage: 2, targets: 3 }, { type: "attack", damage: 4 }] },
-    brute:   { name: "Громила",      hp: 52, armor: 30, melee: true,  actions: [{ type: "attack", damage: 3, armor: 8 }, { type: "attack", damage: 6, targets: 3 }] },
+    // merge-6 (10.11, боты medium ~70%): ХП врагов ×0.85 (Упырь 36→31, Гончая 22→19, Культист 25→21, Лучник 22→19, Громила 52→44),
+    //   Жрец ХП 60→42 и удар 10→8 — без массовок и Зоны пати бьёт по площади слабее.
+    ghoul:   { name: "Упырь",        hp: 31, armor: 15, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 3, targets: 2, armor: 4 }] },
+    hound:   { name: "Гончая",       hp: 19, armor: 8,  melee: true,  actions: [{ type: "attack", damage: 3 }, { type: "attack", damage: 5 }] },
+    cultist: { name: "Культист",     hp: 21, armor: 9,  melee: false, actions: [{ type: "attack", damage: 4, armor: 5 }, { type: "attack", damage: 6 }] },
+    archer:  { name: "Костяной лучник", hp: 19, armor: 7, melee: false, actions: [{ type: "attack", damage: 2, targets: 3 }, { type: "attack", damage: 4 }] },
+    brute:   { name: "Громила",      hp: 44, armor: 30, melee: true,  actions: [{ type: "attack", damage: 3, armor: 8 }, { type: "attack", damage: 6, targets: 3 }] },
     // Жрец (финальный босс): выводит героя из игры на ход, удар с бронёй вместо проклятия.
     // Баланс 21.10 (card-mechanics-1, бот medium): с выводом героя medium выигрывал 33% — ХП 95→72, броня 30→25, удары 12→10 и 7×2→6×2 (≈66%)
-    priest:  { name: "Падший жрец",  hp: 60, armor: 25, melee: false, actions: [{ type: "attack", damage: 10 }, { type: "disable", targets: 1 }, { type: "attack", damage: 6, targets: 2 }, { type: "attack", damage: 5, targets: 3, armor: 10 }] }
+    priest:  { name: "Падший жрец",  hp: 42, armor: 25, melee: false, actions: [{ type: "attack", damage: 8 }, { type: "disable", targets: 1 }, { type: "attack", damage: 6, targets: 2 }, { type: "attack", damage: 5, targets: 3, armor: 10 }] }
   },
 
   // ---------- Квест боя (tests.fightQuest) ----------
