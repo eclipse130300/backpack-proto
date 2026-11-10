@@ -8,6 +8,9 @@
 // Отданная карта передаёт свой родной дар и все полученные (цепочки) и уходит в сброс ЧИСТОЙ.
 // Зона несёт ФИГУРУ своей карты (у динамической массовки — лучи/линию). Цепь прыгает от цели на соседа с наименьшим ХП,
 //   которого карта ещё не била. Рикошет (id pierce): перед ударом выбираешь направление, сосед цели туда получает урон.
+// merge-6 (10.11): Зона и Добивание убраны из конфига (код Зоны остался, но карт с этим даром нет). Новые дары:
+//   По открытым (open) / По закрытым (covered): урон ×(1 + esc) = +100% / +300% / +500% по открытой / закрытой цели (на момент удара);
+//   Заточка (sharpen): при розыгрыше счётчик крита оружия карты сдвигается на 1 / 2 / 3 (card.sharpen = N, не esc).
 // Слабые карты дара не имеют — отдать их нельзя. Дробное округляем вверх.
 window.BP = window.BP || {};
 
@@ -45,7 +48,8 @@ BP.Gifts = (function () {
     const b = baseOf(dst), has = (t) => b.effects.some((e) => e.type === t);
     const dmg = has("damage"), blk = b.effects.some(isBlock), single = dst.target === "enemy", cell = dst.target === "cell";
     switch (giftId) {
-      case "power": case "repeat": case "execute": case "pierce": return dmg;
+      case "power": case "repeat": case "execute": case "pierce": case "open": case "covered": return dmg;
+      case "sharpen": return dmg && !!dst.weapon && !dst.alwaysCrit && !dst.weak; // крит по счётчику есть только у карт оружия
       case "blast": case "chain": return dmg && (single || cell);
       case "push": return single || cell;
       case "taunt": return single && !has("taunt") && !count(dst, "taunt");
@@ -85,7 +89,7 @@ BP.Gifts = (function () {
     const add = [];
     incoming(state, src).forEach((g) => {
       const gift = Object.assign({}, g, { from: g.from || giverId || null });
-      if (applicable(g.id, { target: dst.target, giftBase: dst.giftBase, gifts: list(dst).concat(add) })) add.push(gift);
+      if (applicable(g.id, { target: dst.target, giftBase: dst.giftBase, gifts: list(dst).concat(add), weapon: dst.weapon, alwaysCrit: dst.alwaysCrit, weak: dst.weak })) add.push(gift);
     });
     dst.gifts = list(dst).concat(add);
     rebuild(dst);
@@ -95,7 +99,7 @@ BP.Gifts = (function () {
     return true;
   }
 
-  const DERIVED = ["zone", "zoneSteps", "zoneRays", "zoneLevel", "repeat", "execute", "chain", "pierce", "pushDist"];
+  const DERIVED = ["zone", "zoneSteps", "zoneRays", "zoneLevel", "repeat", "execute", "chain", "pierce", "pushDist", "openBonus", "coveredBonus", "sharpen"];
 
   // Снять с карты все дары и прибавку
   function clean(card) {
@@ -122,6 +126,9 @@ BP.Gifts = (function () {
     if (dmg && n("power")) dmg.amount = up(dmg.amount * powerMult(n("power")));
     if (n("repeat")) card.repeat = esc(n("repeat")); // число доп. ударов по 100%
     if (n("execute")) card.execute = esc(n("execute")); // урон ×(1 + esc)
+    if (n("open")) card.openBonus = esc(n("open")); // merge-6: +100/300/500% по открытым
+    if (n("covered")) card.coveredBonus = esc(n("covered")); // merge-6: +100/300/500% по закрытым
+    if (n("sharpen")) card.sharpen = n("sharpen"); // merge-6: сдвиг счётчика крита на 1/2/3
     if (n("chain")) card.chain = esc(n("chain")); // прыжков по 100%
     if (n("pierce")) card.pierce = n("pierce"); // Рикошет: число даров (сила — BP.Mech.rico)
     // Зона: фигуры даров складываются с родной; новые клетки всегда бьют 100%
@@ -160,6 +167,12 @@ BP.Gifts = (function () {
   // «Добивание»: ×(1 + esc(N)) = ×2, ×4, ×6 по врагу с ≤50% ХП (по ХП до удара). Только собственный урон карты.
   function executeMult(card, e) {
     return card.execute && e.hp * 2 <= e.maxHp ? 1 + card.execute : 1;
+  }
+  // merge-6: По открытым / По закрытым — множитель урона по этой цели (открытость — на момент расчёта, до толчков)
+  function bonusMult(state, card, e) {
+    if (!card.openBonus && !card.coveredBonus) return 1;
+    const open = BP.Cards.isExposed(state, e);
+    return 1 + (open ? card.openBonus || 0 : card.coveredBonus || 0);
   }
 
   // Доп. удары (без крита). areaHits — [{enemy, amount}] основные удары карты (до крита), amount — урон карты.
@@ -225,6 +238,8 @@ BP.Gifts = (function () {
       switch (id) {
         case "power": v = "×" + powerMult(n); break;
         case "execute": v = "×" + (1 + esc(n)); break;
+        case "open": case "covered": v = "+" + esc(n) * 100 + "%"; break;
+        case "sharpen": v = "−" + n; break; // счётчик крита
         case "push": v = String(card.pushDist || 1); break;
         case "taunt": v = ""; break;
         case "armor": case "cover": v = dmg ? pct(esc(n)) : "×" + (1 + esc(n)); break;
@@ -249,6 +264,9 @@ BP.Gifts = (function () {
     if (card.repeat) out.push(`повтор: ещё ${card.repeat === 1 ? "удар" : card.repeat + " " + pl(card.repeat, "", "удара", "ударов")} по 100%`);
     if (card.pierce) out.push(`рикошет: соседу цели по направлению атаки ${up(dmg.amount * BP.Mech.rico(card))}`);
     if (card.execute) out.push(`добивание: ×${1 + card.execute} по врагу с ≤50% ХП`);
+    if (card.openBonus) out.push(`по открытым +${card.openBonus * 100}%`);
+    if (card.coveredBonus) out.push(`по закрытым +${card.coveredBonus * 100}%`);
+    if (card.sharpen) out.push(`заточка: крит ближе на ${card.sharpen}`);
     return out;
   }
 
@@ -264,5 +282,5 @@ BP.Gifts = (function () {
     };
   }
 
-  return { esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
+  return { bonusMult, esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
 })();

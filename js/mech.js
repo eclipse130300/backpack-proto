@@ -87,6 +87,15 @@ BP.Mech = (function () {
   }
 
   // Нужно ли выбирать направление атаки
+  // merge-6 (10.11): второй режим карты (cards.*.alt) — Искра на фишку героя даёт блок вместо урона.
+  // Вид карты в этом режиме: та же карта (uid, дары, владелец), но цель и эффекты из alt.
+  function altView(card) {
+    if (!card.alt) return card;
+    const v = Object.assign({}, card, { target: card.alt.target, effects: JSON.parse(JSON.stringify(card.alt.effects)), attack: undefined, altMode: true });
+    delete v.alt; delete v.area;
+    return v;
+  }
+
   function needsDir(state, card, target) {
     const t = target || {};
     if (t.dir !== undefined && t.dir !== null) return false;
@@ -218,5 +227,5 @@ BP.Mech = (function () {
     return v;
   }
 
-  return { findOption, absorb, rayCells, levelCells, dynCells, zoneDynCells, dynLabel, rico, needsDir, startChoice, choose, autoPick, applyEffect, blockOf, pickAction, armorAct, heroTurnStart, botBonus, DIR_ARROW };
+  return { altView, findOption, absorb, rayCells, levelCells, dynCells, zoneDynCells, dynLabel, rico, needsDir, startChoice, choose, autoPick, applyEffect, blockOf, pickAction, armorAct, heroTurnStart, botBonus, DIR_ARROW };
 })();

@@ -35,6 +35,8 @@ BP.CardTip = (function () {
       if (e.type === "block") add({ icon: "🛡️", value: (c.effects.find((x) => x.type === "block") || e).amount, short: c.target === "hero" ? "блок цели" : "блок себе", long: "Блок поглощает урон до конца хода врагов." });
       if (e.type === "blockSelf") add({ icon: "🛡️", value: e.amount, short: "блок себе", long: "Блок поглощает урон до конца хода врагов." });
     });
+    // merge-6: второй режим (Искра на фишку героя → блок)
+    if (c.alt) (c.alt.effects || []).forEach((e) => { if (e.type === "block") add({ icon: "🛡️", value: e.amount, face: true, short: "или блок герою", long: `Брось на фишку героя (себя или союзника) — вместо урона даст ${e.amount} блока.` }); });
     // зона
     const AREA = {
       line: { icon: "➶", short: "насквозь", long: "Бьёт цель и врага за ней. За целью край поля — рикошет в соседнюю колонку." },

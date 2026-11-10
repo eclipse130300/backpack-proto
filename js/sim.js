@@ -38,6 +38,10 @@ BP.Sim = (function () {
 
   // Все допустимые цели карты. smart: все повороты, дубли фигур (одинаковый набор врагов) убираются.
   function targetsFor(s, hero, card, allRots) {
+    if (card.alt) return targetsBase(s, hero, card, allRots).concat(targetsBase(s, hero, BP.Mech.altView(card), allRots)); // merge-6: Искра — урон или блок
+    return targetsBase(s, hero, card, allRots);
+  }
+  function targetsBase(s, hero, card, allRots) {
     const C = BP.Cards, r = s.config.rules;
     switch (card.target) {
       case "none": case "self": return [{}];

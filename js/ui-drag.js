@@ -37,6 +37,7 @@ BP.Drag = (function () {
       return !!dst && BP.Cards.canMerge(s, card, dst) && BP.Cards.mergeCost(s, hero, card) <= avail(s, hero);
     }
     if (card.cost > avail(s, hero)) return false;
+    if (card.alt && onToken && !BP.Cards.checkTarget(s, hero, card, { hero: el.dataset.hero })) return true; // merge-6: Искра → блок на фишку героя
     switch (card.target) {
       case "enemy": {
         if (kind !== "enemy") return false;
@@ -78,6 +79,7 @@ BP.Drag = (function () {
       else if (c.area === "shape") parts.push(`Фигура «${c.shapeName}» не крутится`);
       if (c.area === "shape" || c.area === "adjacent") parts.push("Клетки с ✕ за краем поля никого не бьют");
       if (c.target === "hero" || c.target === "ally") parts.push("Цель — фишка героя на поле");
+      if (c.alt) parts.push("Или на фишку героя — блок вместо урона");
       if (c.target === "none" || c.target === "self") parts.push("Отпусти над полем боя — карта сыграется (над рукой — отмена)");
       if (s.config.tests.merge.enabled) parts.push("На карту союзника — мердж (цена в фиолетовом ромбе)");
       parts.push(drag ? "Отпусти мимо цели — отмена" : "Esc — отмена");

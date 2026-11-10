@@ -270,8 +270,10 @@ BP.Engine = (function () {
     return (state.pool ? state.pool.amount : hero.energy) >= cost;
   }
 
-  function playCard(state, hero, card, target) {
+  function playCard(state, hero, realCard, target) {
     const t = target || {};
+    // merge-6: второй режим карты (Искра на фишку героя → блок), js/mech.js altView
+    const card = realCard.alt && t.hero && !t.enemy ? BP.Mech.altView(realCard) : realCard;
     const err = C().checkTarget(state, hero, card, t);
     if (err) return err === "NEED_DIR" ? "Выберите направление атаки" : err;
     if (!payCost(state, hero, card.cost)) return "Не хватает энергии";
@@ -337,8 +339,8 @@ BP.Engine = (function () {
     });
 
     // Палач (эволюция): убил цель — карта возвращается в руку; иначе в сброс (квестовая — пропадает)
-    if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(card); notes.push(`«${card.name}» вернулась в руку`); }
-    else BP.Deck.discard(state, hero, card);
+    if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(realCard); notes.push(`«${card.name}» вернулась в руку`); }
+    else BP.Deck.discard(state, hero, realCard);
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
     const qn = BP.Quests.afterPlay(state, hero, card, hits, t); // квест боя: прогресс и награда
