@@ -40,7 +40,7 @@ BP.UIDeck = (function () {
   }
 
   // beta-meta: вне боя (карта, награда, костёр, кузница) — колода забега героя целиком (h.runCards)
-  const META_PHASES = ["map", "reward", "camp", "forge"];
+  const META_PHASES = ["map", "reward", "camp", "forge", "mforge"];
   function renderRun(s) {
     const portrait = (h, i) => `<div class="portrait sm hc${i}">${BP.Icons.svg((s.config.heroes[i] || {}).icon || "helm")}</div>`;
     const cols = s.heroes.map((h, i) => column(h.name, portrait(h, i), h.runCards || [], "колода забега", "lane" + i));

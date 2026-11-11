@@ -4,7 +4,7 @@ window.BP = window.BP || {};
 
 BP.UIMeta = (function () {
   const esc = (s) => BP.UIGame.esc(s);
-  const PHASES = ["map", "reward", "camp", "forge", "victory"];
+  const PHASES = ["map", "reward", "camp", "forge", "mforge", "victory"];
   const RAR = { common: "обычная", uncommon: "средняя", rare: "редкая" };
   let anim = null; // рулетка выбора пути
 
@@ -15,7 +15,7 @@ BP.UIMeta = (function () {
   // ---------- Верхняя панель ----------
   function top(s) {
     const F = s.config.meta.map.floors + 1;
-    const title = { map: "Карта похода — куда идём?", reward: s.reward && s.reward.kind === "treasure" ? "💎 Сокровище" : "Награда за бой", camp: "🔥 Костёр", forge: "⚒ Кузница", victory: "👑 Забег пройден!" }[s.phase];
+    const title = { map: "Карта похода — куда идём?", reward: s.reward && s.reward.kind === "treasure" ? "💎 Сокровище" : "Награда за бой", camp: "🔥 Костёр", forge: "⚒ Кузница", mforge: "✦ Мердж-кузня", victory: "👑 Забег пройден!" }[s.phase];
     return `<div class="topbar"><span class="title">${title}</span><span class="chip">Этаж ${s.run.floor}/${F}</span><span class="chip">Боёв: ${s.run.fights}</span>
       <span class="grow"></span>${readyChips(s)}${BP.Session.code ? `<span class="chip">🔑 ${esc(BP.Session.code)}</span>` : `<span class="chip">локально</span>`}
       ${BP.Session.isHost() ? `<button data-act="settings">⚙</button>` : ""}
@@ -23,7 +23,7 @@ BP.UIMeta = (function () {
   }
 
   function readyChips(s) {
-    if (!["reward", "camp", "forge"].includes(s.phase)) return "";
+    if (!["reward", "camp", "forge", "mforge"].includes(s.phase)) return "";
     return `<span class="ready-list row">${BP.Engine.metaPlayers(s).map((pid) => { const p = s.players[pid]; return p ? `<span class="chip ${p.ready ? "ok" : ""}">${p.ready ? "✅" : "⏳"} ${esc(p.name)}</span>` : ""; }).join("")}</span>`;
   }
 
@@ -68,7 +68,7 @@ BP.UIMeta = (function () {
     const left = BP.Engine.metaPlayers(s).filter((p) => v.votes[p] === undefined).map((p) => pname(s, p));
     const status = v.result ? (v.result.tied.length > 1 ? "Ничья — тянем жребий…" : "Путь выбран!")
       : `Нажмите на светящийся узел, чтобы проголосовать. Ждём голос: ${left.map(esc).join(", ") || "—"}. Ничья — решает жребий.`;
-    const legend = ["w2", "w3", "elite", "camp", "forge", "treasure", "boss"].map((t) => `<span>${BP.RunMap.ICON[t]} ${esc(BP.RunMap.label(t))}</span>`).join("");
+    const legend = ["w2", "w3", "elite", "mforge", "camp", "forge", "boss"].map((t) => `<span>${BP.RunMap.ICON[t]} ${esc(BP.RunMap.label(t))}</span>`).join("");
     return `<div class="mscreen"><div class="mstatus">${status}</div>
       <div class="mapbox" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}">${lines}</svg>${nodes}</div>
       <div class="mlegend">${legend}</div>${party(s, me)}</div>`;
@@ -135,6 +135,32 @@ BP.UIMeta = (function () {
       <div class="rcols">${cols}</div>${readyBar(s, me)}${party(s, me)}</div>`;
   }
 
+  // ---------- Мердж-кузня (js/mforge.js) ----------
+  // Выбрал свою карту «Отдать» → на картах других героев кнопка «✦ Сюда» с тем, что получится.
+  function renderMforge(s, me, ui) {
+    const m = s.config.meta, sel = ui.mfSel && s.heroes.find((h) => h.id === ui.mfSel.hero && h.owner === me && !s.mforge.done[h.id]) ? ui.mfSel : null;
+    const cols = s.heroes.map((h) => {
+      const done = s.mforge.done[h.id], mine = h.owner === me, deck = h.runCards || [];
+      const cards = deck.map((c) => {
+        let btn = "";
+        if (mine && !done && !sel) btn = `<button class="small primary" data-act="mf-select" data-hero="${h.id}" data-card="${c.spec}">Отдать ⇢</button>`;
+        if (sel && sel.hero === h.id && sel.card === c.spec) btn = `<button class="small" data-act="mf-cancel">Отмена</button>`;
+        if (sel && sel.hero !== h.id) {
+          const r = BP.MForge.result(s, sel.hero, sel.card, h.id, c.spec);
+          if (r) btn = `<button class="small ${r.evo ? "evo-btn" : "primary"}" data-act="mf-merge" data-ally="${h.id}" data-card="${c.spec}" title="${esc("Получится: " + r.card.name + " — " + r.card.text)}">✦ Сюда${r.evo ? " (эволюция!)" : ""}</button>`;
+        }
+        const picked = sel && sel.hero === h.id && sel.card === c.spec;
+        return `<div class="fcard ${picked ? "picked" : ""}">${BP.UIDeck.miniCard({ c, n: 1 })}<div class="fbtns">${btn}</div></div>`;
+      }).join("");
+      const head = done ? `<div class="rdone">✔ ${esc(done)}</div>` : mine ? `<button data-act="mf-skip" data-hero="${h.id}">Пропустить (не отдавать)</button>` : `<div class="muted">${esc(pname(s, h.owner))} решает…</div>`;
+      return `<div class="rcol lane${heroIdx(s, h.id)}"><div class="rcol-head">${portrait(s, h)}<b>${esc(h.name)}</b><span class="muted small">🂠 ${deck.length}</span></div>${head}<div class="fcards">${cards}</div></div>`;
+    }).join("");
+    const rule = m.mforgeDestroy !== false ? "обе исходные карты исчезают, остаётся новая" : "исходные карты остаются, новая добавляется";
+    return `<div class="mscreen"><div class="mstatus">Мердж как в бою, но навсегда: отдай свою карту на карту союзника — она получит дар (две мерджнутые эволюционные — эволюция). Каждый герой отдаёт одну карту; ${rule}. Результат — у владельца второй карты.</div>
+      ${sel ? `<div class="chip ok">Выбрана карта ${esc((s.heroes.find((h) => h.id === sel.hero) || {}).name)} — нажми «✦ Сюда» на карте другого героя</div>` : ""}
+      <div class="rcols">${cols}</div>${readyBar(s, me)}${party(s, me)}</div>`;
+  }
+
   // ---------- Победа ----------
   function renderVictory(s, me) {
     return `<div class="mscreen"><div class="campfire">👑</div><div class="mstatus">Падший жрец повержен! Боёв за забег: ${s.run.fights}.</div>
@@ -143,7 +169,7 @@ BP.UIMeta = (function () {
   }
 
   function render(s, me, ui) {
-    const body = { map: renderMap, reward: renderReward, camp: renderCamp, forge: renderForge, victory: renderVictory }[s.phase](s, me);
+    const body = { map: renderMap, reward: renderReward, camp: renderCamp, forge: renderForge, mforge: renderMforge, victory: renderVictory }[s.phase](s, me, ui);
     return `<div class="game meta ${ui.showLog ? "with-log" : ""}">${top(s)}<div class="mbody">${body}</div>${ui.showLog ? BP.UIGame.renderLog(s) : ""}</div>`;
   }
 

@@ -261,7 +261,7 @@ BP.Sim = (function () {
   function botNode(s, opts) {
     const hp = s.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0) / s.heroes.reduce((a, h) => a + h.maxHp, 0);
     const by = (t) => opts.filter((id) => BP.RunMap.node(s, id).type === t);
-    const pref = hp < 0.5 ? ["camp", "treasure", "w2", "forge", "w3", "elite"] : hp > 0.75 ? ["treasure", "elite", "w3", "forge", "w2", "camp"] : ["treasure", "w2", "forge", "w3", "camp", "elite"];
+    const pref = hp < 0.5 ? ["mforge", "camp", "treasure", "w2", "forge", "w3", "elite"] : hp > 0.75 ? ["mforge", "treasure", "elite", "w3", "forge", "w2", "camp"] : ["mforge", "treasure", "w2", "forge", "w3", "camp", "elite"];
     for (const t of pref) { const l = by(t); if (l.length && (t !== "forge" || Math.random() < 0.6)) return rand(l); }
     return rand(opts);
   }
@@ -273,6 +273,11 @@ BP.Sim = (function () {
       const cards = h.runCards || [], basic = cards.filter((c) => c.cost <= 1 && !c.upgraded && (s.config.meta.start[h.id] || {})[c.id] >= 3);
       if (cards.length > 7 && basic.length) act(s, { a: "forge", hero: h.id, card: rand(basic).spec, op: "remove" });
       else { const up = cards.filter((c) => BP.Meta.canForgeUp(s, h, c)); act(s, up.length ? { a: "forge", hero: h.id, card: rand(up).spec, op: "up" } : { a: "forge", hero: h.id, op: "skip" }); }
+    });
+    if (s.phase === "mforge") s.heroes.forEach((h) => { // мердж-кузня: случайный допустимый мердж (70%), иначе пропуск
+      if (s.mforge.done[h.id]) return;
+      const p = Math.random() < 0.7 ? BP.MForge.randomMerge(s, h.id) : null;
+      if (!p || act(s, { a: "mforge", hero: h.id, card: p[0], ally: p[1], allyCard: p[2] })) act(s, { a: "mforge", hero: h.id, skip: true });
     });
     act(s, { a: "metaReady" });
   }
@@ -312,7 +317,7 @@ BP.Sim = (function () {
       }
       if (cur) end();
       if (s.phase === "map") { act(s, { a: "mapVote", node: botNode(s, BP.RunMap.options(s)) }); act(s, { a: "mapGo" }); continue; }
-      if (s.phase === "reward" || s.phase === "forge" || s.phase === "camp") { botMeta(s); continue; }
+      if (["reward", "forge", "mforge", "camp"].includes(s.phase)) { botMeta(s); continue; }
       if (s.phase === "won") { act(s, { a: "next" }); continue; } // старый режим без меты
       break;
     }

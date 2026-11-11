@@ -519,3 +519,6 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 .utier.r-uncommon { border-color: #4a8ad8; } .utier.r-rare { border-color: #e08a2a; }
 .utier h3 { margin: 0 0 6px; } .uline { margin: 6px 0; } .uico { display: inline-block; width: 24px; }
 .dcard .dups { color: #7ab0f0; font-size: 12px; }
+.mnode.t-mforge .mico { border-color: #b77cff; background: #2a1840; color: #e0c8ff; }
+.fcard.picked .dcard { outline: 3px solid #b77cff; }
+button.evo-btn { background: #6a3aa8; border-color: #b77cff; color: #fff; }

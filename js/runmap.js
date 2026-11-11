@@ -26,7 +26,7 @@ BP.RunMap = (function () {
         let type;
         if (f <= 2) type = "w2";
         else if (f === F) type = "camp";
-        else if (f === mc.treasureFloor) type = x === Math.floor(W / 2) ? "treasure" : "camp";
+        else if (f === mc.campFloor) type = x === Math.floor(W / 2) ? "w3" : "camp";
         else {
           const w = Object.assign({}, mc.weights);
           if (f < mc.eliteFrom) delete w.elite;
@@ -37,7 +37,7 @@ BP.RunMap = (function () {
       floors.push(row);
     }
     // кузницы — на случайные обычные узлы этажей 3..F−1 (не на соседних этажах одной дорожки)
-    const spots = shuffle([].concat(...floors.filter((r) => r[0].f >= 3 && r[0].f < F && r[0].f !== mc.treasureFloor)).filter((n) => n.type !== "elite"));
+    const spots = shuffle([].concat(...floors.filter((r) => r[0].f >= 3 && r[0].f < F && r[0].f !== mc.campFloor)).filter((n) => n.type !== "elite"));
     let placed = 0;
     for (const n of spots) {
       if (placed >= (mc.forges || 0)) break;
@@ -53,10 +53,38 @@ BP.RunMap = (function () {
       });
       nxt.forEach((m) => { if (!cur.some((n) => n.next.includes(m.id))) { const src = cur.find((n) => n.x === m.x) || cur[0]; src.next.push(m.id); } });
     }
+    placeMforges(floors, mc);
     const boss = { id: "boss", f: F + 1, x: Math.floor(W / 2), type: "boss", next: [] };
     floors[floors.length - 1].forEach((n) => (n.next = ["boss"]));
     floors.push([boss]);
     return { floors };
+  }
+
+  // Мердж-кузни (11.11): узел сразу за элитой (тот же x, следующий этаж), входы — только из элиты.
+  // Элит меньше mforges — недостающие ставятся на обычные бои этажей eliteFrom..F−2.
+  function placeMforges(floors, mc) {
+    const F = mc.floors, ok = (n) => n.f >= mc.eliteFrom && n.f <= F - 2;
+    const all = [].concat(...floors);
+    let elites = all.filter((n) => n.type === "elite" && ok(n));
+    const free = shuffle(all.filter((n) => ok(n) && (n.type === "w2" || n.type === "w3")));
+    while (elites.length < (mc.mforges || 0) && free.length) { const n = free.pop(); n.type = "elite"; elites.push(n); }
+    let placed = 0;
+    for (const e of shuffle(elites)) {
+      if (placed >= (mc.mforges || 0)) break;
+      const nxt = floors[e.f], t = nxt[e.x];
+      if (t.type === "mforge" || t.type === "elite") continue;
+      t.type = "mforge"; placed++;
+      if (!e.next.includes(t.id)) e.next.push(t.id);
+      floors[e.f - 1].forEach((n) => {
+        if (n.type === "elite") return;
+        n.next = n.next.filter((id) => id !== t.id);
+        if (!n.next.length) { const alt = nxt.filter((m) => m.type !== "mforge" && Math.abs(m.x - n.x) <= 1); n.next.push((alt[0] || nxt.find((m) => m.type !== "mforge") || t).id); }
+      });
+    }
+    // у каждого узла следующего этажа должен остаться вход
+    for (let i = 0; i < floors.length - 1; i++) floors[i + 1].forEach((m) => {
+      if (!floors[i].some((n) => n.next.includes(m.id))) { const src = floors[i].find((n) => n.x === m.x && (m.type !== "mforge" || n.type === "elite")); if (src) src.next.push(m.id); }
+    });
   }
 
   const nodes = (map) => [].concat(...map.floors);
@@ -104,10 +132,11 @@ BP.RunMap = (function () {
     const n = node(state, v.result.winner);
     state.run.node = n.id; state.run.visited.push(n.id); state.run.floor = n.f; state.run.vote = null;
     Object.values(state.players).forEach((p) => (p.ready = false));
-    state.reward = null; state.forge = null; state.campResult = null;
+    state.reward = null; state.forge = null; state.mforge = null; state.campResult = null;
     if (["w2", "w3", "elite", "boss"].includes(n.type)) { BP.Engine.startFight(state, makeEncounter(state, n)); return null; }
     if (n.type === "camp") { state.phase = "camp"; BP.Meta.camp(state); return null; }
     if (n.type === "forge") { state.phase = "forge"; state.forge = { done: {} }; BP.Meta.refreshView(state); return null; }
+    if (n.type === "mforge") { state.phase = "mforge"; state.mforge = { done: {} }; BP.Meta.refreshView(state); return null; }
     if (n.type === "treasure") { state.phase = "reward"; BP.Meta.makeReward(state, "treasure"); return null; }
     return "Неизвестный узел";
   }
@@ -156,8 +185,8 @@ BP.RunMap = (function () {
     return "reward";
   }
 
-  const LABEL = { w2: "Стычка · 2 волны", w3: "Бой · 3 волны", elite: "Элита · 4 волны", camp: "Костёр", forge: "Кузница", treasure: "Сокровище", boss: "Босс" };
-  const ICON = { w2: "⚔", w3: "⚔⚔", elite: "💀", camp: "🔥", forge: "⚒", treasure: "💎", boss: "👑" };
+  const LABEL = { w2: "Стычка · 2 волны", w3: "Бой · 3 волны", elite: "Элита · 4 волны", camp: "Костёр", forge: "Кузница", mforge: "Мердж-кузня", treasure: "Сокровище", boss: "Босс" };
+  const ICON = { w2: "⚔", w3: "⚔⚔", elite: "💀", camp: "🔥", forge: "⚒", mforge: "✦", treasure: "💎", boss: "👑" };
   const label = (t) => LABEL[t] || t;
 
   return { generate, options, openVote, vote, go, node, nodes, afterWin, makeEncounter, label, ICON, PICK_MS };

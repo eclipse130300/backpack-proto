@@ -545,8 +545,12 @@ BP.Engine = (function () {
         if (state.phase !== "forge") return "Сейчас не кузница";
         if (!hero || (!owns && !isHost)) return "Это не ваш герой";
         return BP.Meta.forge(state, hero, act.card, act.op);
+      case "mforge": // мердж-кузня (js/mforge.js): hero отдаёт свою карту card на карту allyCard героя ally
+        if (state.phase !== "mforge") return "Сейчас не мердж-кузня";
+        if (!hero || (!owns && !isHost)) return "Это не ваш герой";
+        return act.skip ? BP.MForge.skip(state, hero) : BP.MForge.apply(state, hero, act.card, state.heroes.find((h) => h.id === act.ally), act.allyCard);
       case "metaReady": {
-        if (!["reward", "forge", "camp"].includes(state.phase)) return "Нечего подтверждать";
+        if (!["reward", "forge", "mforge", "camp"].includes(state.phase)) return "Нечего подтверждать";
         if (!state.players[pid]) return "Нет игрока";
         const mineLeft = state.heroes.filter((h) => h.owner === pid && !metaDone(state, h));
         if (act.value !== false && mineLeft.length) return "Сначала сделайте выбор за всех своих героев";
@@ -606,6 +610,7 @@ BP.Engine = (function () {
   function metaDone(state, h) {
     if (state.phase === "reward") return !!(state.reward && state.reward.picks[h.id]);
     if (state.phase === "forge") return !!(state.forge && state.forge.done[h.id]);
+    if (state.phase === "mforge") return !!(state.mforge && state.mforge.done[h.id]);
     return true;
   }
 

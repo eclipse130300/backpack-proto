@@ -201,6 +201,10 @@ BP.UI = (function () {
       case "forge": BP.Session.dispatch({ a: "forge", hero: el.dataset.hero, card: el.dataset.card, op: el.dataset.op }); break;
       case "meta-ready": { const me = s.players[BP.Session.myPid]; BP.Session.dispatch({ a: "metaReady", value: !(me && me.ready) }); break; }
       case "upgrades-view": ui.modal = "upgrades"; render(); break;
+      case "mf-select": ui.mfSel = { hero: el.dataset.hero, card: el.dataset.card }; render(); break;
+      case "mf-cancel": ui.mfSel = null; render(); break;
+      case "mf-merge": { const sel = ui.mfSel; ui.mfSel = null; if (sel) BP.Session.dispatch({ a: "mforge", hero: sel.hero, card: sel.card, ally: el.dataset.ally, allyCard: el.dataset.card }); break; }
+      case "mf-skip": ui.mfSel = null; BP.Session.dispatch({ a: "mforge", hero: el.dataset.hero, skip: true }); break;
       case "upgrades-all": ui.modal = "upgrades-all"; render(); break;
       case "set-help": BP.UISettings.toggleHelp(el); break;
       case "modal-close": ui.modal = null; render(); break;

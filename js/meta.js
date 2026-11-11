@@ -96,6 +96,7 @@ BP.Meta = (function () {
   function build(state, hero, spec, makeCard) {
     const card = makeCard(state, spec.id, spec.weapon);
     card.spec = spec.uid;
+    if (spec.evo) BP.MForge.buildEvo(card, spec.evo); // эволюция из мердж-кузни
     return apply(state, card, spec.ups);
   }
 
@@ -179,6 +180,7 @@ BP.Meta = (function () {
       if (u.tier !== tier || used.has(id)) return false;
       if (u.on === "hero" && (heroUsed || Math.random() < 0.5)) return false;
       if (u.treasureOnly) return kind === "treasure" && !state.run.relics[id];
+      if (u.eliteOnly) return (kind === "elite" || kind === "treasure") && !state.run.relics[id];
       return true;
     }));
     for (const id of ids) {
@@ -200,7 +202,7 @@ BP.Meta = (function () {
     refreshView(state);
     const m = M(state), rw = m.rewards[kind] || m.rewards.fight, offers = {};
     // «На всю пати» — только в сокровище и только одному случайному герою
-    const relicHero = kind === "treasure" ? rand(state.heroes).id : null;
+    const relicHero = kind === "treasure" || kind === "elite" ? rand(state.heroes).id : null;
     state.heroes.forEach((h) => {
       const used = new Set(), list = [cardOffer(state, h.id, kind)];
       let tiers = kind === "fight" ? ["common", "common"].map((t) => (Math.random() < (rw.uncommonChance || 0) ? "uncommon" : t)) : ["uncommon", "rare"];
