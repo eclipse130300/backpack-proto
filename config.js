@@ -338,11 +338,14 @@ window.GAME_CONFIG = {
     // Карта: сколько копий. Оружие карты определяется само (по оружию героя). Остальные карты героя — в пуле наград.
     start: {
       melee:  { sword_strike: 4, shield_wall: 2, cover: 1, shield_bash: 1, crush: 1 },
-      mage:   { spark: 4, barrier: 2, bolt: 1, pull: 1 },
+      mage:   { spark: 4, barrier: 2, bolt: 1, pull: 1, flame_wall: 1 },   // 11.11: магу массовка с начала (иначе слишком слабый)
       ranger: { shot: 4, cover: 2, double_shot: 1, pierce_arrow: 1 }
     },
     // Пул новых карт героя = карты его оружия + его доп. карты (heroes.*.cards) + extra ниже.
     extraPool: { mage: ["barrier"] },
+    // 11.11: базовые карты стартовой колоды как «новая карта» не предлагаются (хлам). Копии (дубли) — можно, но см. dupeFrom.
+    noReward: ["sword_strike", "spark", "shot", "shield_wall", "barrier", "cover"],
+    dupeFrom: 4,              // дубли (копия карты из колоды) — только в наградах с 4-го боя забега (за первые 3 боя — нет)
     // Редкость карт: common (обычная) | uncommon (средняя) | rare (редкая).
     // Кого нет в списке: эволюционные и за 3 энергии — rare, за 2 — uncommon, остальные — common.
     cardRarity: { might: "uncommon", fortitude: "uncommon", flow: "uncommon", insight: "uncommon", search: "uncommon", battle_cry: "uncommon" },
@@ -352,13 +355,13 @@ window.GAME_CONFIG = {
     upPercent: 0.5,           // прибавка в режиме percent (складывается: 2 улучшения = +100%). Дробное — вверх
     upFlat: 3,                // прибавка в режиме flat (2 улучшения = +6)
     multiUpgrade: true,       // одну карту можно улучшать несколько раз. false — улучшенная карта больше не предлагается
-    minDeck: 6,               // в кузнице нельзя удалить карту, если в колоде героя столько или меньше
+    minDeck: 8,               // 11.11: в колоде героя не меньше 8 карт — в кузнице нельзя удалить карту, если их уже 8
     campHeal: 0.3,            // костёр лечит каждому герою 30% макс. ХП
     // Шансы наград. card — редкость карты в слоте 1: [обычная, средняя, редкая]. dupe — шанс, что слот 1 = копия карты из колоды.
     // up — слоты 2–3. После обычного боя оба обычные, но каждый с шансом uncommonChance становится средним.
     // После элиты и в сокровище — одно среднее + одно редкое.
     rewards: {
-      fight:    { card: [70, 25, 5],  dupe: 0.25, uncommonChance: 0.15 },
+      fight:    { card: [55, 35, 10], dupe: 0.25, uncommonChance: 0.15 },
       elite:    { card: [20, 50, 30], dupe: 0.2 },
       treasure: { card: [0, 40, 60],  dupe: 0 }
     },

@@ -125,7 +125,7 @@ BP.UIMeta = (function () {
         body = `<div class="fcards">${deck.map((c) => `<div class="fcard">${BP.UIDeck.miniCard({ c, n: 1 })}<div class="fbtns">
           ${BP.Meta.canForgeUp(s, h, c) ? `<button class="small primary" data-act="forge" data-hero="${h.id}" data-card="${c.spec}" data-op="up" title="${esc(BP.Meta.offerText(s, { type: "up", up: "up" }))}">⬆ Усилить</button>` : ""}
           ${canRemove ? `<button class="small" data-act="forge" data-hero="${h.id}" data-card="${c.spec}" data-op="remove">✕ Удалить</button>` : ""}</div></div>`).join("")}</div>
-          ${canRemove ? "" : `<div class="muted small">Удалять нельзя: в колоде ${deck.length} карт (минимум ${m.minDeck + 1}).</div>`}
+          ${canRemove ? "" : `<div class="muted small">Удалять нельзя: в колоде ${deck.length} карт (меньше ${m.minDeck} нельзя).</div>`}
           <button data-act="forge" data-hero="${h.id}" data-op="skip">Пропустить</button>`;
       }
       return `<div class="rcol lane${heroIdx(s, h.id)}"><div class="rcol-head">${portrait(s, h)}<b>${esc(h.name)}</b><span class="muted small">🂠 ${deck.length}</span></div>${body}</div>`;

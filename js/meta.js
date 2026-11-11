@@ -36,7 +36,8 @@ BP.Meta = (function () {
     (hc.weapons || []).forEach((w) => Object.keys((cfg.weapons[w] || {}).cards || {}).forEach((c) => set.add(c)));
     Object.keys(hc.cards || {}).forEach((c) => set.add(c));
     ((M(state).extraPool || {})[hid] || []).forEach((c) => set.add(c));
-    return [...set].filter((c) => cfg.cards[c] && !cfg.cards[c].weak);
+    const no = new Set(M(state).noReward || []); // базовые карты стартовой колоды — не награда
+    return [...set].filter((c) => cfg.cards[c] && !cfg.cards[c].weak && !no.has(c));
   }
 
   function rarityOf(state, cardId) {
@@ -154,13 +155,15 @@ BP.Meta = (function () {
 
   function cardOffer(state, hid, kind) {
     const m = M(state), rw = m.rewards[kind] || m.rewards.fight, deck = state.run.decks[hid];
-    if (deck.length && Math.random() < (rw.dupe || 0)) {
+    const early = state.run.fights < (m.dupeFrom || 1); // награды за первые 3 боя — без дублей
+    if (deck.length && !early && Math.random() < (rw.dupe || 0)) {
       const sp = rand(deck);
       return { type: "dupe", spec: sp.uid, rarity: "common" };
     }
     const all = pool(state, hid);
     let tier = rollTier(rw.card || [70, 25, 5]), list = [];
     for (let i = TIERS.indexOf(tier); i >= 0 && !list.length; i--) list = all.filter((c) => rarityOf(state, c) === TIERS[i]);
+    if (list.length < 2) list = list.concat(all.filter((c) => rarityOf(state, c) === "uncommon")); // бедный пул (маг) — не крутить одну карту
     if (!list.length) list = all;
     const cid = rand(list);
     return { type: "card", card: cid, rarity: rarityOf(state, cid) };
@@ -272,7 +275,7 @@ BP.Meta = (function () {
     const sp = specOf(state, hero.id, uid), c = sp && hero.runCards.find((x) => x.spec === uid);
     if (!sp || !c) return "Нет такой карты";
     if (op === "remove") {
-      if (deck.length <= (M(state).minDeck || 0)) return `Колода не может быть меньше ${M(state).minDeck + 1} карт`;
+      if (deck.length <= (M(state).minDeck || 0)) return `В колоде должно остаться не меньше ${M(state).minDeck} карт`;
       state.run.decks[hero.id] = deck.filter((s) => s !== sp);
       fg.done[hero.id] = `удалил «${c.name}»`;
     } else if (op === "up") {
