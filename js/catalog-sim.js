@@ -98,7 +98,7 @@ BP.CatalogSim = (function () {
         <span class="muted small">${esc(BOT_INFO[st.bot] || "")}</span>
       </div>
       ${st.job ? `<div id="simprog" class="prog"><i></i><span>запускаю…</span></div>` : ""}
-      <p class="muted small">Боты играют весь забег (${cfg.encounters.length} ${cfg.encounters.length === 1 ? "бой" : "боя"}) по тем же правилам и на тех же числах, что игра сейчас. Результат сохраняется в этом браузере — для каждого бота свой.
+      <p class="muted small">Боты играют весь забег (${cfg.meta ? "карта похода: ~9 боёв, награды, костры, кузницы, босс" : cfg.encounters.length + " боя"}) по тем же правилам и на тех же числах, что игра сейчас. Результат сохраняется в этом браузере — для каждого бота свой.
         Боты — не люди: smart играет почти идеально, sloppy — хуже любого игрока. Настоящая сложность где-то между ними.</p>
       ${r ? result(cfg, cards, r) : `<div class="empty muted">Для бота «${esc(st.bot)}» ещё нет результата — нажмите «Прогнать ботов».</div>`}
     </section>`;

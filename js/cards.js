@@ -210,16 +210,18 @@ BP.Cards = (function () {
     const base = Math.max(0, dmgEff.amount - weakness(hero) + (hero.dmgBuff || 0)); // + Сила (js/mech.js)
     const areaHits = targets.map((t) => ({ enemy: t.e.uid, amount: Math.ceil(base * t.f - 1e-9) })); // до крита — для Повтора
     const crit = card.weapon && !card.weak ? hero.crit[card.weapon] : null; // слабые удары не двигают крит и не критуют (18.10)
-    let counter = crit ? Math.min(crit.every - 1, crit.count + (card.sharpen || 0)) : 0; // merge-6: Заточка сдвигает счётчик (крит не дальше следующего удара)
+    const every = crit ? Math.max(1, crit.every - (card.sharpPerm || 0)) : 0; // beta-meta: «Острота» — крит этой картой на N ударов раньше
+    let counter = crit ? Math.min(every - 1, crit.count + (card.sharpen || 0)) : 0; // merge-6: Заточка сдвигает счётчик (крит не дальше следующего удара)
+    const insp = (state.inspire || 0) * 0.5; // beta-meta: «Воодушевление» — +50% следующей атаке пати (складывается)
     const hits = [];
     for (let i = 0; i < (dmgEff.hits || 1); i++) {
       let weaponCrit = false;
       if (card.alwaysCrit) weaponCrit = true; // Верный выстрел: всегда крит, счётчик не трогает
-      else if (crit) { counter++; if (counter >= crit.every) { weaponCrit = true; counter = 0; } }
+      else if (crit) { counter++; if (counter >= every) { weaponCrit = true; counter = 0; } }
       targets.forEach(({ e }, k) => {
         // card-mechanics-1: условного крита по оглушённому/толкнутому нет; столкнувшиеся враги получают +50% (складывается с критом)
         const cond = !!(rules.collisionBonus && e.vuln);
-        const mult = 1 + (weaponCrit ? rules.critMultiplier - 1 : 0) + (cond ? rules.collisionBonus : 0);
+        const mult = 1 + (weaponCrit ? rules.critMultiplier - 1 : 0) + (cond ? rules.collisionBonus : 0) + insp;
         const exec = BP.Gifts ? BP.Gifts.executeMult(card, e) * BP.Gifts.bonusMult(state, card, e) : 1; // дары «Добивание», «По открытым/закрытым»
         const zone = targets[k].f !== 1; // клетка Взрыва
         let amount = areaHits[k].amount * mult * exec * (card.mult || 1); // mult — эволюции (Палач, Цепной крюк)
@@ -234,7 +236,7 @@ BP.Cards = (function () {
     hits.forEach((h, i) => { h.i = i; });
     hits.sort((a, b) => (a.step || 0) - (b.step || 0) || a.i - b.i);
     hits.forEach((h) => { delete h.i; });
-    if (commit && crit) crit.count = counter;
+    if (commit && crit) crit.count = Math.min(counter, crit.every - 1);
     return hits;
   }
 
@@ -244,8 +246,9 @@ BP.Cards = (function () {
     const c = card.weapon && !card.weak && hero.crit ? hero.crit[card.weapon] : null;
     if (dmg && card.alwaysCrit) return { left: 1, every: 1, willCrit: true, always: true };
     if (!dmg || !c) return null;
-    const left = Math.max(1, c.every - c.count - (card.sharpen || 0)); // merge-6: Заточка
-    return { left, every: c.every, willCrit: left <= (dmg.hits || 1) };
+    const every = Math.max(1, c.every - (card.sharpPerm || 0)); // beta-meta: «Острота»
+    const left = Math.max(1, every - c.count - (card.sharpen || 0)); // merge-6: Заточка
+    return { left, every, willCrit: left <= (dmg.hits || 1) };
   }
 
   const rotatable = (card) => card.area === "shape" && !card.fixed; // tests.fixedShapes — фигура не крутится
@@ -303,6 +306,8 @@ BP.Cards = (function () {
     const m = state.config.tests.merge;
     if (!m.payCost) return 0;
     const ts = state.turnStats || { merges: {}, mergesTotal: 0 };
+    // beta-meta: «Лёгкая передача» (карта) и «На всю пати» (первый мердж хода) — бесплатно
+    if (card.freeMerge || (state.run && state.run.relics.partymerge && !ts.mergesTotal)) return 0;
     if (m.costGrowth === "hero") return card.cost + ((ts.merges || {})[hero.id] || 0);
     if (m.costGrowth === "party") return (ts.mergesTotal || 0) + 1;
     return card.cost;

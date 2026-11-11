@@ -224,14 +224,6 @@ BP.FX = (function () {
         ${h.dmgBuff ? `<div class="tip-note good">⚔ Сила: +${h.dmgBuff} урона каждой картой до конца боя.</div>` : ""}${h.blockBuff ? `<div class="tip-note good">🛡 Стойкость: +${h.blockBuff} блока от каждой карты до конца боя.</div>` : ""}
         <div class="tip-sec">Его будут бить</div>${inc.length ? inc.map((e) => `<div>⚔ ${esc(e.name)}: ${e.intent.damage}${e.intent.hits > 1 ? "×" + e.intent.hits : ""}</div>`).join("") : '<div class="muted">никто</div>'}`;
     }
-    if (kind === "fquest" && s.quest) {
-      const q = s.quest, rc = s.config.cards[q.reward] || {};
-      const rtext = BP.Cards.text(Object.assign({ effects: [] }, rc));
-      return `<div class="tip-title">${q.done ? "✔ Квест выполнен" : "? Квест боя"}</div><div>${esc(q.text)}</div>
-        <div class="tip-sec">Прогресс (за весь бой)</div><div>${esc(BP.Quests.progressText(s))}</div>
-        <div class="tip-sec">Награда — карта</div><div class="good"><b>${esc(rc.name || q.reward)}</b> <span class="tip-cost">${rc.cost || 0}⚡</span> — ${esc(rtext)}</div>
-        <div class="tip-note">Карту сразу получает в руку герой, который закрыл условие. Одноразовая, в конце хода не сгорает.</div>`;
-    }
     if (kind === "targeting") {
       return s.config.tests.enemyTargeting === "A"
         ? `<div class="tip-title">Коридоры</div><div>Каждый герой стоит под своими двумя колонками (они подкрашены его цветом). Враг бьёт героя своего коридора; если тот пал — ближайшего.</div>`

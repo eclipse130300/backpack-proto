@@ -81,10 +81,19 @@ BP.CardTip = (function () {
     if (c.alwaysCrit) add({ icon: "💥", value: "!", face: true, cls: ev, short: "всегда крит", long: `Всегда крит ×${state.config.rules.critMultiplier}. Счётчик крита оружия не двигает.` });
     if (c.ricochet && !giftIds.has("pierce")) add({ icon: "↯", value: "100%", face: true, short: "рикошет", long: "Перед ударом выбираешь направление атаки: сосед цели в эту сторону получает 100% урона. Толчок карты (если есть) — туда же." });
     if (c.returnOnKill) add({ icon: "↩", face: true, cls: ev, short: "вернётся в руку", long: "Убил цель — карта возвращается в руку." });
-    // полученные дары (в порядке первого мерджа)
+    // beta-meta: улучшения карты на весь забег (js/meta.js) — синие значки
+    const U = (state.config.meta || {}).upgrades || {}, ups = c.ups || {};
+    const upPart = (id, value) => { const u = U[id]; if (u) add({ icon: u.icon, value, face: true, cls: "up", short: u.name, long: `Улучшение на весь забег — ${u.name}: ${u.text}.` }); };
+    if (ups.up) upPart("up", "+" + ups.up);
+    if (ups.cheaper) upPart("cheaper", "−" + ups.cheaper);
+    ["draw", "inspire", "feed", "retain", "innate", "sharp", "freemerge", "killenergy", "echo", "generous"].forEach((id) => { if (ups[id]) upPart(id, ""); });
+    if (ups.armorbreak && !c.armorBreak) upPart("armorbreak", "");
+    if (ups.awaken) upPart("awaken", "");
+    // полученные дары (в порядке первого мерджа); постоянные дары забега — тоже здесь
+    const perm = new Set(c.permGifts || []);
     if (BP.Gifts.isOn(state)) BP.Gifts.badges(state, c).forEach((b) => {
       const g = state.config.gifts[b.id] || {};
-      add({ icon: b.icon, value: b.value, color: b.color, face: true, short: g.name, long: `Получено мерджем — ${g.name}: ${g.text}.` });
+      add({ icon: b.icon, value: b.value, color: b.color, face: true, short: g.name, long: `${perm.has(b.id) ? "Постоянный дар (улучшение забега)" : "Получено мерджем"} — ${g.name}: ${g.text}.` });
     });
     // крит
     const ci = BP.Cards.critInfo(hero, c);

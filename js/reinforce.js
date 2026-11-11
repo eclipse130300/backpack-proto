@@ -9,11 +9,18 @@ BP.Reinforce = (function () {
   const opts = (state) => state.config.tests.reinforcements || {};
   const isOn = (state) => !!opts(state).enabled;
 
+  // beta-meta: бой по волнам — enc.waves = [[типы], [типы]…] (вторая и следующие волны; первая уже на поле).
+  //   Волна выходит целиком (sizes — размеры оставшихся волн). Старый формат enc.reserve — по perWave врагов.
   function setup(state, enc) {
     const o = opts(state);
+    if (isOn(state) && enc.waves && enc.waves.length) {
+      state.reinf = { left: [].concat(...enc.waves), sizes: enc.waves.map((w) => w.length), total: enc.waves.length + 1, next: 1 + (o.every || 2), marks: [] };
+      return;
+    }
     state.reinf = isOn(state) && enc.reserve && enc.reserve.length
       ? { left: enc.reserve.slice(), next: 1 + (o.every || 2), marks: [] } : null;
   }
+  const waveSize = (state) => { const rf = state.reinf; return Math.min(rf.sizes ? rf.sizes[0] : (opts(state).perWave || 2), rf.left.length); };
 
   const pending = (state) => !!(state.reinf && state.reinf.left.length);
 
@@ -30,18 +37,19 @@ BP.Reinforce = (function () {
 
   // Пометить клетки следующей волны
   function plan(state) {
-    const rf = state.reinf, n = Math.min(opts(state).perWave || 2, rf.left.length);
+    const rf = state.reinf, n = waveSize(state);
     rf.marks = freeCells(state).slice(0, n).map((c, i) => ({ col: c.col, row: c.row, type: rf.left[i] }));
   }
 
   // Выпустить волну. make(type, col, row) создаёт врага (engine). Возвращает новых врагов.
   function spawn(state, make) {
-    const rf = state.reinf, n = Math.min(opts(state).perWave || 2, rf.left.length), out = [];
+    const rf = state.reinf, n = waveSize(state), out = [];
     const marks = rf.marks.filter((m) => !BP.Cards.enemyAt(state, m.col, m.row));
     const free = freeCells(state).filter((c) => !marks.some((m) => m.col === c.col && m.row === c.row));
     const cells = marks.concat(free);
     for (let i = 0; i < n && cells[i]; i++) out.push(make(rf.left.shift(), cells[i].col, cells[i].row));
     rf.marks = [];
+    if (rf.sizes) rf.sizes.shift();
     return out;
   }
 
@@ -94,7 +102,8 @@ BP.Reinforce = (function () {
   function info(state) {
     const rf = state.reinf;
     if (!rf || !rf.left.length) return null;
-    return { left: rf.left.length, inTurns: Math.max(1, rf.next - state.turn), marks: rf.marks };
+    return { left: rf.left.length, inTurns: Math.max(1, rf.next - state.turn), marks: rf.marks,
+      wave: rf.sizes ? rf.total - rf.sizes.length : 0, waves: rf.total || 0 };
   }
 
   return { isOn, setup, pending, onTurnStart, spawnNow, info, fixMarks };

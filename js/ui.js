@@ -62,7 +62,7 @@ BP.UI = (function () {
       ${override ? `<div class="warn" style="margin-top:12px">Используется конфиг из «Настроек» (сохранён ${esc(override.savedAt.slice(0, 16).replace("T", " "))}), а не config.js. <button class="small" data-act="reset-config">Вернуть config.js</button></div>` : ""}
       <div class="lobby-heroes">${heroes}</div>
       <div class="muted small">Свободные герои при старте достанутся хосту. Хост без героев — наблюдатель.</div>
-      <div class="row" style="margin-top:14px">${host ? `<button class="primary" data-act="start">Начать бой</button><button data-act="settings">⚙ Настройки и тесты</button>` : `<span class="muted">Ждём, пока хост начнёт…</span>`}</div>
+      <div class="row" style="margin-top:14px">${host ? `<button class="primary" data-act="start">${s.run ? "Начать забег" : "Начать бой"}</button><button data-act="settings">⚙ Настройки и тесты</button>` : `<span class="muted">Ждём, пока хост начнёт…</span>`}</div>
     </div></div>`;
   }
 
@@ -78,7 +78,7 @@ BP.UI = (function () {
     const rows = sm.heroes.map((h) => `<tr><td>${esc(h.name)}</td><td>${h.hp}/${h.maxHp}</td><td>${h.cards}</td><td>${h.energy}</td><td>${h.damage}</td><td>${h.blockGiven}</td><td>${h.taken}</td><td>${h.merges}</td></tr>`).join("");
     return `<div class="modal-back"><div class="modal" style="max-width:860px">
       <h2>${title}</h2>
-      <div class="muted">«${esc(sm.name)}» · ходов: ${sm.turns} · столкновений: ${sm.collisions}${sm.quest ? ` · квест боя: ${sm.quest.done ? "✔ выполнен" : "✘ нет"}` : ""}</div>
+      <div class="muted">«${esc(sm.name)}» · ходов: ${sm.turns} · столкновений: ${sm.collisions}</div>
       <table><tr><th>Герой</th><th>ХП</th><th>Карт</th><th>Энергии</th><th>Урон</th><th>Блок дал</th><th>Урона получил</th><th>Мерджей</th></tr>${rows}</table>
       <div class="row">${host ? (s.phase === "won" ? `<button class="primary" data-act="next">Следующий бой</button>` : `<button class="primary" data-act="retry">Заново</button>`) : `<span class="muted">Ждём хоста…</span>`}
       <button data-act="log-csv">Скачать лог (CSV)</button><button data-act="toggle-log">Показать лог</button></div>
@@ -123,15 +123,18 @@ BP.UI = (function () {
     const logAtBottom = !logEl || logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30;
     const deckEl = document.getElementById("deck-scroll");
     const deckScroll = deckEl ? deckEl.scrollTop : 0;
-    let html = BP.UIGame.render(s, me, ui);
-    if (["won", "lost", "victory"].includes(s.phase)) {
-      // Конец боя: ~2.5 с экран заблокирован (досмотреть цифры урона), потом окно итогов (rules.endFightDelayMs)
-      const delay = s.config.rules.endFightDelayMs || 0, sid = s.summary && s.summary.id;
-      if (ui.endId !== sid) { ui.endId = sid; ui.endAt = Date.now(); if (delay) setTimeout(render, delay + 30); }
-      if (Date.now() - ui.endAt < delay) html += `<div class="end-block"></div>`;
-      else if (ui.modal !== "hide-summary") html += renderSummary(s);
-    }
+    // Конец боя: ~2.5 с экран заблокирован (досмотреть цифры урона), потом итоги / награда (rules.endFightDelayMs)
+    const delay = s.config.rules.endFightDelayMs || 0, sid = s.summary && s.summary.id;
+    const ended = ["won", "lost", "victory", "reward"].includes(s.phase) && sid;
+    if (ended && ui.endId !== sid) { ui.endId = sid; ui.endAt = Date.now(); if (delay) setTimeout(render, delay + 30); }
+    const inDelay = ended && ui.endId === sid && Date.now() - ui.endAt < delay;
+    // beta-meta: карта, награда, костёр, кузница, победа — свои экраны (js/ui-meta.js)
+    const metaScreen = s.run && BP.UIMeta.PHASES.includes(s.phase) && !inDelay;
+    let html = metaScreen ? BP.UIMeta.render(s, me, ui) : BP.UIGame.render(s, me, ui);
+    if (inDelay) html += `<div class="end-block"></div>`;
+    else if (["won", "lost"].includes(s.phase) || (s.phase === "victory" && !s.run)) { if (ui.modal !== "hide-summary") html += renderSummary(s); }
     if (ui.modal === "deck" || ui.modal === "discard") html += BP.UIDeck.render(s, ui.modal);
+    if ((ui.modal === "upgrades" || ui.modal === "upgrades-all") && s.run) html += BP.UIMeta.upgradesModal(s, ui.modal === "upgrades-all" ? "all" : "mine");
     if (s.choice && s.phase === "players") html += BP.UIDeck.renderChoice(s, me); // Прозрение / Поиск (js/mech.js)
     if (ui.modal === "settings") html += renderSettings(s);
     app().innerHTML = html;
@@ -145,7 +148,7 @@ BP.UI = (function () {
     BP.Drag.refresh();
     BP.FX.afterRender(s);
     BP.CardTip.refresh();
-    BP.UIQuest.afterRender(s);
+    BP.UIMeta.afterRender(s);
   }
 
   // ---------- Действия кнопок ----------
@@ -191,8 +194,14 @@ BP.UI = (function () {
       case "show-summary": ui.modal = null; render(); break;
       case "deck-view": ui.modal = "deck"; render(); break;
       case "discard-view": ui.modal = "discard"; render(); break;
-      case "quest-vote": BP.Session.dispatch({ a: "questVote", idx: +el.dataset.idx }); break;
       case "settings": ui.modal = "settings"; render(); break;
+      // beta-meta (js/ui-meta.js)
+      case "map-vote": BP.Session.dispatch({ a: "mapVote", node: el.dataset.node }); break;
+      case "reward-pick": BP.Session.dispatch({ a: "rewardPick", hero: el.dataset.hero, idx: +el.dataset.idx }); break;
+      case "forge": BP.Session.dispatch({ a: "forge", hero: el.dataset.hero, card: el.dataset.card, op: el.dataset.op }); break;
+      case "meta-ready": { const me = s.players[BP.Session.myPid]; BP.Session.dispatch({ a: "metaReady", value: !(me && me.ready) }); break; }
+      case "upgrades-view": ui.modal = "upgrades"; render(); break;
+      case "upgrades-all": ui.modal = "upgrades-all"; render(); break;
       case "set-help": BP.UISettings.toggleHelp(el); break;
       case "modal-close": ui.modal = null; render(); break;
       case "cfg-apply": { const cfg = collectSettings(s); if (cfg) { ui.modal = null; BP.Session.applyConfig(cfg); toast("Конфиг применён, забег перезапущен", "good"); } break; }
@@ -234,7 +243,7 @@ BP.UI = (function () {
       if (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA") return;
       const s = BP.Session.state;
       if (!s || s.phase === "lobby") return;
-      if (ev.key === "Escape" && (ui.modal === "deck" || ui.modal === "discard")) { ui.modal = null; render(); return; }
+      if (ev.key === "Escape" && ["deck", "discard", "upgrades", "upgrades-all"].includes(ui.modal)) { ui.modal = null; render(); return; }
       const mine = s.heroes.filter((h) => h.owner === BP.Session.myPid);
       const n = parseInt(ev.key, 10);
       if (n >= 1 && n <= mine.length) { ui.activeHero = mine[n - 1].id; ui.selected = null; render(); }

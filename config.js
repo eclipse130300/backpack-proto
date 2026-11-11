@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 16,
+  version: 17,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -62,11 +62,6 @@ window.GAME_CONFIG = {
     // Карты героя подсвечены его цветом, общие — бирюзовой полосой «общая».
     sharedDeck: { enabled: false, minDeck: 12 },
 
-    // Квест боя (17.10, заменил «Клятвы»): перед боем игроки голосуют за 1 из 3 случайных квестов (у каждого своя награда).
-    // Ничья — рулетка выбирает случайно. Во время боя над полем висит «?»: серый — не выполнен, золотой — выполнен.
-    // Условие — на весь бой, с прогрессом. Герой, который закрыл условие, сразу получает в руку квестовую карту:
-    // одноразовую (сыграл — пропала) и не сгорающую в конце хода. Условия и награды — questConditions/questRewards.
-    fightQuest: { enabled: true },
 
     // Фигуры массовок без поворота (17.10): у каждой массовки своя фигура (fixedShape у карты), ПКМ не крутит.
     // Фигуры из 3+ клеток симметричные и «смотрят» на героев. false — старый режим: фигуры shape, поворот ПКМ.
@@ -84,7 +79,8 @@ window.GAME_CONFIG = {
     // Бой выигран, когда пусто и на поле, и в резерве. Подробно — js/reinforce.js.
     // card-mechanics-1 (21.10): волна, вышедшая посреди хода игроков (поле зачистили), в этот ход не атакует
     // («осматривается»), зато получает lateArmor брони. Толкнул врага на клетку ⚠ — метка переезжает на ближайшую свободную.
-    reinforcements: { enabled: true, every: 2, perWave: 2, lateArmor: 5 }
+    // beta-meta (11.11): every 1 — следующая волна выходит каждый ход (бои короче, ориентир по таблице времени)
+    reinforcements: { enabled: true, every: 1, perWave: 2, lateArmor: 5 }
   },
 
   // ---------- Дары (мердж в режиме tests.merge.mode = "gift"), версия merge-2 (19.10) ----------
@@ -258,25 +254,16 @@ window.GAME_CONFIG = {
     // Маг
     flow:          { name: "Поток",             cost: 0, icon: "bolt",    target: "ally", effects: [{ type: "energy", amount: 1 }], isNew: true, added: "21.10.2026" },
     insight:       { name: "Прозрение",         cost: 0, icon: "purify",  target: "none", effects: [{ type: "pick", count: 3 }], isNew: true, added: "21.10.2026" },
-    might:         { name: "Сила",              cost: 1, icon: "unity",   target: "hero", effects: [{ type: "buffDamage", amount: 1 }], isNew: true, added: "21.10.2026" },
+    might:         { name: "Сила",              cost: 0, icon: "unity",   target: "hero", effects: [{ type: "buffDamage", amount: 1 }], isNew: true, added: "21.10.2026" },
     // Милишник
     battle_cry:    { name: "Боевой клич",       cost: 1, icon: "taunt",   target: "hero", effects: [{ type: "energy", amount: 2 }], isNew: true, added: "21.10.2026" },
     // Поиск (24.10): на себя или союзника — 1 из 3 случайных карт из колоды и сброса этого героя (рука не участвует), с мердж-бонусами
     search:        { name: "Поиск",             cost: 1, icon: "oath",    target: "hero", effects: [{ type: "tutor", count: 3 }], isNew: true, added: "24.10.2026" },
-    fortitude:     { name: "Стойкость",         cost: 1, icon: "barrier", target: "hero", effects: [{ type: "buffBlock", amount: 1 }], isNew: true, added: "21.10.2026" },
+    fortitude:     { name: "Стойкость",         cost: 0, icon: "barrier", target: "hero", effects: [{ type: "buffBlock", amount: 1 }], isNew: true, added: "21.10.2026" },
     // Стрелок
     quiver:        { name: "Колчан",            cost: 1, icon: "arrows",  target: "self", effects: [{ type: "draw", amount: 2 }], isNew: true, added: "21.10.2026" },
     smoke:         { name: "Дымовая завеса",    cost: 1, icon: "cover",   target: "hero", effects: [{ type: "miss", amount: 1 }], isNew: true, added: "21.10.2026" },
 
-    // «Единение» — только награда квеста (см. questRewards), отдельной настройки нет.
-    unity:         { name: "Единение",          cost: 0, icon: "unity", target: "none",  effects: [{ type: "sharedPool" }], note: "Остаток энергии всех героев складывается, любой тратит из пула" },
-
-    // Награды квеста боя (tests.fightQuest): одноразовые карты, в колоды не попадают
-    q_surge:       { name: "Прилив сил",        cost: 0, icon: "bolt",   target: "self", effects: [{ type: "energy", amount: 2 }], isNew: true, added: "17.10.2026" },
-    q_insight:     { name: "Озарение",          cost: 0, icon: "purify", target: "self", effects: [{ type: "draw", amount: 2 }], isNew: true, added: "17.10.2026" },
-    q_gift:        { name: "Дар силы",          cost: 0, icon: "unity",  target: "ally", effects: [{ type: "energy", amount: 2 }], isNew: true, added: "17.10.2026" },
-    q_bulwark:     { name: "Общий оплот",       cost: 1, icon: "barrier", target: "none", effects: [{ type: "blockParty", amount: 5 }], isNew: true, added: "17.10.2026" },
-    q_wave:        { name: "Ударная волна",     cost: 1, icon: "nova",   target: "none", effects: [{ type: "damageAllEnemies", amount: 5 }], isNew: true, added: "17.10.2026" }
   },
 
   // ---------- Оружие и щиты (главный источник карт) ----------
@@ -341,49 +328,93 @@ window.GAME_CONFIG = {
     priest:  { name: "Падший жрец",  hp: 42, armor: 25, melee: false, actions: [{ type: "attack", damage: 8 }, { type: "disable", targets: 1 }, { type: "attack", damage: 6, targets: 2 }, { type: "attack", damage: 5, targets: 3, armor: 10 }] }
   },
 
-  // ---------- Квест боя (tests.fightQuest) ----------
-  // Перед боем — 3 разных случайных условия, у каждого своя случайная награда; игроки голосуют. Условие — на весь бой.
-  // condition: killMarked (убить отмеченного 🎯 врага) | aoeHits {count} (задеть N врагов одной массовкой)
-  //            collisions {count} (столкновений толчками за бой) | focusTurn {count} (N героев бьют одного врага за ход)
-  //            crits {count} (критов за бой) | stuns {count} (оглушений) | killsTurn {count} (убийств за один ход)
-  //            backKills {count} (убить заднего врага, пока передний его прикрывает) | pushes {count} (толчков)
-  //            cleanEnemyTurn (ход врагов, после которого ни у кого не убыло ХП; карту получает случайный живой герой)
-  //            mergeKills {count} (убийств картой с ★) | weakKills {count} (убийств слабым ударом)
-  // Награда — id карты из cards: её получает в руку герой, закрывший условие. Карта одноразовая.
-  questConditions: {
-    marked:    { text: "Убейте отмеченного врага 🎯", condition: { type: "killMarked" } },
-    aoe3:      { text: "Задейте 3 врагов одной массовкой", condition: { type: "aoeHits", count: 3 } },
-    collision: { text: "Устройте столкновение толчком", condition: { type: "collisions", count: 1 } },
-    focus2:    { text: "Два героя бьют одного врага за один ход", condition: { type: "focusTurn", count: 2 } },
-    crit2:     { text: "Нанесите 2 крита", condition: { type: "crits", count: 2 } },
-    // 17.10: новые условия
-    stun2:     { text: "Оглушите 2 врагов", condition: { type: "stuns", count: 2 } },
-    kills2:    { text: "Убейте 2 врагов за один ход", condition: { type: "killsTurn", count: 2 } },
-    backKill:  { text: "Убейте врага заднего ряда, пока его прикрывают", condition: { type: "backKills", count: 1 } },
-    push3:     { text: "Толкните врагов 3 раза", condition: { type: "pushes", count: 3 } },
-    noHit:     { text: "Переживите ход врагов: никто из героев не теряет ХП", condition: { type: "cleanEnemyTurn", count: 1 } },
-    mergeKill: { text: "Убейте врага усиленной (мердж ★) картой", condition: { type: "mergeKills", count: 1 } },
-    weakKill:  { text: "Добейте врага слабым ударом", condition: { type: "weakKills", count: 1 } }
-  },
-  questRewards: ["q_surge", "q_insight", "q_gift", "q_bulwark", "q_wave", "unity"],
 
-  // ---------- Бои (идут по порядку) ----------
-  // Клетки: col 0–5 (слева направо), row 0 — передний ряд, 1 — задний.
-  // Враг заднего ряда (col, 1) стоит прямо за (col, 0) — она его и прикрывает. Колонки 0, 2, 4 ближе к героям.
-  // Задумка забега: каждый бой отъедает немного ХП, минибосс — больше всех.
-  //   1 «Трупоеды» — разминка, лучник за упырём учит бить дальними;
-  //   2 «Стая» — 4 гончие в ряд + прикрытый лучник: бой для массовых атак;
-  //   3 «Громила» — танк с блоком (распылять урон невыгодно) и два дальника по краям;
-  //   4 «Минибосс: Жрец» — жрец в заднем ряду за упырём (рядом второй упырь), сбоку лучник.
-  // reserve — подкрепления (tests.reinforcements): типы врагов по порядку выхода, по perWave за волну.
-  encounters: [
-    { name: "Трупоеды",          enemies: [{ type: "ghoul", col: 1, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 2, row: 1 }, { type: "archer", col: 4, row: 1 }],
-      reserve: ["hound", "hound", "ghoul", "cultist", "hound", "ghoul", "hound", "hound"] },
-    { name: "Стая",              enemies: [{ type: "hound", col: 0, row: 0 }, { type: "hound", col: 2, row: 0 }, { type: "hound", col: 3, row: 0 }, { type: "hound", col: 5, row: 0 }, { type: "archer", col: 2, row: 1 }],
-      reserve: ["hound", "hound", "hound", "archer", "hound", "ghoul", "hound", "hound"] },
-    { name: "Громила",           enemies: [{ type: "brute", col: 2, row: 0 }, { type: "ghoul", col: 4, row: 0 }, { type: "cultist", col: 0, row: 1 }, { type: "archer", col: 5, row: 1 }],
-      reserve: ["ghoul", "hound", "hound", "cultist", "hound", "ghoul", "hound", "hound"] },
-    { name: "Минибосс: Жрец",    enemies: [{ type: "priest", col: 2, row: 1 }, { type: "ghoul", col: 2, row: 0 }, { type: "ghoul", col: 3, row: 0 }, { type: "archer", col: 5, row: 1 }],
-      reserve: ["hound", "hound", "ghoul", "cultist"] }
-  ]
+  // =====================================================================
+  //  МЕТА ЗАБЕГА (ветка beta-meta, 11.11): карта похода, награды, костёр, кузница, сокровище.
+  //  Код — js/meta.js (колоды забега, улучшения, награды) и js/runmap.js (карта, голосование, бои по волнам).
+  // =====================================================================
+  meta: {
+    // ---------- Стартовые колоды (как в Slay the Spire, только меньше: 8–9 карт) ----------
+    // Карта: сколько копий. Оружие карты определяется само (по оружию героя). Остальные карты героя — в пуле наград.
+    start: {
+      melee:  { sword_strike: 4, shield_wall: 2, cover: 1, shield_bash: 1, crush: 1 },
+      mage:   { spark: 4, barrier: 2, bolt: 1, pull: 1 },
+      ranger: { shot: 4, cover: 2, double_shot: 1, pierce_arrow: 1 }
+    },
+    // Пул новых карт героя = карты его оружия + его доп. карты (heroes.*.cards) + extra ниже.
+    extraPool: { mage: ["barrier"] },
+    // Редкость карт: common (обычная) | uncommon (средняя) | rare (редкая).
+    // Кого нет в списке: эволюционные и за 3 энергии — rare, за 2 — uncommon, остальные — common.
+    cardRarity: { might: "uncommon", fortitude: "uncommon", flow: "uncommon", insight: "uncommon", search: "uncommon", battle_cry: "uncommon" },
+
+    // ---------- Улучшения ----------
+    upgradeMode: "percent",   // как работает «+Урон/+Блок» (награда и кузница): "percent" — +50% | "flat" — +3
+    upPercent: 0.5,           // прибавка в режиме percent (складывается: 2 улучшения = +100%). Дробное — вверх
+    upFlat: 3,                // прибавка в режиме flat (2 улучшения = +6)
+    multiUpgrade: true,       // одну карту можно улучшать несколько раз. false — улучшенная карта больше не предлагается
+    minDeck: 6,               // в кузнице нельзя удалить карту, если в колоде героя столько или меньше
+    campHeal: 0.3,            // костёр лечит каждому герою 30% макс. ХП
+    // Шансы наград. card — редкость карты в слоте 1: [обычная, средняя, редкая]. dupe — шанс, что слот 1 = копия карты из колоды.
+    // up — слоты 2–3. После обычного боя оба обычные, но каждый с шансом uncommonChance становится средним.
+    // После элиты и в сокровище — одно среднее + одно редкое.
+    rewards: {
+      fight:    { card: [70, 25, 5],  dupe: 0.25, uncommonChance: 0.15 },
+      elite:    { card: [20, 50, 30], dupe: 0.2 },
+      treasure: { card: [0, 40, 60],  dupe: 0 }
+    },
+    // id: tier (common | uncommon | rare), on: card — на конкретную карту, hero — герою, party — всей пати.
+    // Тексты — для экрана наград и окна «Улучшения». Поведение — js/meta.js (apply) и engine.js.
+    upgrades: {
+      up:          { tier: "common",   on: "card",  icon: "⬆", name: "Усиление",      text: "+50% урона (или блока) карте — или +3, по переключателю upgradeMode" },
+      gift:        { tier: "common",   on: "card",  icon: "🎁", name: "Дар",           text: "карта получает постоянный дар; при мердже он уходит вместе с остальными дарами" },
+      draw:        { tier: "common",   on: "card",  icon: "🂠", name: "Добор",         text: "сыграл карту — возьми ещё одну" },
+      inspire:     { tier: "common",   on: "card",  icon: "✨", name: "Воодушевление", text: "следующая атака любого героя пати бьёт на +50%" },
+      feed:        { tier: "common",   on: "card",  icon: "🔋", name: "Подпитка",      text: "отдал эту карту мерджем — союзник получает +1 энергии" },
+      armorbreak:  { tier: "common",   on: "card",  icon: "⬢", name: "Бронебой",      text: "урон по броне врага ×2" },
+      maxhp:       { tier: "common",   on: "hero",  icon: "❤", name: "Здоровье",      text: "+8 к макс. ХП героя (и сразу +8 ХП)" },
+      startblock:  { tier: "common",   on: "hero",  icon: "⛨", name: "Закалка",       text: "+2 к стартовому блоку героя в каждом бою" },
+      cheaper:     { tier: "uncommon", on: "card",  icon: "⚡", name: "Удешевление",   text: "карта стоит на 1 энергию меньше (не меньше 0)" },
+      retain:      { tier: "uncommon", on: "card",  icon: "📌", name: "Удержание",     text: "карта не сбрасывается в конце хода" },
+      innate:      { tier: "uncommon", on: "card",  icon: "☝", name: "Первая в руке", text: "карта всегда приходит в первую руку боя" },
+      sharp:       { tier: "uncommon", on: "card",  icon: "🗡", name: "Острота",       text: "крит этой картой на 1 удар раньше (раз в 3 вместо 4)" },
+      freemerge:   { tier: "uncommon", on: "card",  icon: "🤲", name: "Лёгкая передача", text: "мердж этой картой бесплатный" },
+      killenergy:  { tier: "uncommon", on: "card",  icon: "💀", name: "Добивающая",    text: "убила врага — +1 энергии" },
+      echo:        { tier: "rare",     on: "card",  icon: "🔁", name: "Эхо",           text: "раз за бой: после первого розыгрыша карта возвращается в руку" },
+      awaken:      { tier: "rare",     on: "card",  icon: "🌟", name: "Пробуждение",   text: "карта становится эволюционной (золотая рамка)" },
+      strength:    { tier: "rare",     on: "hero",  icon: "💪", name: "Сила навсегда", text: "+1 к урону всех атак героя до конца забега" },
+      fortitude:   { tier: "rare",     on: "hero",  icon: "🛡", name: "Стойкость навсегда", text: "+1 к блоку всех карт героя до конца забега" },
+      ignorecover: { tier: "rare",     on: "card",  icon: "👻", name: "Сквозная",      text: "мили-карта бьёт и закрытых врагов" },
+      generous:    { tier: "rare",     on: "card",  icon: "💞", name: "Щедрая",        text: "при мердже передаёт дары дважды (сразу 300%)" },
+      partymerge:  { tier: "rare",     on: "party", icon: "🤝", name: "На всю пати",   text: "первый мердж каждого хода бесплатный для всех", treasureOnly: true }
+    },
+
+    // ---------- Карта похода (генерируется каждый забег) ----------
+    // floors — этажей до босса, width — дорожек. Этажи 1–2 — только лёгкие бои; последний этаж перед боссом — костёр;
+    // этаж treasureFloor — развилка «костёр или сокровище» (сокровище одно на всю карту, в середине).
+    // Остальные узлы — по весам weights. Элита — не раньше eliteFrom этажа. Кузниц на карте forges.
+    map: { floors: 11, width: 3, treasureFloor: 6, eliteFrom: 4, forges: 2,
+      weights: { w2: 45, w3: 38, elite: 17 } },
+
+    // ---------- Бои по волнам ----------
+    // Бой = несколько волн. Первая волна стоит на поле, следующие выходят подкреплением (tests.reinforcements:
+    // каждые every ходов или сразу, когда поле зачищено). Ориентир (11.11): 2 волны ≈ 2–3 хода, 3 волны ≈ 4, элита ≈ 5–6, босс ≈ 6.
+    // Волна — список врагов; мили встают вперёд, дальники — назад (за мили, если можно).
+    // Баланс ботами (11.11, medium, цель ~70% побед за забег): врагов меньше по ХП, но бьют сильнее — бои короче, а ХП тает
+    enemyHp: 0.4,             // множитель ХП и брони всех врагов в забеге
+    hpPerFloor: 0.04,         // + к ХП и броне врагов за каждый этаж (этаж 10 — +36%)
+    enemyDmg: 2.4,            // множитель урона всех врагов в забеге
+    dmgPerFloor: 0.025,       // + к урону врагов за каждый этаж
+    fights: {
+      w2:    { name: "Стычка (2 волны)",   waves: 2 },
+      w3:    { name: "Бой (3 волны)",      waves: 3 },
+      elite: { name: "Элита (4 волны)",    waves: 4, first: "elite" },
+      boss:  { name: "Босс: Падший жрец",  waves: 3, first: "boss" }
+    },
+    waves: {
+      first: [["ghoul", "cultist", "hound"], ["hound", "hound", "archer"], ["ghoul", "ghoul", "archer"], ["ghoul", "hound", "cultist"], ["hound", "hound", "cultist"]],
+      next:  [["hound", "hound"], ["ghoul", "archer"], ["cultist", "hound"], ["ghoul", "hound"], ["archer", "hound"], ["ghoul", "cultist"]],
+      elite: [["brute", "cultist", "hound"], ["brute", "archer", "ghoul"]],
+      boss:  [["priest", "ghoul", "ghoul", "archer"]]
+    }
+  }
 };

@@ -50,7 +50,7 @@ BP.Sim = (function () {
       case "enemy": {
         const out = [];
         s.enemies.filter((e) => e.alive).forEach((e) => {
-          if (card.attack === "melee" && !C.isExposed(s, e)) return;
+          if (card.attack === "melee" && !card.ignoreCover && !C.isExposed(s, e)) return;
           if (C.has(card, "push") || BP.Mech.rico(card)) for (let d = 0; d < 6; d++) out.push({ enemy: e.uid, dir: d }); // толчок / рикошет
           else out.push({ enemy: e.uid });
         });
@@ -257,69 +257,86 @@ BP.Sim = (function () {
   // ---------- один забег ----------
   // Кроме итогов боёв считает по картам: seen — сколько раз карта лежала в руке в начале хода,
   // played — сколько раз сыграна, merged — сколько раз отдана в мердж.
+  // beta-meta: бот на карте похода — костёр, когда ХП мало; элита, когда ХП много; сокровище — всегда
+  function botNode(s, opts) {
+    const hp = s.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0) / s.heroes.reduce((a, h) => a + h.maxHp, 0);
+    const by = (t) => opts.filter((id) => BP.RunMap.node(s, id).type === t);
+    const pref = hp < 0.5 ? ["camp", "treasure", "w2", "forge", "w3", "elite"] : hp > 0.75 ? ["treasure", "elite", "w3", "forge", "w2", "camp"] : ["treasure", "w2", "forge", "w3", "camp", "elite"];
+    for (const t of pref) { const l = by(t); if (l.length && (t !== "forge" || Math.random() < 0.6)) return rand(l); }
+    return rand(opts);
+  }
+  // Награда: случайный вариант (как средний игрок). Кузница: колода больше 7 — удалить базовую карту, иначе усилить
+  function botMeta(s) {
+    if (s.phase === "reward") s.heroes.forEach((h) => { const n = (s.reward.offers[h.id] || []).length; if (!s.reward.picks[h.id]) act(s, { a: "rewardPick", hero: h.id, idx: n ? Math.floor(Math.random() * n) : -1 }); });
+    if (s.phase === "forge") s.heroes.forEach((h) => {
+      if (s.forge.done[h.id]) return;
+      const cards = h.runCards || [], basic = cards.filter((c) => c.cost <= 1 && !c.upgraded && (s.config.meta.start[h.id] || {})[c.id] >= 3);
+      if (cards.length > 7 && basic.length) act(s, { a: "forge", hero: h.id, card: rand(basic).spec, op: "remove" });
+      else { const up = cards.filter((c) => BP.Meta.canForgeUp(s, h, c)); act(s, up.length ? { a: "forge", hero: h.id, card: rand(up).spec, op: "up" } : { a: "forge", hero: h.id, op: "skip" }); }
+    });
+    act(s, { a: "metaReady" });
+  }
+
   function runOnce(cfg, bot) {
     const s = BP.Engine.createRun(cfg, { host: { name: "bot" } });
     s.heroes.forEach((h) => (h.owner = "host"));
     act(s, { a: "start" });
-    const maxTotal = s.heroes.reduce((a, h) => a + h.maxHp, 0);
+    const maxTotal = () => s.heroes.reduce((a, h) => a + h.maxHp, 0);
     const fights = [], cards = {};
     const cc = (id) => (cards[id] = cards[id] || { seen: 0, played: 0, merged: 0 });
-    let cur = { hpStart: s.heroes.reduce((a, h) => a + h.hp, 0) };
+    let cur = null;
     const turnFn = BOT_TURN[bot];
-    for (let guard = 0; guard < 400; guard++) {
-      if (s.phase === "questPick") { // квест перед боем: бот выбирает случайно
-        act(s, { a: "questVote", idx: Math.floor(Math.random() * s.questPick.options.length) });
-        act(s, { a: "questStart" });
-        continue;
-      }
-      if (s.phase === "players") {
+    const hpNow = () => s.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0);
+    const end = () => {
+      cur.lost = (cur.hpStart - hpNow()) / maxTotal();
+      cur.turns = s.turn;
+      cur.deaths = s.heroes.filter((h) => !h.alive).length;
+      fights.push(cur); cur = null;
+    };
+    for (let guard = 0; guard < 3000; guard++) {
+      if (s.phase === "players" || s.phase === "enemies") {
+        if (!cur) cur = { hpStart: hpNow(), kind: s.enc && s.enc.kind, name: s.enc && s.enc.name };
         if (s.turn > 30) { s.phase = "lost"; continue; }
-        s.heroes.forEach((h) => { if (h.alive) h.hand.forEach((c) => cc(c.id).seen++); });
-        turnFn(s);
+        if (s.phase === "players") {
+          s.heroes.forEach((h) => { if (h.alive) h.hand.forEach((c) => cc(c.id).seen++); });
+          turnFn(s);
+        }
         if (s.phase === "players") {
           s.players.host.ready = false;
           act(s, { a: "ready" });
-          while (BP.Engine.enemyStep(s)) {}
         }
-        s.log.forEach((l) => { if (l.card) { if (l.merge) { cc(l.card).merged++; cur.merges = (cur.merges || 0) + 1; if (l.evolve) cur.evolves = (cur.evolves || 0) + 1; } else cc(l.card).played++; } });
+        while (BP.Engine.enemyStep(s)) {}
+        s.log.forEach((l) => { if (l.card && cur) { if (l.merge) { cc(l.card).merged++; cur.merges = (cur.merges || 0) + 1; if (l.evolve) cur.evolves = (cur.evolves || 0) + 1; } else cc(l.card).played++; } });
         s.log = []; s.fx = [];
         continue;
       }
-      const end = () => {
-        const hpEnd = s.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0);
-        cur.lost = (cur.hpStart - hpEnd) / maxTotal;
-        cur.turns = s.turn;
-        cur.deaths = s.heroes.filter((h) => !h.alive).length;
-        fights.push(cur);
-      };
-      if (s.phase === "won") {
-        end();
-        act(s, { a: "next" });
-        cur = { hpStart: s.heroes.reduce((a, h) => a + h.hp, 0) };
-        continue;
-      }
-      end();
+      if (cur) end();
+      if (s.phase === "map") { act(s, { a: "mapVote", node: botNode(s, BP.RunMap.options(s)) }); act(s, { a: "mapGo" }); continue; }
+      if (s.phase === "reward" || s.phase === "forge" || s.phase === "camp") { botMeta(s); continue; }
+      if (s.phase === "won") { act(s, { a: "next" }); continue; } // старый режим без меты
       break;
     }
     const win = s.phase === "victory";
-    const finalHp = s.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0);
-    return { win, fights, cards, runLost: win ? 1 - finalHp / maxTotal : null };
+    const finalHp = hpNow();
+    return { win, fights, cards, runLost: win ? 1 - finalHp / maxTotal() : null, deck: s.run ? s.heroes.map((h) => s.run.decks[h.id].length) : null };
   }
 
   // ---------- сводка по многим забегам ----------
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 
   function summarize(cfg, runs) {
-    const nF = cfg.encounters.length;
     const wins = runs.filter((r) => r.win).length;
     const allF = [].concat(...runs.map((r) => r.fights));
+    // beta-meta: разбивка по видам боя (Стычка, Бой, Элита, Босс); старый режим — по номеру боя
+    const kinds = cfg.meta ? Object.keys(cfg.meta.fights) : (cfg.encounters || []).map((e, i) => i);
+    const kindOf = (f, i) => (cfg.meta ? f.kind : i);
     const per = [];
-    for (let i = 0; i < nF; i++) {
-      const fs = runs.filter((r) => r.fights[i]).map((r) => r.fights[i]);
-      const wipes = runs.filter((r) => !r.win && r.fights.length === i + 1).length;
-      per.push({ name: cfg.encounters[i].name, reach: fs.length / runs.length, wipe: wipes / runs.length,
-        lost: avg(fs.map((f) => f.lost)), turns: avg(fs.map((f) => f.turns)), deaths: avg(fs.map((f) => f.deaths)) });
-    }
+    kinds.forEach((k) => {
+      const fs = [].concat(...runs.map((r) => r.fights.filter((f, i) => kindOf(f, i) === k)));
+      const wipes = runs.filter((r) => !r.win && r.fights.length && kindOf(r.fights[r.fights.length - 1], r.fights.length - 1) === k).length;
+      per.push({ name: cfg.meta ? cfg.meta.fights[k].name : cfg.encounters[k].name, reach: runs.filter((r) => r.fights.some((f, i) => kindOf(f, i) === k)).length / runs.length,
+        wipe: wipes / runs.length, lost: avg(fs.map((f) => f.lost)), turns: avg(fs.map((f) => f.turns)), deaths: avg(fs.map((f) => f.deaths)), count: fs.length / runs.length });
+    });
     const worst = per.slice().sort((a, b) => b.wipe - a.wipe)[0];
     const wl = runs.filter((r) => r.win).map((r) => r.runLost).sort((a, b) => a - b);
     // По картам: perFight — сыграна за бой в среднем; playRate — доля «лежала в руке → сыграна» (главная метка)
@@ -342,6 +359,8 @@ BP.Sim = (function () {
       mergesPerFight: avg(allF.map((f) => f.merges || 0)),
       evolvesPerFight: avg(allF.map((f) => f.evolves || 0)),
       deathsPerRun: avg(runs.map((r) => r.fights.reduce((a, f) => a + f.deaths, 0))),
+      fightsPerRun: avg(runs.map((r) => r.fights.length)),
+      deckSize: runs[0] && runs[0].deck ? avg([].concat(...runs.map((r) => r.deck))) : null,
       fights: per, cards,
     };
   }

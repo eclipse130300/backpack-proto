@@ -10,19 +10,26 @@ BP.UIDeck = (function () {
   function groups(cards) {
     const map = new Map();
     cards.forEach((c) => {
-      const key = [c.name, c.cost, c.text, c.merged || 0, c.questCard ? 1 : 0].join("|");
+      const key = [c.name, c.cost, c.text, c.merged || 0, JSON.stringify(c.ups || {})].join("|");
       if (!map.has(key)) map.set(key, { c, n: 0 });
       map.get(key).n++;
     });
     return [...map.values()].sort((a, b) => a.c.cost - b.c.cost || a.c.name.localeCompare(b.c.name));
   }
 
+  // beta-meta: улучшения карты на весь забег — синей строкой под текстом
+  function upsLine(c) {
+    const st = BP.Session && BP.Session.state, cfg = (st && st.config) || window.GAME_CONFIG;
+    if (!c.ups || !Object.keys(c.ups).length || !cfg || !cfg.meta || !BP.UIMeta) return "";
+    return `<div class="dups">${esc(BP.UIMeta.upsText({ config: cfg }, c.ups))}</div>`;
+  }
+
   function miniCard(g) {
     const c = g.c, kind = BP.Cards.kind(c), kc = BP.Icons.KIND_COLOR[kind];
     return `<div class="dcard" style="--kc:${kc}">
       <div class="dcost">${c.cost}</div><div class="dart">${BP.Icons.svg(c.icon)}</div>
-      <div class="dbody"><div class="dname">${esc(c.name)}${c.merged ? ` <span class="gold">★${c.merged > 1 ? c.merged : ""}</span>` : ""}${c.weaponName ? ` <span class="muted small">· ${esc(c.weaponName)}</span>` : ""}</div>
-      <div class="dtext">${esc(c.text)}</div></div>
+      <div class="dbody"><div class="dname">${c.upgraded ? `<span class="upmark" title="Улучшена (на весь забег)">⬆</span> ` : ""}${esc(c.name)}${c.merged ? ` <span class="gold">★${c.merged > 1 ? c.merged : ""}</span>` : ""}${c.weaponName ? ` <span class="muted small">· ${esc(c.weaponName)}</span>` : ""}</div>
+      <div class="dtext">${esc(c.text)}</div>${upsLine(c)}</div>
       ${g.n > 1 ? `<div class="dcount">×${g.n}</div>` : ""}
     </div>`;
   }
@@ -32,7 +39,20 @@ BP.UIDeck = (function () {
     return `<div class="dcol ${cls || ""}"><div class="dhead">${head}<div><b>${esc(title)}</b><div class="muted small">${cards.length} карт${extra ? " · " + extra : ""}</div></div></div>${list}</div>`;
   }
 
+  // beta-meta: вне боя (карта, награда, костёр, кузница) — колода забега героя целиком (h.runCards)
+  const META_PHASES = ["map", "reward", "camp", "forge"];
+  function renderRun(s) {
+    const portrait = (h, i) => `<div class="portrait sm hc${i}">${BP.Icons.svg((s.config.heroes[i] || {}).icon || "helm")}</div>`;
+    const cols = s.heroes.map((h, i) => column(h.name, portrait(h, i), h.runCards || [], "колода забега", "lane" + i));
+    return `<div class="modal-back deck-back"><div class="modal deckview">
+      <div class="row"><h2 class="grow">🂠 Колоды забега</h2><button data-act="modal-close">Закрыть (Esc)</button></div>
+      <div class="muted small">Все карты героев с улучшениями (синие значки). Каждый бой колода собирается заново из этих карт.</div>
+      <div class="dcols" id="deck-scroll" style="grid-template-columns:repeat(${cols.length}, 1fr)">${cols.join("")}</div>
+    </div></div>`;
+  }
+
   function render(s, which) {
+    if (META_PHASES.includes(s.phase) || s.phase === "victory") return renderRun(s);
     const pile = which === "discard" ? "discard" : "draw";
     const shared = !!s.shared;
     const portrait = (h, i) => `<div class="portrait sm hc${i}">${BP.Icons.svg((s.config.heroes[i] || {}).icon || "helm")}</div>`;
@@ -65,5 +85,5 @@ BP.UIDeck = (function () {
     </div></div>`;
   }
 
-  return { render, renderChoice };
+  return { render, renderChoice, miniCard };
 })();

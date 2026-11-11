@@ -463,3 +463,59 @@ svg.intent-arrows { position: fixed; inset: 0; width: 100%; height: 100%; pointe
 /* Клиент потерял связь с хостом и переподключается */
 .chip.reconnecting { background: #5a1a10; border-color: #ff7a4a; color: #ffd2b8; animation: blinkLost 1.2s ease-in-out infinite; }
 @keyframes blinkLost { 50% { opacity: .55; } }
+
+/* ===== beta-meta (11.11): карта похода, награды, костёр, кузница, «Улучшения» — js/ui-meta.js ===== */
+.game.meta { display: flex; flex-direction: column; height: 100%; }
+.mbody { flex: 1; overflow: auto; }
+.mscreen { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px 20px 20px; }
+.mstatus { font-size: 18px; text-align: center; max-width: 1200px; }
+.mapbox { position: relative; background: radial-gradient(ellipse at center, #2a2119, #15110d); border: 1px solid var(--line); border-radius: 14px; }
+.mapbox svg { position: absolute; inset: 0; }
+.mapbox line { stroke: #5a4a38; stroke-width: 3; stroke-dasharray: 6 6; }
+.mapbox line.walked { stroke: var(--gold); stroke-dasharray: none; }
+.mapbox line.start { stroke: #3a2f24; }
+.mnode { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; z-index: 2; opacity: .45; }
+.mnode .mico { width: 50px; height: 50px; border-radius: 50%; background: var(--panel2); border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.mnode .mlabel { font-size: 12px; white-space: nowrap; margin-top: 2px; text-shadow: 0 1px 2px #000; }
+.mnode .mvotes { position: absolute; top: 72px; display: flex; flex-direction: column; gap: 2px; }
+.mnode .mvotes .chip { font-size: 11px; padding: 1px 6px; }
+.mnode.t-elite .mico { border-color: #b5372f; background: #3a1512; }
+.mnode.t-boss .mico { width: 70px; height: 70px; font-size: 32px; border-color: var(--gold); background: #3a2a08; }
+.mnode.t-camp .mico { border-color: #e08a3a; } .mnode.t-treasure .mico { border-color: #5fd0e0; } .mnode.t-forge .mico { border-color: #9aa0a8; }
+.mnode.done { opacity: .8; } .mnode.done .mico { background: #4a3a1a; }
+.mnode.cur { opacity: 1; } .mnode.cur .mico { box-shadow: 0 0 0 4px var(--gold); }
+.mnode.reach { opacity: 1; } .mnode.reach .mico { box-shadow: 0 0 14px #ffd27a; animation: mpulse 1.4s infinite; }
+.mnode.clickable { cursor: pointer; } .mnode.clickable:hover .mico { transform: scale(1.12); }
+.mnode.mine .mico { border-color: #6fae5a; border-width: 4px; }
+.mnode.roll .mico { background: #6a5a20; } .mnode.win .mico { background: var(--gold); color: #000; transform: scale(1.2); }
+@keyframes mpulse { 50% { box-shadow: 0 0 24px #ffd27a; } }
+.mlegend { display: flex; gap: 18px; color: var(--muted); font-size: 14px; flex-wrap: wrap; justify-content: center; }
+.mparty { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.mparty-hero { display: flex; gap: 10px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 260px; }
+.mparty-hero.mine { border-color: var(--gold); }
+.mparty .hpbar { position: relative; height: 16px; background: #3a1512; border-radius: 4px; margin: 4px 0; overflow: hidden; }
+.mparty .hpbar i { position: absolute; inset: 0 auto 0 0; background: #b5372f; }
+.mparty .hpbar span { position: relative; font-size: 12px; padding-left: 6px; }
+.mrelics { display: flex; gap: 6px; align-items: center; }
+.rcols { display: grid; grid-template-columns: repeat(3, minmax(280px, 420px)); gap: 16px; }
+.rcol { background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.rcol.lane0 { border-top-color: var(--lane0); } .rcol.lane1 { border-top-color: var(--lane1); } .rcol.lane2 { border-top-color: var(--lane2); }
+.rcol-head { display: flex; gap: 8px; align-items: center; }
+.ropt { border: 2px solid #777; border-radius: 9px; padding: 8px; background: var(--bg2); display: flex; flex-direction: column; gap: 5px; }
+.ropt.r-uncommon { border-color: #4a8ad8; } .ropt.r-rare { border-color: #e08a2a; box-shadow: 0 0 10px #e08a2a55; }
+.rhead { display: flex; justify-content: space-between; gap: 6px; } .rrar { font-size: 12px; color: var(--muted); }
+.r-uncommon .rrar { color: #7ab0f0; } .r-rare .rrar { color: #f0a050; }
+.rdone { color: var(--green); font-size: 17px; padding: 10px 0; } .rwait { padding: 10px 0; }
+.mready { display: flex; gap: 12px; align-items: center; }
+.campfire { font-size: 90px; line-height: 1; }
+.camplist { display: flex; flex-direction: column; gap: 6px; } .campline { display: flex; gap: 10px; align-items: center; font-size: 18px; }
+.fcards { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; }
+.fcard { display: flex; gap: 6px; align-items: center; } .fcard .dcard { flex: 1; } .fbtns { display: flex; flex-direction: column; gap: 4px; }
+.upmark { color: #7ab0f0; }
+.card .cbadge.up { --bc: #4a8ad8; border-color: #4a8ad8; }
+.chip.inspire { border-color: #f0d060; color: #f0d060; }
+.modal.upgrades .ucols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; max-height: 70vh; overflow: auto; }
+.utier { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.utier.r-uncommon { border-color: #4a8ad8; } .utier.r-rare { border-color: #e08a2a; }
+.utier h3 { margin: 0 0 6px; } .uline { margin: 6px 0; } .uico { display: inline-block; width: 24px; }
+.dcard .dups { color: #7ab0f0; font-size: 12px; }

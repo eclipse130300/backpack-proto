@@ -70,10 +70,7 @@ BP.UIGame = (function () {
         if (e) {
           const ed = state.config.enemies[e.type] || {};
           const covered = !BP.Cards.isExposed(state, e);
-          const marked = state.quest && !state.quest.done && state.quest.mark === e.uid;
-          // на выборе квеста: какие варианты отмечают этого врага
-          const pickMarks = state.questPick ? state.questPick.options.map((q, i) => (q.mark === e.uid ? "🎯" + (i + 1) : "")).filter(Boolean).join(" ") : "";
-          const badges = [marked ? "🎯 квест" : "", pickMarks, e.stunned ? "оглушён" : "", e.vuln ? "💥 +50%" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
+          const badges = [e.stunned ? "оглушён" : "", e.vuln ? "💥 +50%" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
           html += `<div class="hex enemy row${row}${lane} ${state.actingEnemy === e.uid ? "acting" : ""}" data-drop="enemy" data-tip="enemy" data-enemy="${e.uid}" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner"><div class="etype">${ed.melee ? "мили" : "дальн."}</div><div class="ename">${esc(e.name)}</div>
             <div class="bar"><i style="width:${(100 * e.hp) / e.maxHp}%"></i></div>
@@ -88,9 +85,7 @@ BP.UIGame = (function () {
         }
       }
     }
-    // Квест боя: «?» над полем. Серый — не выполнен, золотой — выполнен (как в WoW).
-    if (rf) html += `<div class="reinf" title="Подкрепление врагов: столько ещё в резерве; выходят на помеченные ⚠ клетки">👹 Подкрепление: ${rf.left} · ${rf.inTurns === 1 ? "в начале след. хода" : `через ${rf.inTurns} хода`}</div>`;
-    if (state.quest) html += `<div class="fquest ${state.quest.done ? "done" : ""}" data-tip="fquest" style="left:${g.width / 2}px">?</div>`;
+    if (rf) html += `<div class="reinf" title="Подкрепление врагов: выходят на помеченные ⚠ клетки — через несколько ходов или сразу, как только поле зачищено">👹 ${rf.waves ? `Волна ${rf.wave}/${rf.waves} · следующая` : `Подкрепление: ${rf.left} ·`} ${rf.inTurns === 1 ? "в начале след. хода" : `через ${rf.inTurns} хода`}</div>`;
     return html + `</div>`;
   }
 
@@ -177,7 +172,6 @@ BP.UIGame = (function () {
 
   // Руки всех трёх героев внизу экрана — переключаться не нужно
   function renderHands(state, myPid, ui) {
-    if (state.phase === "questPick") return BP.UIQuest.renderBar(state, myPid); // руки ещё не набраны — на их месте выбор квеста
     const z = sizes(), lanes = corridors(state);
     const secW = (window.innerWidth - z.logW) / 3 - 22;
     const html = state.heroes.map((h, i) => {
@@ -219,20 +213,22 @@ BP.UIGame = (function () {
   }
 
   function renderTop(state) {
-    const enc = state.config.encounters[state.fightIndex] || {};
+    const enc = state.enc || {};
+    const insp = state.inspire ? `<span class="chip inspire" title="Воодушевление: следующая атака любого героя пати бьёт сильнее">✨ +${state.inspire * 50}% следующей атаке</span>` : "";
     const pool = state.pool ? `<span class="chip pool">⚡ Общий пул: ${state.pool.amount}</span>` : "";
     const shared = state.shared ? `<span class="chip shared" title="Общая колода / общий сброс">🂠 Общая колода ${state.shared.draw.length} · ♻ ${state.shared.discard.length}</span>` : "";
     const req = BP.Engine.requiredPlayers(state);
     const ready = state.phase === "players" ? `<span class="ready-list row">${req.map((pid) => { const p = state.players[pid]; return p ? `<span class="chip ${p.ready ? "ok" : ""}">${p.ready ? "✅" : "⏳"} ${esc(p.name)}</span>` : ""; }).join("")}</span>` : (state.phase === "enemies" ? `<span class="chip enemy-line">👹 ${esc(lastEnemyLine(state))}</span>` : "");
     const roomInfo = BP.Session.code ? `<span class="chip" title="Код комнаты">🔑 ${esc(BP.Session.code)}</span>` : `<span class="chip">локально</span>`;
     return `<div class="topbar">
-      <span class="title">Бой ${state.fightIndex + 1}/${state.config.encounters.length}: ${esc(enc.name || "")}</span>
-      <span class="chip">Ход ${state.turn}</span>${pool}${shared}
+      <span class="title">${state.run ? `Этаж ${state.run.floor}/${state.config.meta.map.floors + 1} · ${esc(enc.name || "")}` : `Бой ${state.fightIndex + 1}/${state.config.encounters.length}: ${esc(enc.name || "")}`}</span>
+      <span class="chip">Ход ${state.turn}</span>${pool}${shared}${insp}
       <span class="grow"></span>${ready}${roomInfo}
       <span class="chip" data-tip="targeting">Цели врагов: ${corridors(state) ? "коридоры" : "любой"}</span>
       ${BP.Session.isHost() ? `<button data-act="settings">⚙</button>` : ""}
       <button data-act="deck-view" title="Что лежит в колодах (порядок скрыт)">🂠 Колода</button>
       <button data-act="discard-view" title="Что лежит в сбросах">♻ Сброс</button>
+      ${state.run ? `<button data-act="upgrades-view" title="Улучшения героев и список всех возможных">⬆ Улучшения</button>` : ""}
       ${state.summary ? `<button data-act="show-summary">Итоги боя</button>` : ""}
       <button data-act="toggle-log">📜 Лог</button>
     </div>`;
@@ -253,5 +249,5 @@ BP.UIGame = (function () {
     </div>`;
   }
 
-  return { render, geometry, cellPos, esc, heroName, intentHtml, shortText };
+  return { render, renderLog, geometry, cellPos, esc, heroName, intentHtml, shortText };
 })();

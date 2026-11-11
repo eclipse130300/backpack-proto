@@ -133,18 +133,18 @@ BP.Session = (function () {
       Object.values(S.conns).forEach((c) => c.send({ t: "state", state: pub }));
     }
     emit();
-    maybeStartQuestFight();
+    maybeGoOnMap();
   }
 
-  // Квест выбран — ждём, пока у всех доиграет анимация выбора (рулетка при ничьей), и начинаем бой
-  function maybeStartQuestFight() {
-    const s = S.state;
-    if (S.role === "client" || !s || s.phase !== "questPick" || !s.questPick || !s.questPick.result) return;
-    const res = s.questPick.result;
-    if (S.questTimer === res) return;
-    S.questTimer = res;
+  // beta-meta: путь на карте выбран — ждём, пока у всех доиграет анимация выбора (рулетка при ничьей), и входим в узел
+  function maybeGoOnMap() {
+    const s = S.state, v = s && s.run && s.run.vote;
+    if (S.role === "client" || !s || s.phase !== "map" || !v || !v.result) return;
+    const res = v.result;
+    if (S.mapTimer === res) return;
+    S.mapTimer = res;
     setTimeout(() => {
-      if (S.state === s && s.phase === "questPick" && s.questPick && s.questPick.result === res) hostApply(S.myPid, { a: "questStart" });
+      if (S.state === s && s.phase === "map" && s.run.vote && s.run.vote.result === res) hostApply(S.myPid, { a: "mapGo" });
     }, res.ms);
   }
 
@@ -160,7 +160,9 @@ BP.Session = (function () {
     ns.log = old.log.concat([]);
     S.state = ns;
     BP.Engine.log(ns, "—", "Новый забег");
-    if (old.phase !== "lobby") BP.Engine.startFight(ns, 0);
+    if (old.phase !== "lobby") {
+      if (ns.run) { BP.Meta.refreshView(ns); BP.RunMap.openVote(ns); } else BP.Engine.startFight(ns, 0);
+    }
     broadcast();
   }
 

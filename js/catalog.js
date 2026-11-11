@@ -56,7 +56,6 @@ BP.Catalog = (function () {
       Object.entries(w.cards || {}).forEach(([cid, n]) => add(cid, { type: "weapon", wid, label: w.name, n, heroes }));
     });
     cfg.heroes.forEach((h) => Object.entries(h.cards || {}).forEach(([cid, n]) => add(cid, { type: "hero", label: h.name, n, heroes: [h.name] })));
-    (cfg.questRewards || []).forEach((cid) => add(cid, { type: "quest", label: "награда квеста", n: 1, heroes: [] }));
     // добивка колоды: слабый удар каждого оружия (у героев с этим оружием) и запасная rules.fillerCard
     Object.entries(cfg.weapons || {}).forEach(([wid, w]) => {
       if (!w.weakCard) return;
@@ -101,7 +100,6 @@ BP.Catalog = (function () {
         out.push({ key: "w:" + wid, title: w.name, icon: w.icon, sub, cards: cards.filter((c) => c.src.some((s) => s.wid === wid)) });
       });
       out.push({ key: "hero", title: "Кооп-карты героев", sub: "доп. карты сверх оружия", cards: cards.filter((c) => c.src.some((s) => s.type === "hero")) });
-      out.push({ key: "quest", title: "Награды квеста боя", sub: "одноразовые, получает герой, выполнивший квест", cards: cards.filter((c) => c.src.some((s) => s.type === "quest")) });
       out.push({ key: "evolved", title: "Эволюции", sub: "две мерджнутые эволюционные карты разных героев: перетащи одну на другую — та, на которую тащили, эволюционирует", cards: cards.filter((c) => c.src.some((s) => s.type === "evolved")) });
       out.push({ key: "filler", title: "Добивка колоды", sub: `слабые удары оружия, до ${cfg.rules.minDeck} карт`, cards: cards.filter((c) => c.src.some((s) => s.type === "filler")) });
       out.push({ key: "none", title: "Не в колодах", sub: "есть в конфиге, но ни у кого не лежит", cards: cards.filter((c) => !c.src.length) });

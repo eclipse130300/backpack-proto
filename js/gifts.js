@@ -67,7 +67,9 @@ BP.Gifts = (function () {
       if (src.area === "rays") { own.steps = [[]]; own.rays = clone(src.rays); } // динамическая массовка (js/mech.js)
       if (src.area === "level") { own.steps = [[]]; own.level = true; }
     }
-    return [own].concat(list(src).map((g) => Object.assign({}, g)));
+    const out = [own].concat(list(src).map((g) => Object.assign({}, g, { perm: false })));
+    // beta-meta: улучшение «Щедрая» — карта передаёт все свои дары дважды (сразу как два одинаковых дара)
+    return src.generous ? out.concat(out.map((g) => Object.assign({}, g))) : out;
   }
 
   // Текущий урон карты за розыгрыш по одной цели: урон (с Мощью) × удары
@@ -93,19 +95,32 @@ BP.Gifts = (function () {
     });
     dst.gifts = list(dst).concat(add);
     rebuild(dst);
-    dst.merged = dst.gifts.length || 1;
+    dst.merged = mergedCount(dst);
     dst.text = BP.Cards.text(dst);
-    clean(src); // отданная карта уходит в сброс чистой
+    clean(src); // отданная карта уходит в сброс чистой (постоянные дары забега остаются)
     return true;
   }
 
   const DERIVED = ["zone", "zoneSteps", "zoneRays", "zoneLevel", "repeat", "execute", "chain", "pierce", "pushDist", "openBonus", "coveredBonus", "sharpen"];
 
-  // Снять с карты все дары и прибавку
+  // Снять с карты все дары и прибавку. beta-meta: постоянные дары забега (card.permGifts) возвращаются на место
   function clean(card) {
     if (!card.giftBase) return;
     card.effects = clone(card.giftBase.effects); card.attack = card.giftBase.attack; card.area = card.giftBase.area;
     ["giftBase", "gifts", "bonus", "merged"].concat(DERIVED).forEach((k) => delete card[k]);
+    card.text = BP.Cards.text(card);
+    if (card.permGifts && card.permGifts.length) addPerm(card, card.permGifts);
+  }
+
+  // ★ на карте — только дары от мерджа (постоянные дары забега не делают карту «мерджнутой» для эволюции)
+  const mergedCount = (card) => list(card).filter((g) => !g.perm).length || 1;
+
+  // beta-meta: постоянные дары карты на весь забег (награда «Дар»). Лежат в gifts с пометкой perm.
+  function addPerm(card, ids) {
+    card.permGifts = ids.slice();
+    if (!card.giftBase) card.giftBase = { effects: clone(card.effects), attack: card.attack, area: card.area };
+    card.gifts = ids.map((id) => ({ id, from: null, perm: true }));
+    rebuild(card);
     card.text = BP.Cards.text(card);
   }
 
@@ -282,5 +297,5 @@ BP.Gifts = (function () {
     };
   }
 
-  return { bonusMult, esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
+  return { addPerm, bonusMult, esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
 })();

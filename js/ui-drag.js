@@ -86,7 +86,6 @@ BP.Drag = (function () {
     } else if (s && s.phase === "players") {
       parts.push("Перетащи карту на цель или кликни карту, потом цель");
       parts.push("Наведи на врага — его план и цели");
-      if (s.quest) parts.push("«?» над полем — квест боя");
     }
     box.innerHTML = parts.length ? `<b>Подсказки</b>${parts.map((p) => `<div>${BP.UIGame.esc(p)}</div>`).join("")}` : "";
     box.style.display = parts.length ? "block" : "none";

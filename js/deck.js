@@ -28,6 +28,17 @@ BP.Deck = (function () {
   // Добивка до минимума — слабые удары оружия героя (js/weak.js); в общей колоде — «слабый удар», который подстроится.
   function buildFight(state, makeCard) {
     const cfg = state.config, shared = isShared(state);
+    // beta-meta: колода забега героя (js/meta.js) — собирается заново каждый бой, с улучшениями.
+    // «Первая в руке» (innate) кладётся наверх колоды.
+    if (state.run) {
+      state.heroes.forEach((h) => {
+        h.draw = shuffle((state.run.decks[h.id] || []).map((sp) => Object.assign(BP.Meta.build(state, h, sp, makeCard), { owner: h.id })));
+        h.draw = h.draw.filter((c) => !c.innate).concat(h.draw.filter((c) => c.innate));
+        h.hand = []; h.discard = [];
+      });
+      state.shared = null;
+      return;
+    }
     const pool = [];
     state.heroes.forEach((h, i) => {
       const hc = cfg.heroes[i];
