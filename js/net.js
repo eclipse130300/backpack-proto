@@ -31,10 +31,27 @@ BP.Net = (function () {
     };
   }
 
+  // Серверы для соединения игроков. TURN (Metered, бесплатный тариф) — ретранслятор на случай,
+  // когда напрямую браузеры не соединяются (строгий NAT, провайдеры РФ). Ключи публичные по необходимости:
+  // сайт статичный; худшее, что может случиться, — кончится бесплатный лимит, денег не спишут.
+  const TURN_USER = "a96bba7ae874b735fbbc760c", TURN_PASS = "1lyAI74G60SzkHTh";
+  const PEER_OPTS = {
+    config: {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun.relay.metered.ca:80" },
+        { urls: "turn:global.relay.metered.ca:80", username: TURN_USER, credential: TURN_PASS },
+        { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: TURN_USER, credential: TURN_PASS },
+        { urls: "turn:global.relay.metered.ca:443", username: TURN_USER, credential: TURN_PASS },
+        { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: TURN_USER, credential: TURN_PASS },
+      ],
+    },
+  };
+
   const peerTransport = {
     host(code, onConn, onReady, onError) {
       if (!window.Peer) return onError("Не загрузилась библиотека PeerJS (нет интернета?)");
-      const peer = new window.Peer(PREFIX + code);
+      const peer = new window.Peer(PREFIX + code, PEER_OPTS);
       let wasOpen = false, timer = null;
       // Пропал интернет у хоста: связь с сервером PeerJS рвётся. Стучимся снова каждые 3 с, пока не вернётся,
       // иначе после возвращения сети к комнате никто не сможет подключиться заново.
@@ -57,7 +74,7 @@ BP.Net = (function () {
     },
     join(code, onConn, onError) {
       if (!window.Peer) return onError("Не загрузилась библиотека PeerJS (нет интернета?)");
-      const peer = new window.Peer();
+      const peer = new window.Peer(PEER_OPTS);
       let dc = null;
       peer.on("open", () => {
         dc = peer.connect(PREFIX + code, { reliable: true });
