@@ -166,14 +166,23 @@ BP.RunMap = (function () {
     return out;
   }
 
+  // merge-7: вид обычного боя (config.meta.flavors) — смешанный / «толстые» / «рой», по весам
+  function pickFlavor(m, type) {
+    const fl = m.flavors || {}, ids = Object.keys(fl).filter((k) => (fl[k].on || []).includes(type));
+    if (!ids.length) return null;
+    let x = Math.random() * ids.reduce((a, k) => a + fl[k].weight, 0);
+    for (const k of ids) { x -= fl[k].weight; if (x < 0) return Object.assign({ id: k }, fl[k]); }
+    return Object.assign({ id: ids[0] }, fl[ids[0]]);
+  }
+
   function makeEncounter(state, n) {
-    const m = state.config.meta, fc = m.fights[n.type], wv = m.waves;
-    const first = rand(wv[fc.first || "first"]);
+    const m = state.config.meta, fc = m.fights[n.type], wv = m.waves, fl = pickFlavor(m, n.type);
+    const first = rand(wv[(fl && fl.first) || fc.first || "first"]);
     const rest = [];
-    for (let i = 1; i < fc.waves; i++) rest.push(rand(wv.next));
-    return { kind: n.type, name: fc.name, floor: n.f, enemies: place(state, first), waves: rest,
-      hpMult: (m.enemyHp || 1) * (1 + (m.hpPerFloor || 0) * Math.max(0, n.f - 1)),
-      dmgMult: (m.enemyDmg || 1) * (1 + (m.dmgPerFloor || 0) * Math.max(0, n.f - 1)) };
+    for (let i = 1; i < fc.waves; i++) rest.push(rand(wv[(fl && fl.next) || "next"]));
+    return { kind: n.type, name: fc.name + (fl && fl.name ? " · " + fl.name : ""), flavor: fl ? fl.id : null, floor: n.f, enemies: place(state, first), waves: rest,
+      hpMult: (m.enemyHp || 1) * ((fl && fl.hp) || 1) * (1 + (m.hpPerFloor || 0) * Math.max(0, n.f - 1)),
+      dmgMult: (m.enemyDmg || 1) * ((fl && fl.dmg) || 1) * (1 + (m.dmgPerFloor || 0) * Math.max(0, n.f - 1)) };
   }
 
   // После победы: босс — конец забега, иначе награда

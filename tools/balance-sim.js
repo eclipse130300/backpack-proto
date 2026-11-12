@@ -39,6 +39,11 @@ global.window = global;
 const ROOT = path.join(__dirname, "..");
 ["config.js", "js/hex.js", "js/cards.js", "js/gifts.js", "js/evolve.js", "js/reinforce.js", "js/weak.js", "js/deck.js", "js/mech.js", "js/engine.js", "js/meta.js", "js/mforge.js", "js/runmap.js", "js/sim.js"].forEach((f) => require(path.join(ROOT, f)));
 const BP = global.BP, CFG = global.GAME_CONFIG;
+// Временная правка чисел без правки config.js: BP_SET='{"meta":{"enemyHp":0.8}}' node tools/balance-sim.js ...
+if (process.env.BP_SET) {
+  const merge = (o, p) => Object.keys(p).forEach((k) => { if (p[k] && typeof p[k] === "object" && !Array.isArray(p[k]) && o[k]) merge(o[k], p[k]); else o[k] = p[k]; });
+  merge(CFG, JSON.parse(process.env.BP_SET));
+}
 
 // ---------- аргументы ----------
 const argv = process.argv.slice(2);

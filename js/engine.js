@@ -28,6 +28,7 @@ BP.Engine = (function () {
     return state;
   }
 
+  const vectorAoe = (state) => !!(state.config.tests.vectorAoe && state.config.tests.vectorAoe.enabled);
   function makeCard(state, cardId, weapon) {
     const src = state.config.cards[cardId];
     if (!src) throw new Error("Нет карты в конфиге: " + cardId);
@@ -37,9 +38,8 @@ BP.Engine = (function () {
     card.effects = card.effects || [];
     if (weapon) { card.weapon = weapon; card.weaponName = state.config.weapons[weapon].name; }
     if (card.area === "shape") {
-      // tests.fixedShapes: у массовки своя фигура (fixedShape), не крутится
-      const fs = state.config.tests.fixedShapes;
-      if (fs && fs.enabled && card.fixedShape) { card.shape = card.fixedShape; card.fixed = true; }
+      // У массовки своя фигура (fixedShape). merge-7: tests.vectorAoe — фигура поворачивается за курсором, иначе неподвижна
+      if (card.fixedShape) { card.shape = card.fixedShape; card.fixed = !vectorAoe(state); }
       const sh = (state.config.shapes || {})[card.shape]; card.shapeName = sh ? sh.name : card.shape; card.shapeSteps = sh ? sh.steps : [[]];
     }
     card.text = C().text(card);
@@ -90,7 +90,8 @@ BP.Engine = (function () {
     const hp = Math.max(1, Math.round(ed.hp * k)), dk = (state.enc && state.enc.dmgMult) || 1;
     const actions = clone(ed.actions);
     if (dk !== 1) actions.forEach((a) => { if (a.damage) a.damage = Math.max(1, Math.round(a.damage * dk)); });
-    return { uid: "e" + state.seq++, type, name: ed.name, hp, maxHp: hp, block: 0, armor: Math.round((ed.armor || 0) * k), // броня — js/mech.js
+    const armor = Math.round((ed.armor || 0) * k);
+    return { uid: "e" + state.seq++, type, name: ed.name, hp, maxHp: hp, block: 0, armor, maxArmor: armor, // броня — js/mech.js
       col, row, actions, actionIndex: 0, intent: null, lastAct: -1,
       stunned: false, pushedThisTurn: false, vuln: false, skip: false, alive: true };
   }
@@ -353,6 +354,7 @@ BP.Engine = (function () {
     if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(realCard); notes.push(`«${card.name}» вернулась в руку`); }
     else if (realCard.echo && !realCard.echoUsed) { realCard.echoUsed = true; hero.hand.push(realCard); notes.push(`эхо: «${card.name}» вернулась в руку`); }
     else BP.Deck.discard(state, hero, realCard);
+    BP.Gifts.afterPlay(state, realCard); // merge-7: одноразовый урон от мерджа сгорает (tests.merge.keepDamage: false)
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
     state.playKills = null;
@@ -369,12 +371,13 @@ BP.Engine = (function () {
     const cost = C().mergeCost(state, hero, card); // растущая стоимость — tests.merge.costGrowth
     if (!canPay(state, hero, cost)) return `Мердж стоит ${cost} энергии — не хватает`;
     const before = clone(allyCard);
-    if (!C().mergeInto(state, card, allyCard, hero.id)) return m.mode === "gift" ? "Этот дар карте союзника не подходит (или на ней уже 2 дара)" : "Эти карты не совмещаются (нет общего урона/блока)";
+    const why = BP.Gifts.mergeBlock(state, card, allyCard);
+    if (!C().mergeInto(state, card, allyCard, hero.id)) return "Мердж нельзя: " + (why || "карты не совмещаются");
     payCost(state, hero, cost);
     const ts = state.turnStats;
     ts.merges[hero.id] = (ts.merges[hero.id] || 0) + 1; ts.mergesTotal++;
     hero.hand = hero.hand.filter((c) => c.uid !== card.uid);
-    BP.Deck.discard(state, hero, card);
+    if (!m.exhaust) BP.Deck.discard(state, hero, card); // merge-7: tests.merge.exhaust — отданная карта уходит из боя
     if (card.upFeed) ally.energy += card.upFeed; // beta-meta: «Подпитка» — союзнику +1 энергии
     hero.stats.merges++; hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id, merge: true });
@@ -640,5 +643,5 @@ BP.Engine = (function () {
     return s;
   }
 
-  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard };
+  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard, vectorAoe };
 })();

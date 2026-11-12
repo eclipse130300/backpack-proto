@@ -251,7 +251,7 @@ BP.Cards = (function () {
     return { left, every, willCrit: left <= (dmg.hits || 1) };
   }
 
-  const rotatable = (card) => card.area === "shape" && !card.fixed; // tests.fixedShapes — фигура не крутится
+  const rotatable = (card) => card.area === "shape" && !card.fixed; // merge-7: tests.vectorAoe — фигура поворачивается за курсором
 
   // Превью для UI: суммарный урон по каждому врагу
   function preview(state, hero, card, target) {
@@ -266,50 +266,24 @@ BP.Cards = (function () {
   }
 
   // ---------- Мердж ----------
+  // merge-7: один режим мерджа — js/gifts.js (часть урона + дары). Эволюция (js/evolve.js) — вместо обычного мерджа
   function canMerge(state, src, dst) {
-    const m = state.config.tests.merge;
-    if (BP.Evolve && BP.Evolve.can(state, src, dst)) return true; // эволюция (js/evolve.js) — вместо обычного мерджа
-    if (m.mode === "gift") return BP.Gifts.canMerge(state, src, dst); // дары — js/gifts.js
-    const types = (c) => c.effects.map((e) => (e.type === "blockSelf" ? "block" : e.type));
-    const d = types(dst);
-    if (m.mode === "flat") return d.includes("damage") || d.includes("block");
-    const s = types(src);
-    return (s.includes("damage") && d.includes("damage")) || (s.includes("block") && d.includes("block"));
+    if (BP.Evolve && BP.Evolve.can(state, src, dst)) return true;
+    return BP.Gifts.canMerge(state, src, dst);
   }
 
   function mergeInto(state, src, dst, giverId) {
-    const m = state.config.tests.merge;
     if (BP.Evolve && BP.Evolve.can(state, src, dst)) return BP.Evolve.apply(state, src, dst, giverId);
-    if (m.mode === "gift") return BP.Gifts.mergeInto(state, src, dst, giverId);
-    let changed = false;
-    const srcDmg = src.effects.find((e) => e.type === "damage");
-    const srcBlk = src.effects.find((e) => e.type === "block" || e.type === "blockSelf");
-    dst.effects.forEach((e) => {
-      if (e.type === "damage") {
-        const add = m.mode === "flat" ? m.flatBonus : srcDmg ? srcDmg.amount * (srcDmg.hits || 1) : 0;
-        if (add) { e.amount += add; changed = true; }
-      }
-      if (e.type === "block" || e.type === "blockSelf") {
-        const add = m.mode === "flat" ? m.flatBonus : srcBlk ? srcBlk.amount : 0;
-        if (add) { e.amount += add; changed = true; }
-      }
-    });
-    if (changed) {
-      dst.merged = (dst.merged || 0) + 1;
-      dst.text = text(dst);
-    }
-    return changed;
+    return BP.Gifts.mergeInto(state, src, dst, giverId);
   }
 
-  // Стоимость мерджа этой карты сейчас (tests.merge.costGrowth, счётчики сбрасываются каждый ход)
+  // Стоимость мерджа этой карты сейчас = её стоимость (tests.merge.payCost)
   function mergeCost(state, hero, card) {
     const m = state.config.tests.merge;
     if (!m.payCost) return 0;
     const ts = state.turnStats || { merges: {}, mergesTotal: 0 };
     // beta-meta: «Лёгкая передача» (карта) и «На всю пати» (первый мердж хода) — бесплатно
     if (card.freeMerge || (state.run && state.run.relics.partymerge && !ts.mergesTotal)) return 0;
-    if (m.costGrowth === "hero") return card.cost + ((ts.merges || {})[hero.id] || 0);
-    if (m.costGrowth === "party") return (ts.mergesTotal || 0) + 1;
     return card.cost;
   }
 

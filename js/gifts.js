@@ -1,17 +1,14 @@
-// merge-4 (24.10, эксперимент, вариант D): мердж НЕ передаёт урон — только дары, в полную силу.
-//   Урон карты растёт только эволюцией (сумма базового урона двух карт). Прибавки +50% больше нет.
-// Повторные одинаковые дары растут по шкале 1 → 3 → 5 (esc(n) = 2n − 1, итоговая сила, не сумма):
-//   Мощь ×2 → ×3 → ×4 (исключение) | Добивание ×2 → ×4 → ×6 | Цепь 1 → 3 → 5 прыжков по 100%
-//   Повтор +1 → +3 → +5 ударов по 100% | Рикошет 100% → 300% → 500% | Броня/Прикрытие блок = 100% → 300% → 500% урона
-//   (у карты блока — блок ×2 → ×4 → ×6) | Толчок 1 → 3 → 5 клеток | Вызов — один | Зона: добавленные клетки всегда 100%,
-//   каждая следующая Зона только добавляет свою фигуру.
-// Отданная карта передаёт свой родной дар и все полученные (цепочки) и уходит в сброс ЧИСТОЙ.
-// Зона несёт ФИГУРУ своей карты (у динамической массовки — лучи/линию). Цепь прыгает от цели на соседа с наименьшим ХП,
-//   которого карта ещё не била. Рикошет (id pierce): перед ударом выбираешь направление, сосед цели туда получает урон.
-// merge-6 (10.11): Зона и Добивание убраны из конфига (код Зоны остался, но карт с этим даром нет). Новые дары:
-//   По открытым (open) / По закрытым (covered): урон ×(1 + esc) = +100% / +300% / +500% по открытой / закрытой цели (на момент удара);
-//   Заточка (sharpen): при розыгрыше счётчик крита оружия карты сдвигается на 1 / 2 / 3 (card.sharpen = N, не esc).
-// Слабые карты дара не имеют — отдать их нельзя. Дробное округляем вверх.
+// merge-7 (12.11): простой мердж. Отданная карта передаёт карте союзника:
+//   — часть своего урона: tests.merge.donorDamage (0.5 = 50%) → card.bonus (атака → атака);
+//     у карт защиты — часть блока → card.blockBonus (защита → защита, блок складывается);
+//   — свой родной дар и все полученные. Дары без шкалы 1 → 3 → 5: сколько закинули, столько и работает
+//     (2 Цепи = 2 прыжка, 2 Мощи = ×3, 2 Повтора = +2 удара, Рикошет 2 = 200%, Толчок 2 = 2 клетки).
+//   Бонус урона живёт до конца боя (tests.merge.keepDamage: true) или сгорает после розыгрыша (false), дары — до конца боя.
+// Мерджимые карты — с уроном или блоком (поддержка и card.noMerge — нет). Исключения (mergeBlock):
+//   атака не идёт в защиту; толчок не идёт в карту с притяжением; массовка принимает мердж только при tests.merge.aoeReceive.
+//   Бесполезные пары не запрещены: урон всё равно переходит.
+// Свойства удара (Мощь, по открытым/закрытым, бронебой, сквозь блок) действуют и на доп. удары (Повтор, Рикошет, Цепь).
+// Отданная карта уходит в сброс ЧИСТОЙ (или из боя совсем — tests.merge.exhaust). Дробное округляем вверх.
 window.BP = window.BP || {};
 
 BP.Gifts = (function () {
@@ -23,8 +20,9 @@ BP.Gifts = (function () {
   const list = (card) => card.gifts || [];
   const count = (card, id) => list(card).filter((g) => g.id === id).length;
   const info = (state, id) => (state.config.gifts || {})[id] || null;
-  // Эскалация одинаковых даров: 1 → 1, 2 → 3, 3 → 5 (итоговая сила в «сотнях процентов»)
-  const esc = (n) => (n > 0 ? 2 * n - 1 : 0);
+  // merge-7: сила дара = число даров (без шкалы 1 → 3 → 5)
+  const esc = (n) => (n > 0 ? n : 0);
+  const M = (state) => state.config.tests.merge;
   const powerMult = (n) => (n > 0 ? 1 + n : 1); // Мощь: ×2, ×3, ×4
 
   // Исходный вид карты (до даров)
@@ -53,7 +51,7 @@ BP.Gifts = (function () {
       case "blast": case "chain": return dmg && (single || cell);
       case "push": return single || cell;
       case "taunt": return single && !has("taunt") && !count(dst, "taunt");
-      case "armor": case "cover": return dmg || blk;
+      case "armor": case "cover": return dmg; // merge-7: у защиты блок складывается сам (blockBonus), дары брони не нужны
     }
     return false;
   }
@@ -78,16 +76,35 @@ BP.Gifts = (function () {
     return d ? d.amount * (d.hits || 1) : 0;
   }
 
-  function canMerge(state, src, dst) {
-    const inc = incoming(state, src);
-    if (!inc.length) return false;
-    let taunts = 0;
-    return inc.some((g) => g.id === "taunt" ? !taunts++ && applicable(g.id, dst) : applicable(g.id, dst));
+  const effOf = (card) => baseOf(card).effects;
+  const blockOf = (card) => { const b = effOf(card).find(isBlock); return b ? b.amount : 0; };
+  // Мерджимая карта: есть урон или блок (поддержку отдать и усилить нельзя). card.noMerge — немерджимая по конфигу
+  function mergeable(card) {
+    if (!card || card.noMerge) return false;
+    return effOf(card).some((e) => e.type === "damage" || isBlock(e));
   }
+  const isAoe = (card) => baseOf(card).attack === "aoe";
+  // Почему нельзя (null — можно)
+  function mergeBlock(state, src, dst) {
+    if (!src || !dst || src.uid === dst.uid) return "та же карта";
+    if (!mergeable(src)) return "эту карту нельзя отдать";
+    if (!mergeable(dst)) return "в эту карту нельзя мерджить";
+    const sAtk = hasDmg(src), dAtk = hasDmg(dst);
+    if (sAtk && !dAtk) return "атаку нельзя мерджить в защиту";
+    if (isAoe(dst) && !M(state).aoeReceive) return "массовка не принимает мердж";
+    const inc = incoming(state, src);
+    if (inc.some((g) => g.id === "push") && effOf(dst).some((e) => e.type === "pull")) return "толчок и притяжение не совмещаются";
+    if (!sAtk && dAtk && !inc.some((g) => applicable(g.id, dst))) return "дар этой карты не подходит";
+    return null;
+  }
+  const canMerge = (state, src, dst) => !mergeBlock(state, src, dst);
 
   function mergeInto(state, src, dst, giverId) {
     if (!canMerge(state, src, dst)) return false;
     if (!dst.giftBase) dst.giftBase = { effects: clone(dst.effects), attack: dst.attack, area: dst.area };
+    const pct = M(state).donorDamage == null ? 0.5 : M(state).donorDamage;
+    if (hasDmg(src) && hasDmg(dst)) dst.bonus = (dst.bonus || 0) + up(currentDamage(src) * pct);
+    else if (!hasDmg(src) && !hasDmg(dst)) dst.blockBonus = (dst.blockBonus || 0) + up(currentBlock(src) * pct);
     const add = [];
     incoming(state, src).forEach((g) => {
       const gift = Object.assign({}, g, { from: g.from || giverId || null });
@@ -95,10 +112,19 @@ BP.Gifts = (function () {
     });
     dst.gifts = list(dst).concat(add);
     rebuild(dst);
-    dst.merged = mergedCount(dst);
+    dst.merged = (dst.merged || 0) + 1;
     dst.text = BP.Cards.text(dst);
     clean(src); // отданная карта уходит в сброс чистой (постоянные дары забега остаются)
     return true;
+  }
+  const currentBlock = (card) => { const b = (card.effects || []).find(isBlock); return b ? b.amount : 0; };
+
+  // merge-7: «урон от мерджа одноразовый» (tests.merge.keepDamage: false) — после розыгрыша прибавка сгорает, дары остаются
+  function afterPlay(state, card) {
+    if (M(state).keepDamage !== false || !card.giftBase || !(card.bonus || card.blockBonus)) return;
+    delete card.bonus; delete card.blockBonus;
+    rebuild(card);
+    card.text = BP.Cards.text(card);
   }
 
   const DERIVED = ["zone", "zoneSteps", "zoneRays", "zoneLevel", "repeat", "execute", "chain", "pierce", "pushDist", "openBonus", "coveredBonus", "sharpen"];
@@ -107,7 +133,7 @@ BP.Gifts = (function () {
   function clean(card) {
     if (!card.giftBase) return;
     card.effects = clone(card.giftBase.effects); card.attack = card.giftBase.attack; card.area = card.giftBase.area;
-    ["giftBase", "gifts", "bonus", "merged"].concat(DERIVED).forEach((k) => delete card[k]);
+    ["giftBase", "gifts", "bonus", "blockBonus", "merged"].concat(DERIVED).forEach((k) => delete card[k]);
     card.text = BP.Cards.text(card);
     if (card.permGifts && card.permGifts.length) addPerm(card, card.permGifts);
   }
@@ -137,7 +163,8 @@ BP.Gifts = (function () {
     card.effects = clone(b.effects); card.attack = b.attack; card.area = b.area;
     DERIVED.forEach((k) => delete card[k]);
     const dmg = card.effects.find((e) => e.type === "damage"), blk = card.effects.find(isBlock);
-    delete card.bonus; // merge-4: прибавки урона от мерджа нет
+    if (dmg && card.bonus) dmg.amount += card.bonus; // merge-7: часть урона отданных карт
+    if (blk && card.blockBonus) blk.amount += card.blockBonus; // merge-7: часть блока отданных карт защиты
     if (dmg && n("power")) dmg.amount = up(dmg.amount * powerMult(n("power")));
     if (n("repeat")) card.repeat = esc(n("repeat")); // число доп. ударов по 100%
     if (n("execute")) card.execute = esc(n("execute")); // урон ×(1 + esc)
@@ -160,7 +187,7 @@ BP.Gifts = (function () {
       if (rays.length) card.zoneRays = rays;
       if (list(card).some((g) => g.id === "blast" && g.level)) card.zoneLevel = true;
     }
-    // Толчок: свой + дары = N толчков → esc(N) клеток (1, 3, 5). У массовки — враг в клетке прицела, ДО удара.
+    // Толчок: свой + дары = N толчков → N клеток. У массовки — враг в клетке прицела, ДО удара.
     if (n("push")) {
       const total = esc((b.effects.some((e) => e.type === "push") ? 1 : 0) + n("push"));
       if (!card.effects.some((e) => e.type === "push")) card.effects.push({ type: "push" });
@@ -170,12 +197,10 @@ BP.Gifts = (function () {
     if (dmg) {
       const half = (k) => up(dmg.amount * esc(k));
       if (n("armor")) card.effects.push({ type: "blockSelf", amount: half(n("armor")) });
-      // Прикрытие: каждому отдавшему — 100% / 300% / 500% по числу его Прикрытий
+      // Прикрытие: каждому отдавшему — 100% урона за каждое его Прикрытие
       const by = {};
       list(card).filter((g) => g.id === "cover").forEach((g) => { by[g.from] = (by[g.from] || 0) + 1; });
       Object.keys(by).forEach((h) => card.effects.push({ type: "blockHero", hero: h === "null" ? null : h, amount: half(by[h]) }));
-    } else if (blk && n("armor") + n("cover")) {
-      blk.amount = up(blk.amount * (1 + esc(n("armor") + n("cover"))));
     }
   }
 
@@ -197,7 +222,11 @@ BP.Gifts = (function () {
   function extraHits(state, hero, card, target, areaHits, amount, hits) {
     const r = state.config.rules;
     let src = "";
-    const push = (e, a) => { if (a > 0) hits.push({ enemy: e.uid, amount: a, crit: false, critReason: "", src, step: stepOf(card, src) }); };
+    // merge-7: свойства удара — и на доп. удары: по открытым/закрытым, бронебой, сквозь блок
+    const push = (e, a) => {
+      a = Math.ceil(a * bonusMult(state, card, e) * (card.mult || 1) - 1e-9);
+      if (a > 0) hits.push({ enemy: e.uid, amount: a, nb: !!card.ignoreBlock, ab: !!card.armorBreak, crit: false, critReason: "", src, step: stepOf(card, src) });
+    };
     const byUid = (uid) => state.enemies.find((e) => e.uid === uid);
     src = "repeat";
     if (card.repeat) for (let k = 0; k < card.repeat; k++) areaHits.forEach((h) => { const e = byUid(h.enemy); if (e) push(e, h.amount); });
@@ -253,7 +282,7 @@ BP.Gifts = (function () {
       switch (id) {
         case "power": v = "×" + powerMult(n); break;
         case "execute": v = "×" + (1 + esc(n)); break;
-        case "open": case "covered": v = "+" + esc(n) * 100 + "%"; break;
+        case "open": case "covered": v = "+" + n * 100 + "%"; break;
         case "sharpen": v = "−" + n; break; // счётчик крита
         case "push": v = String(card.pushDist || 1); break;
         case "taunt": v = ""; break;
@@ -297,5 +326,5 @@ BP.Gifts = (function () {
     };
   }
 
-  return { addPerm, bonusMult, esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
+  return { mergeable, mergeBlock, afterPlay, addPerm, bonusMult, esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
 })();

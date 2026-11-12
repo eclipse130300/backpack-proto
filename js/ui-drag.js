@@ -75,13 +75,14 @@ BP.Drag = (function () {
       parts.push("Esc — отмена");
     } else if (c) {
       if (c.attack === "melee") parts.push("Мили: только открытые враги (никто не стоит перед ними)");
-      if (BP.Cards.rotatable(c)) parts.push("🖱 Правая кнопка — повернуть фигуру");
+      if (BP.Cards.rotatable(c)) parts.push(BP.Engine.vectorAoe(s) ? "🖱 Веди курсор от центра клетки — фигура повернётся туда" : "🖱 Правая кнопка — повернуть фигуру");
       else if (c.area === "shape") parts.push(`Фигура «${c.shapeName}» не крутится`);
       if (c.area === "shape" || c.area === "adjacent") parts.push("Клетки с ✕ за краем поля никого не бьют");
       if (c.target === "hero" || c.target === "ally") parts.push("Цель — фишка героя на поле");
       if (c.alt) parts.push("Или на фишку героя — блок вместо урона");
       if (c.target === "none" || c.target === "self") parts.push("Отпусти над полем боя — карта сыграется (над рукой — отмена)");
-      if (s.config.tests.merge.enabled) parts.push("На карту союзника — мердж (цена в фиолетовом ромбе)");
+      if (BP.Gifts.mergeable(c)) parts.push("На карту союзника — мердж: часть урона и дары (подходящие карты подсвечены)");
+      else parts.push("Эту карту нельзя отдать мерджем");
       parts.push(drag ? "Отпусти мимо цели — отмена" : "Esc — отмена");
     } else if (s && s.phase === "players") {
       parts.push("Перетащи карту на цель или кликни карту, потом цель");
@@ -236,7 +237,23 @@ BP.Drag = (function () {
     drag.ghost.style.display = "";
     const el = dropTargetAt(under);
     if (el !== hoverEl) { hoverEl = el; refresh(); }
+    aim(ev.clientX, ev.clientY, under);
     arrow(ev.clientX, ev.clientY);
+  }
+
+  // merge-7: векторные массовки (tests.vectorAoe) — фигура поворачивается в сторону курсора от центра клетки прицела.
+  // Курсор над центром клетки (вверх) — фигура как в конфиге; 6 направлений хекса.
+  function aim(x, y, el) {
+    const s = st(), cc = currentCard();
+    if (!s || !cc || !BP.Cards.rotatable(cc.card) || !BP.Engine.vectorAoe(s)) return;
+    const hex = el && el.closest && el.closest(".hex");
+    if (!hex) return;
+    const r = hex.getBoundingClientRect(), dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2);
+    if (Math.hypot(dx, dy) < r.height * 0.12) return; // в самом центре — без изменений
+    const ang = (Math.atan2(-dy, dx) * 180) / Math.PI; // экран: вверх = назад (направление 1)
+    const dir = (((Math.round((ang - 30) / 60) % 6) + 6) % 6);
+    const rot = (dir - 1 + 6) % 6;
+    if (rot !== (ui().aoeRot || 0)) { ui().aoeRot = rot; refresh(); if (BP.FX) BP.FX.refreshTip(); }
   }
 
   function onUp(ev) {
@@ -285,6 +302,7 @@ BP.Drag = (function () {
     if (drag || !ui().selected) return;
     const el = dropTargetAt(ev.target);
     if (el !== hoverEl) { hoverEl = el; refresh(); }
+    aim(ev.clientX, ev.clientY, ev.target);
   }
 
   function init() {

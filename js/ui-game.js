@@ -59,6 +59,14 @@ BP.UIGame = (function () {
     return "";
   }
 
+  // merge-7: одна полоска врага — ХП красным, броня синим; подпись «ХП (броня)». Блок — отдельно 🛡
+  function enemyBar(e) {
+    const total = Math.max(1, e.maxHp + Math.max(e.armor, e.maxArmor || 0));
+    const hp = (100 * e.hp) / total, ar = (100 * e.armor) / total;
+    return `<div class="bar hpar" title="ХП ${e.hp}/${e.maxHp}${e.armor ? `, броня ${e.armor} (не сгорает, урон сначала идёт в неё)` : ""}"><i class="hp" style="width:${hp}%"></i><i class="ar" style="left:${hp}%;width:${ar}%"></i>
+      <span>${e.hp}${e.armor ? ` <b>(${e.armor})</b>` : ""}</span></div>${e.block ? `<div class="ehp"><span class="eblock">🛡${e.block}</span></div>` : ""}`;
+  }
+
   function renderField(state) {
     const g = geometry(state), lanes = corridors(state), rf = BP.Reinforce.info(state);
     let html = `<div class="field" style="width:${g.width}px;height:${g.height}px;--hw:${g.hw}px">`;
@@ -73,8 +81,7 @@ BP.UIGame = (function () {
           const badges = [e.stunned ? "оглушён" : "", e.vuln ? "💥 +50%" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
           html += `<div class="hex enemy row${row}${lane} ${state.actingEnemy === e.uid ? "acting" : ""}" data-drop="enemy" data-tip="enemy" data-enemy="${e.uid}" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner"><div class="etype">${ed.melee ? "мили" : "дальн."}</div><div class="ename">${esc(e.name)}</div>
-            <div class="bar"><i style="width:${(100 * e.hp) / e.maxHp}%"></i></div>
-            <div class="ehp">❤ ${e.hp}/${e.maxHp}${e.armor ? ` <span class="earmor" title="Броня: не сгорает, сначала урон идёт в неё">⬢${e.armor}</span>` : ""}${e.block ? ` <span class="eblock">🛡${e.block}</span>` : ""}</div>${intentHtml(state, e)}<div class="badges">${badges}</div></div>
+            ${enemyBar(e)}${intentHtml(state, e)}<div class="badges">${badges}</div></div>
             <div class="preview"></div></div>`;
         } else {
           // подкрепление (js/reinforce.js): клетка, куда выйдет враг в начале следующего хода
@@ -151,14 +158,15 @@ BP.UIGame = (function () {
       const oi = c.shared ? -1 : heroIdx(state, c.owner || hero.id);
       owner = c.shared ? `<div class="cowner shared">общая</div>` : `<div class="cowner hc${oi}">${esc((state.heroes[oi] || hero).name)}</div>`;
     }
-    const mergeOk = !readonly && state.config.tests.merge.enabled && BP.Cards.mergeCost(state, hero, c) <= avail;
+    const mergeOk = !readonly && BP.Gifts.mergeable(c) && BP.Cards.mergeCost(state, hero, c) <= avail;
     const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", grey(state, hero, c, avail) ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : "",
       // эволюция (js/evolve.js): золотая рамка — эволюционная, фиолетовое свечение — можно эволюционировать сейчас
       BP.Evolve.evolvable(state, c) ? "evo" : "", hero.alive && BP.Evolve.ready(state, hero, c) ? "evo-ready" : "", c.evolvedFrom ? "evolved" : ""].join(" ");
     const needsBtn = !readonly && ui.selected === c.uid && (c.target === "none" || c.target === "self");
     const ci = BP.Cards.critInfo(hero, c);
     const crit = ci ? `<div class="crit ${ci.willCrit ? "on" : ""}">${ci.willCrit ? "💥 КРИТ" : `💥 через ${ci.left}`}</div>` : "";
-    const gc = BP.Gifts.isOn(state) && c.gift && (state.config.gifts[c.gift] || {}).color; // фон карты — цвет её дара
+    // merge-7: мерджимые карты цветные (цвет дара; без дара — общий фиолетовый), немерджимые — обычные
+    const gc = BP.Gifts.mergeable(c) ? (c.gift && (state.config.gifts[c.gift] || {}).color) || "#7a6aa8" : "";
     return `<div class="${cls}${gc ? " gifted" : ""}" data-card="${c.uid}" data-hero="${hero.id}" data-drop="merge" data-tip="card" style="--kc:${kc};${gc ? `--gc:${gc};` : ""}${ml ? `margin-left:${ml}px` : ""}">
       ${BP.Icons.costHtml(c)}${BP.Icons.statsHtml(c)}${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
       <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${shapeMini(c)}${crit}</div>

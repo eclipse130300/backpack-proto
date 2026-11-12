@@ -80,10 +80,9 @@ BP.Mech = (function () {
   }
 
   // ---------- рикошет ----------
-  // Сила рикошета (merge-4): родной + дары = N → 100%, 300%, 500% (шкала даров 1 → 3 → 5)
+  // Сила рикошета (merge-7): родной + дары = N → N × 100% (сколько закинули, столько и работает)
   function rico(card) {
-    const total = (card.ricochet ? 1 : 0) + (card.pierce || 0);
-    return total ? 2 * total - 1 : 0;
+    return (card.ricochet ? 1 : 0) + (card.pierce || 0);
   }
 
   // Нужно ли выбирать направление атаки

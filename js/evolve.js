@@ -43,12 +43,12 @@ BP.Evolve = (function () {
     ev.id = id; ev.uid = dst.uid; ev.cost = dst.cost;
     ["owner", "shared", "weapon", "weaponName"].forEach((k) => { if (dst[k] !== undefined) ev[k] = dst[k]; });
     if (ev.area === "shape") {
-      const fs = cfg.tests.fixedShapes;
-      if (fs && fs.enabled && ev.fixedShape) { ev.shape = ev.fixedShape; ev.fixed = true; }
+      if (ev.fixedShape) { ev.shape = ev.fixedShape; ev.fixed = !BP.Engine.vectorAoe(state); } // merge-7: векторные массовки
       const sh = (cfg.shapes || {})[ev.shape]; ev.shapeName = sh ? sh.name : ev.shape; ev.shapeSteps = sh ? sh.steps : [[]];
     }
     const dmg = (ev.effects || []).find((e) => e.type === "damage");
-    if (dmg) dmg.amount = Math.max(1, Math.ceil((baseDamage(dst) + baseDamage(src)) / (dmg.hits || 1)));
+    // merge-7: + прибавка от мерджей, уже вложенная в целевую карту
+    if (dmg) dmg.amount = Math.max(1, Math.ceil((baseDamage(dst) + (dst.bonus || 0) + baseDamage(src)) / (dmg.hits || 1)));
     ev.evolvedFrom = [dst.name, src.name];
     ev.retain = true; // card-mechanics-1: эволюция не сгорает в конце хода — лежит в руке, пока её не сыграют
     // дары: полученные целевой картой + всё, что передаёт отданная (её родной дар и её полученные)
