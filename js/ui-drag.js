@@ -129,7 +129,8 @@ BP.Drag = (function () {
       if (!dst || !BP.Cards.canMerge(s, cc.card, dst)) return;
       const b = document.createElement("div");
       b.className = "mcost" + (ok ? "" : " no");
-      b.title = ok ? `Мердж стоит ${cost} энергии` : `Мердж стоит ${cost} энергии — не хватает`;
+      b.title = (ok ? `Мердж стоит ${cost} энергии` : `Мердж стоит ${cost} энергии — не хватает`) +
+        (dst.cost > avail(s, ally) ? `. У союзника не хватает энергии сыграть эту карту` : ""); // 13.11: серая — союзник не сыграет
       b.innerHTML = `<span>${cost}</span>`;
       el.appendChild(b);
     });

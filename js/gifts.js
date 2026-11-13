@@ -8,7 +8,7 @@
 //   атака не идёт в защиту; толчок не идёт в карту с притяжением; массовка принимает мердж только при tests.merge.aoeReceive.
 //   Бесполезные пары не запрещены: урон всё равно переходит.
 // Свойства удара (Мощь, по открытым/закрытым, бронебой, сквозь блок) действуют и на доп. удары (Повтор, Рикошет, Цепь).
-// Отданная карта уходит в сброс ЧИСТОЙ (или из боя совсем — tests.merge.exhaust). Дробное округляем вверх.
+// Отданная карта уходит в сброс ЧИСТОЙ (или сгорает — tests.merge.lifetime "fused"; режимы — см. config.js). Дробное округляем вверх.
 window.BP = window.BP || {};
 
 BP.Gifts = (function () {
@@ -117,6 +117,14 @@ BP.Gifts = (function () {
     clean(src); // отданная карта уходит в сброс чистой (постоянные дары забега остаются)
     return true;
   }
+  // 13.11: «Lifetime after merge» (tests.merge.lifetime): all | fused | turn. Старый флаг exhaust = fused
+  const lifetime = (state) => M(state).lifetime || (M(state).exhaust ? "fused" : "all");
+  // Чистая копия карты союзника до мерджа (для режима «на один ход»)
+  function cleanCopy(card) {
+    const c = clone(card); delete c.preMerge; clean(c); return c;
+  }
+  // Мердж «на один ход» истёк: вместо мерджнутой карты — исходная
+  const expire = (card) => card.preMerge || card;
   const currentBlock = (card) => { const b = (card.effects || []).find(isBlock); return b ? b.amount : 0; };
 
   // merge-7: «урон от мерджа одноразовый» (tests.merge.keepDamage: false) — после розыгрыша прибавка сгорает, дары остаются
@@ -326,5 +334,5 @@ BP.Gifts = (function () {
     };
   }
 
-  return { mergeable, mergeBlock, afterPlay, addPerm, bonusMult, esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean };
+  return { mergeable, mergeBlock, afterPlay, addPerm, bonusMult, esc, powerMult, isOn, canMerge, mergeInto, extraHits, hasExtra, executeMult, textExtra, labels, badges, applicable, currentDamage, stripped, stepKey, nativeSteps, rebuild, stepOf, incoming, clean, lifetime, cleanCopy, expire };
 })();

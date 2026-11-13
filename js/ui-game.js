@@ -59,12 +59,12 @@ BP.UIGame = (function () {
     return "";
   }
 
-  // merge-7: одна полоска врага — ХП красным, броня синим; подпись «ХП (броня)». Блок — отдельно 🛡
+  // merge-7: одна полоска врага — ХП красным, броня синим. 13.11: число — общий запас (ХП + броня), рядом ⬢ броня. Блок — отдельно 🛡
   function enemyBar(e) {
     const total = Math.max(1, e.maxHp + Math.max(e.armor, e.maxArmor || 0));
     const hp = (100 * e.hp) / total, ar = (100 * e.armor) / total;
     return `<div class="bar hpar" title="ХП ${e.hp}/${e.maxHp}${e.armor ? `, броня ${e.armor} (не сгорает, урон сначала идёт в неё)` : ""}"><i class="hp" style="width:${hp}%"></i><i class="ar" style="left:${hp}%;width:${ar}%"></i>
-      <span>${e.hp}${e.armor ? ` <b>(${e.armor})</b>` : ""}</span></div>${e.block ? `<div class="ehp"><span class="eblock">🛡${e.block}</span></div>` : ""}`;
+      <span>${e.hp + e.armor}${e.armor ? ` <b>⬢${e.armor}</b>` : ""}</span></div>${e.block ? `<div class="ehp"><span class="eblock">🛡${e.block}</span></div>` : ""}`;
   }
 
   function renderField(state) {
@@ -104,8 +104,15 @@ BP.UIGame = (function () {
     return dmg;
   }
 
+  // 13.11: полоска героя как у врагов — ХП красным, стартовый блок фиолетовым, блок синим (урон съедает справа налево:
+  // блок → стартовый блок → ХП). Число — общий запас, рядом иконки стартового блока и блока.
   function hpBar(h) {
-    return `<div class="bar hp"><i style="width:${(100 * h.hp) / h.maxHp}%"></i><span>${h.hp}/${h.maxHp}</span></div>`;
+    const sb = h.startBlock || 0, b = h.block || 0;
+    const total = Math.max(1, h.maxHp + Math.max(sb, h.startBlockMax || 0) + b);
+    const w = (x) => (100 * x) / total, hp = w(h.hp), sw = w(sb);
+    const title = `ХП ${h.hp}/${h.maxHp}${sb ? `, стартовый блок ${sb} (сгорает последним)` : ""}${b ? `, блок ${b} (сгорает первым)` : ""}`;
+    return `<div class="bar hpar hero-bar" title="${title}"><i class="hp" style="width:${hp}%"></i><i class="sb" style="left:${hp}%;width:${sw}%"></i><i class="ar" style="left:${hp + sw}%;width:${w(b)}%"></i>
+      <span>${h.hp + sb + b}${sb ? ` <b class="sbn">⛨${sb}</b>` : ""}${b ? ` <b>🛡${b}</b>` : ""}</span></div>`;
   }
 
   // Фишки героев под полем: каждая стоит под своим коридором
@@ -172,7 +179,7 @@ BP.UIGame = (function () {
       <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${shapeMini(c)}${crit}</div>
       <div class="cname">${esc(c.name)}</div>
       ${BP.CardTip.faceHtml(state, hero, c)}
-      ${c.merged ? `<div class="cmerged">★${c.merged > 1 ? c.merged : ""}</div>` : ""}
+      ${c.merged ? `<div class="cmerged"${c.preMerge ? ' title="Мердж на один ход: в конце хода карта станет прежней"' : ""}>★${c.merged > 1 ? c.merged : ""}${c.preMerge ? "⏳" : ""}</div>` : ""}
       ${BP.Gifts.isOn(state) && c.gift ? `<div class="cgift">🎁${esc(BP.Gifts.labels(state, c).ownIcon)}</div>` : ""}
       ${needsBtn ? `<button class="play-btn primary" data-act="play-self">▶ Сыграть</button>` : ""}
     </div>`;

@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 18,
+  version: 19,
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -47,10 +47,15 @@ window.GAME_CONFIG = {
     //   толчок в карту с притяжением нельзя. Немерджимая карта — поле noMerge: true у карты.
     // donorDamage — какая часть урона (и блока) отданной карты переходит: 0.5 = 50%, 1 = 100%
     // keepDamage — true: прибавка урона живёт до конца боя (переживает сброс); false — сгорает после розыгрыша (дары остаются)
-    // exhaust — true: отданная карта уходит из боя (не в сброс)
+    // lifetime — что происходит с картами после мерджа (13.11, «Lifetime after merge»):
+    //   "all"   — как было: отданная карта уходит в сброс чистой, мерджнутая после розыгрыша уходит в сброс владельца
+    //             вместе с бонусами и до конца боя возвращается в руку усиленной
+    //   "fused" — сплав: отданная карта сгорает до конца боя (не в сброс), мерджнутая остаётся в руке и дальше ходит по колоде с бонусами
+    //   "turn"  — на один ход: обе исходные карты уходят в сброс чистыми, мерджнутая живёт только этот ход —
+    //             сыграли её или нет, в сброс она не попадает (вместо неё в сброс ложится исходная карта союзника)
     // aoeReceive — true: в массовку можно мерджить
     // payCost — платишь энергию своей карты за мердж (стоимость = стоимость карты)
-    merge: { enabled: true, mode: "gift", payCost: true, donorDamage: 0.5, keepDamage: true, exhaust: false, aoeReceive: false },
+    merge: { enabled: true, mode: "gift", payCost: true, donorDamage: 0.5, keepDamage: true, lifetime: "all", aoeReceive: false },
 
     // Векторные массовки (merge-7, 12.11): у массовки своя фигура (fixedShape у карты); наводишься на клетку,
     // и фигура поворачивается в сторону курсора (6 направлений хекса). Клетки за краем поля пропадают.
@@ -190,7 +195,10 @@ window.GAME_CONFIG = {
     // Посох
     // merge-6 (10.11): базовый удар мага. alt — второй режим: брось на фишку героя → блок (вместо урона)
     spark:         { name: "Искра",             cost: 1, gift: "sharpen", icon: "sparks", target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 2 }], alt: { target: "hero", effects: [{ type: "block", amount: 3 }] }, isNew: true, added: "10.11.2026" },
-    bolt:          { name: "Разряд",            cost: 1, gift: "chain", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 5 }] },
+    // 13.11: Разряд — базовая карта мага вместо Искры (4 копии в стартовой колоде), урон 5 → 3
+    bolt:          { name: "Разряд",            cost: 1, gift: "chain", icon: "bolt",   target: "enemy", attack: "ranged", effects: [{ type: "damage", amount: 3 }] },
+    // 13.11: сильный одиночный удар мага в стартовой колоде (вместо Притяжения)
+    fire_arrow:    { name: "Огненная стрела",   cost: 2, gift: "sharpen", icon: "fire", target: "enemy", attack: "ranged", evolve: "incinerate", effects: [{ type: "damage", amount: 12 }], isNew: true, added: "13.11.2026" },
     // merge-6 (10.11): у мага две массовки по 3 клетки (его особенность) — галочка вниз и галочка вверх
     fireball:      { name: "Огненный шар",      cost: 3, gift: "sharpen", icon: "fire",   target: "cell",  attack: "aoe", area: "shape", shape: "chevDown", fixedShape: "chevDown", evolve: "meteor", effects: [{ type: "damage", amount: 8 }] },
     stun_bolt:     { name: "Оглушающий разряд", cost: 2, gift: "power", icon: "stun",   target: "enemy", attack: "ranged", evolve: "thunderer", effects: [{ type: "damage", amount: 3 }, { type: "stun" }] },
@@ -232,6 +240,7 @@ window.GAME_CONFIG = {
     arrow_storm:   { name: "Ливень стрел",      evolved: true, special: "линия поперёк бьёт дважды", icon: "rain",   target: "cell",  attack: "aoe", area: "level", effects: [{ type: "damage", amount: 0, hits: 2 }] },
     light_spear:   { name: "Копьё света",       evolved: true, special: "бьёт цель и врага за ней, сквозь блок и броню", icon: "pierce", target: "enemy", attack: "ranged", area: "line", ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
     deadshot:      { name: "Смертельный выстрел", evolved: true, special: "враг с ≤50% ХП погибает, иначе урон ×2", icon: "aim",  target: "enemy", attack: "ranged", finisher: true, effects: [{ type: "damage", amount: 0 }] },
+    incinerate:    { name: "Испепеление",       evolved: true, special: "урон ×2 по цели", icon: "fire", target: "enemy", attack: "ranged", mult: 2, effects: [{ type: "damage", amount: 0 }] },
     heart_shot:    { name: "Выстрел в сердце",  evolved: true, special: "всегда крит, сквозь блок и броню", icon: "aim", target: "enemy", attack: "ranged", alwaysCrit: true, ignoreBlock: true, effects: [{ type: "damage", amount: 0 }] },
 
     // Кооп-сейвы
@@ -268,7 +277,7 @@ window.GAME_CONFIG = {
   weapons: {
     sword:  { name: "Меч",   kind: "weapon", icon: "w_sword",  critEvery: 3, weakCard: "weak_strike", cards: { sword_strike: 4, cleave: 2, diagonal: 1, rush: 1, crush: 1, quake: 1 } },
     shield: { name: "Щит",   kind: "shield", icon: "w_shield", critEvery: 0, cards: { shield_bash: 1, shield_wall: 2 } },
-    staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, weakCard: "sparks", cards: { spark: 4, bolt: 2, fireball: 1, stun_bolt: 1, flame_wall: 1, pull: 2 } },
+    staff:  { name: "Посох", kind: "weapon", icon: "w_staff",  critEvery: 4, weakCard: "sparks", cards: { bolt: 4, fire_arrow: 1, fireball: 1, stun_bolt: 1, flame_wall: 1, pull: 2 } },   // 13.11: Искра убрана, Разряд — базовая карта
     // merge-4 (24.10): вторая Рикошетная стрела — чтобы дар Рикошет можно было собрать в 2 копии (300%)
     bow:    { name: "Лук",   kind: "weapon", icon: "w_bow",    critEvery: 4, weakCard: "weak_shot", cards: { shot: 4, double_shot: 2, pierce_arrow: 2, knock_arrow: 1, arrow_rain: 1, aimed_shot: 1, true_shot: 1 } }
   },
@@ -329,13 +338,13 @@ window.GAME_CONFIG = {
     // Карта: сколько копий. Оружие карты определяется само (по оружию героя). Остальные карты героя — в пуле наград.
     start: {
       melee:  { sword_strike: 4, shield_wall: 2, cover: 1, shield_bash: 1, crush: 1 },
-      mage:   { spark: 4, barrier: 2, bolt: 1, pull: 1, flame_wall: 1 },   // 11.11: магу массовка с начала (иначе слишком слабый)
+      mage:   { bolt: 4, barrier: 2, fire_arrow: 1, flame_wall: 1 },   // 11.11: магу массовка с начала; 13.11: Искра → Разряд ×4, Притяжение → Огненная стрела
       ranger: { shot: 4, cover: 2, double_shot: 1, pierce_arrow: 1 }
     },
     // Пул новых карт героя = карты его оружия + его доп. карты (heroes.*.cards) + extra ниже.
     extraPool: { mage: ["barrier"] },
     // 11.11: базовые карты стартовой колоды как «новая карта» не предлагаются (хлам). Копии (дубли) — можно, но см. dupeFrom.
-    noReward: ["sword_strike", "spark", "shot", "shield_wall", "barrier", "cover"],
+    noReward: ["sword_strike", "bolt", "shot", "shield_wall", "barrier", "cover"],
     dupeFrom: 4,              // дубли (копия карты из колоды) — только в наградах с 4-го боя забега (за первые 3 боя — нет)
     // Редкость карт: common (обычная) | uncommon (средняя) | rare (редкая).
     // Кого нет в списке: эволюционные и за 3 энергии — rare, за 2 — uncommon, остальные — common.

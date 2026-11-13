@@ -353,7 +353,7 @@ BP.Engine = (function () {
     // Палач (эволюция): убил цель — карта возвращается в руку; Эхо — раз за бой; иначе в сброс (квестовая — пропадает)
     if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(realCard); notes.push(`«${card.name}» вернулась в руку`); }
     else if (realCard.echo && !realCard.echoUsed) { realCard.echoUsed = true; hero.hand.push(realCard); notes.push(`эхо: «${card.name}» вернулась в руку`); }
-    else BP.Deck.discard(state, hero, realCard);
+    else BP.Deck.discard(state, hero, BP.Gifts.expire(realCard)); // 13.11: режим «на один ход» — в сброс уходит исходная карта
     BP.Gifts.afterPlay(state, realCard); // merge-7: одноразовый урон от мерджа сгорает (tests.merge.keepDamage: false)
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
@@ -377,7 +377,8 @@ BP.Engine = (function () {
     const ts = state.turnStats;
     ts.merges[hero.id] = (ts.merges[hero.id] || 0) + 1; ts.mergesTotal++;
     hero.hand = hero.hand.filter((c) => c.uid !== card.uid);
-    if (!m.exhaust) BP.Deck.discard(state, hero, card); // merge-7: tests.merge.exhaust — отданная карта уходит из боя
+    if (BP.Gifts.lifetime(state) !== "fused") BP.Deck.discard(state, hero, card); // 13.11: «сплав» — отданная карта сгорает до конца боя
+    if (BP.Gifts.lifetime(state) === "turn") allyCard.preMerge = before.preMerge || BP.Gifts.cleanCopy(before); // «на один ход»
     if (card.upFeed) ally.energy += card.upFeed; // beta-meta: «Подпитка» — союзнику +1 энергии
     hero.stats.merges++; hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id, merge: true });
@@ -444,8 +445,8 @@ BP.Engine = (function () {
     if (state.choice) { const u = BP.Mech.autoPick(state); BP.Mech.choose(state, u); } // выбор карты не сделан — берём сами
     aliveHeroes(state).forEach((h) => {
       h.out = false;
-      const keep = h.hand.filter((c) => c.retain);
-      BP.Deck.discardAll(state, h, h.hand.filter((c) => !c.retain));
+      const keep = h.hand.filter((c) => c.retain && !c.preMerge); // 13.11: мердж «на один ход» исчезает в конце хода
+      BP.Deck.discardAll(state, h, h.hand.filter((c) => !keep.includes(c)).map(BP.Gifts.expire));
       h.hand = keep;
     });
     afterChange(state, true);
