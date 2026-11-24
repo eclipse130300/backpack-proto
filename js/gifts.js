@@ -80,12 +80,14 @@ BP.Gifts = (function () {
   const blockOf = (card) => { const b = effOf(card).find(isBlock); return b ? b.amount : 0; };
   // Мерджимая карта: есть урон или блок (поддержку отдать и усилить нельзя). card.noMerge — немерджимая по конфигу
   function mergeable(card) {
+    if (card && card.wr) return BP.Wide.mergeable(card); // wide-range: мердж-сложение (js/wide.js)
     if (!card || card.noMerge) return false;
     return effOf(card).some((e) => e.type === "damage" || isBlock(e));
   }
   const isAoe = (card) => baseOf(card).attack === "aoe";
   // Почему нельзя (null — можно)
   function mergeBlock(state, src, dst) {
+    if (BP.Wide && BP.Wide.on(state)) return BP.Wide.mergeBlock(state, src, dst);
     if (!src || !dst || src.uid === dst.uid) return "та же карта";
     if (!mergeable(src)) return "эту карту нельзя отдать";
     if (!mergeable(dst)) return "в эту карту нельзя мерджить";
@@ -100,6 +102,7 @@ BP.Gifts = (function () {
   const canMerge = (state, src, dst) => !mergeBlock(state, src, dst);
 
   function mergeInto(state, src, dst, giverId) {
+    if (BP.Wide && BP.Wide.on(state)) return BP.Wide.mergeInto(state, src, dst, giverId);
     if (!canMerge(state, src, dst)) return false;
     if (!dst.giftBase) dst.giftBase = { effects: clone(dst.effects), attack: dst.attack, area: dst.area };
     const pct = M(state).donorDamage == null ? 0.5 : M(state).donorDamage;
@@ -139,6 +142,7 @@ BP.Gifts = (function () {
 
   // Снять с карты все дары и прибавку. beta-meta: постоянные дары забега (card.permGifts) возвращаются на место
   function clean(card) {
+    if (card.wBase) { BP.Wide.release0(card); return; }
     if (!card.giftBase) return;
     card.effects = clone(card.giftBase.effects); card.attack = card.giftBase.attack; card.area = card.giftBase.area;
     ["giftBase", "gifts", "bonus", "blockBonus", "merged"].concat(DERIVED).forEach((k) => delete card[k]);
@@ -245,7 +249,7 @@ BP.Gifts = (function () {
       areaHits.forEach((h) => {
         const e = byUid(h.enemy), n = e && BP.Hex.neighbor(e.col, e.row, dir, r.cols, r.rows);
         const nb = n && BP.Cards.enemyAt(state, n.col, n.row);
-        if (nb && !done.has(nb.uid)) { done.add(nb.uid); push(nb, up(amount * rico)); }
+        if (nb && !done.has(nb.uid)) { done.add(nb.uid); push(nb, card.wr ? ((card.ricoDmg || amount) + (card.ricoBonus || 0)) * rico : up(amount * rico)); }
       });
     }
     src = "chain";
@@ -260,7 +264,7 @@ BP.Gifts = (function () {
           .sort((a, b) => a.hp - b.hp)[0];
         if (!next) break;
         hit.add(next.uid);
-        push(next, amount);
+        push(next, card.wr ? (card.chainDmg || amount) + (card.chainBonus || 0) : amount); // wide-range: свой урон прыжка
         cur = next;
       }
     }
@@ -307,6 +311,7 @@ BP.Gifts = (function () {
 
   // Доп. текст карты (того, чего нет в effects)
   function textExtra(card) {
+    if (card.wr) return BP.Wide.textExtra(card);
     const dmg = (card.effects || []).find((e) => e.type === "damage");
     const out = [];
     if (!dmg) return out;

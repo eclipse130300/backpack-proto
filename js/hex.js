@@ -105,8 +105,11 @@ BP.Hex = (function () {
   }
 
   // Клетка «впереди» (ближе к героям): для заднего ряда — передняя клетка той же колонки.
+  // wide-range (24.11): поле 6×3 — прикрывают ВСЕ клетки впереди в той же колонке
   function frontCells(col, row) {
-    return row === 0 ? [] : [{ col, row: row - 1 }];
+    const out = [];
+    for (let r = row - 1; r >= 0; r--) out.push({ col, row: r });
+    return out;
   }
 
   // Коридор (0..2) для колонки: по cols/3 колонки на героя

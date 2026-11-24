@@ -42,6 +42,7 @@ BP.Engine = (function () {
       if (card.fixedShape) { card.shape = card.fixedShape; card.fixed = !vectorAoe(state); }
       const sh = (state.config.shapes || {})[card.shape]; card.shapeName = sh ? sh.name : card.shape; card.shapeSteps = sh ? sh.steps : [[]];
     }
+    if (BP.Wide) BP.Wide.initCard(state, card); // wide-range: эффекты мерджа, Power (js/wide.js)
     card.text = C().text(card);
     return card;
   }
@@ -77,6 +78,7 @@ BP.Engine = (function () {
       h.crit = {}; h.dmgBuff = pm.dmg || 0; h.blockBuff = pm.block || 0; h.miss = 0; h.out = false; h.disableNext = false; // card-mechanics-1 (js/mech.js)
       (hc.weapons || []).forEach((w) => { if (cfg.weapons[w] && cfg.weapons[w].critEvery > 0) h.crit[w] = { every: cfg.weapons[w].critEvery, count: 0 }; });
       h.stats = { cards: 0, energy: 0, damage: 0, blockGiven: 0, merges: 0, taken: 0 };
+      if (BP.Wide && BP.Wide.on(state)) BP.Wide.fightStart(state, h); // статусы wide-range, стартовая броня (tests.startBlock)
     });
     BP.Deck.buildFight(state, makeCard); // колоды героев (и общая) — js/deck.js
     state.fightStats = { collisions: 0, turns: 0, crits: 0, aoeBest: 0 };
@@ -144,6 +146,7 @@ BP.Engine = (function () {
     aliveHeroes(state).forEach((h) => {
       if (BP.Mech.heroTurnStart(h)) { h.energy = 0; h.bonusEnergy = 0; log(state, h.name, "выведен из игры на этот ход"); return; } // Жрец
       h.energy = state.config.rules.energy + h.bonusEnergy; h.bonusEnergy = 0;
+      if (BP.Wide && BP.Wide.on(state)) { const n = BP.Wide.turnStart(state, h); if (n) log(state, h.name, n); } // Угасание
       drawCards(state, h, state.config.rules.drawPerTurn); // фиксированный добор, не «до N»
     });
     arrive(state, BP.Reinforce.onTurnStart(state, maker(state)));
@@ -201,18 +204,18 @@ BP.Engine = (function () {
     const n = BP.Hex.neighbor(e.col, e.row, dir, r.cols, r.rows);
     e.pushedThisTurn = true;
     if (!n) {
-      hurtEnemy(state, e, r.collisionDamage, heroId);
+      if (r.collisionDamage) hurtEnemy(state, e, r.collisionDamage, heroId);
       state.fightStats.collisions++;
-      return `${e.name} врезался в край поля (−${r.collisionDamage})`;
+      return `${e.name} упёрся в край поля${r.collisionDamage ? ` (−${r.collisionDamage})` : ""}`;
     }
     const other = C().enemyAt(state, n.col, n.row);
     if (other) {
-      hurtEnemy(state, e, r.collisionDamage, heroId);
-      hurtEnemy(state, other, r.collisionDamage, heroId);
+      if (r.collisionDamage) { hurtEnemy(state, e, r.collisionDamage, heroId); hurtEnemy(state, other, r.collisionDamage, heroId); }
       state.fightStats.collisions++;
-      // card-mechanics-1: оба столкнувшихся до конца хода получают +50% урона (rules.collisionBonus)
-      if (r.collisionBonus) { e.vuln = true; other.vuln = true; }
-      return `${e.name} столкнулся с ${other.name} (оба −${r.collisionDamage}${r.collisionBonus ? `, до конца хода +${Math.round(r.collisionBonus * 100)}% урона по ним` : ""})`;
+      // столкновение: оба получают стак Уязвимости до конца хода (+rules.collisionBonus урона за стак). wide-range: стаки складываются
+      const vs = (x) => (x.vuln === true ? 1 : x.vuln || 0);
+      if (r.collisionBonus) { e.vuln = vs(e) + 1; other.vuln = vs(other) + 1; }
+      return `${e.name} столкнулся с ${other.name} (${r.collisionDamage ? `оба −${r.collisionDamage}, ` : ""}оба: Уязвимость)`;
     }
     e.col = n.col; e.row = n.row;
     BP.Reinforce.fixMarks(state); // встал на клетку подкрепления — метка сдвигается
@@ -292,6 +295,7 @@ BP.Engine = (function () {
     const notes = [];
     const primary = card.target === "enemy" ? state.enemies.find((e) => e.uid === t.enemy) : null;
     const tHero = (card.target === "hero" || card.target === "ally") ? state.heroes.find((x) => x.id === t.hero) : card.target === "self" ? hero : null;
+    if (BP.Wide) BP.Wide.blockFirst(state, hero, card, tHero, notes); // эффект мерджа «броня до удара»
 
     // дар «Толчок» в массовку: сначала толкаем врага в клетке прицела, потом бьёт массовка (по исходной зоне)
     if (card.target === "cell" && C().has(card, "push") && t.dir !== undefined && t.dir !== null) {
@@ -309,18 +313,21 @@ BP.Engine = (function () {
         hurtEnemy(state, e, h.amount, hero.id, h.crit, h.src, h.step, h.nb, h.ab);
         per[e.name] = (per[e.name] || []).concat(h.amount + (h.crit ? "!" : ""));
       });
+      hits.forEach((h) => { const e = state.enemies.find((x) => x.uid === h.enemy); if (e) e.mark = false; }); // Метка потрачена
       notes.push(Object.entries(per).map(([n, a]) => `${n}: ${a.join("+")}`).join(", "));
     }
 
     const BO = (a) => BP.Mech.blockOf(hero, a); // + Стойкость героя (js/mech.js)
     card.effects.forEach((ef) => {
+      const wr = BP.Wide && BP.Wide.on(state) ? BP.Wide.applyEffect(state, hero, card, ef, tHero, primary, t) : null; // wide-range (js/wide.js)
+      if (wr !== null) { if (wr) notes.push(wr); return; }
       const mine = BP.Mech.applyEffect(state, hero, card, ef, tHero, primary, hits); // Сила, Стойкость, промах, выбор карты, оглушение
       if (mine !== null) { if (mine) notes.push(mine); return; }
       switch (ef.type) {
         case "block": { const to = tHero || hero, a = BO(ef.amount); to.block += a; hero.stats.blockGiven += a; notes.push(`${to.name} +${a} блока`); break; }
         case "blockSelf": { const a = BO(ef.amount); hero.block += a; notes.push(`+${a} блока себе`); break; }
         case "blockHero": { const to = state.heroes.find((x) => x.id === ef.hero && x.alive) || hero, a = BO(ef.amount); to.block += a; hero.stats.blockGiven += a; notes.push(`${to.name} +${a} блока`); break; } // дар «Прикрытие»
-        case "push": if (primary && primary.alive) notes.push(pushN(state, primary, t.dir, hero.id, card.pushDist)); break;
+        case "push": if (primary && primary.alive) notes.push(pushN(state, primary, ef.dir !== undefined ? ef.dir : t.dir, hero.id, ef.far ? 9 : card.pushDist)); break; // far — до столкновения
         case "pull": if (primary && primary.alive) notes.push(pull(state, primary)); break;
         case "blockPartyPct": { const d = card.effects.find((x) => x.type === "damage"), a = BO(Math.ceil((d ? d.amount : 0) * ef.pct - 1e-9)); aliveHeroes(state).forEach((h) => (h.block += a)); hero.stats.blockGiven += a * aliveHeroes(state).length; notes.push(`всем +${a} блока`); break; }
         case "sparks": notes.push(BP.Weak.sparks(state, card, primary, (e, a) => hurtEnemy(state, e, a + (hero.dmgBuff || 0), hero.id, false, "sparks", 1))); break;
@@ -353,6 +360,7 @@ BP.Engine = (function () {
     // Палач (эволюция): убил цель — карта возвращается в руку; Эхо — раз за бой; иначе в сброс (квестовая — пропадает)
     if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(realCard); notes.push(`«${card.name}» вернулась в руку`); }
     else if (realCard.echo && !realCard.echoUsed) { realCard.echoUsed = true; hero.hand.push(realCard); notes.push(`эхо: «${card.name}» вернулась в руку`); }
+    else if (BP.Wide && BP.Wide.on(state)) { delete realCard._bf; const rc = BP.Wide.release(state, realCard, true); if (!BP.Wide.exhaustPlayed(state, hero, rc)) BP.Deck.discard(state, hero, rc); } // распад мерджа, Power/Exhaust
     else BP.Deck.discard(state, hero, BP.Gifts.expire(realCard)); // 13.11: режим «на один ход» — в сброс уходит исходная карта
     BP.Gifts.afterPlay(state, realCard); // merge-7: одноразовый урон от мерджа сгорает (tests.merge.keepDamage: false)
     hero.stats.cards++;
@@ -377,14 +385,15 @@ BP.Engine = (function () {
     const ts = state.turnStats;
     ts.merges[hero.id] = (ts.merges[hero.id] || 0) + 1; ts.mergesTotal++;
     hero.hand = hero.hand.filter((c) => c.uid !== card.uid);
-    if (BP.Gifts.lifetime(state) !== "fused") BP.Deck.discard(state, hero, card); // 13.11: «сплав» — отданная карта сгорает до конца боя
-    if (BP.Gifts.lifetime(state) === "turn") allyCard.preMerge = before.preMerge || BP.Gifts.cleanCopy(before); // «на один ход»
+    const wnotes = BP.Wide && BP.Wide.on(state) ? BP.Wide.afterMerge(state, hero, card, ally, allyCard) : null; // wide-range: эффекты мерджа «сразу», донор в сброс
+    if (!wnotes && BP.Gifts.lifetime(state) !== "fused") BP.Deck.discard(state, hero, card); // 13.11: «сплав» — отданная карта сгорает до конца боя
+    if (!wnotes && BP.Gifts.lifetime(state) === "turn") allyCard.preMerge = before.preMerge || BP.Gifts.cleanCopy(before); // «на один ход»
     if (card.upFeed) ally.energy += card.upFeed; // beta-meta: «Подпитка» — союзнику +1 энергии
     hero.stats.merges++; hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id, merge: true });
     const evo = allyCard.evolvedFrom && !before.evolvedFrom; // эволюция (js/evolve.js)
     if (evo) fx(state, { k: "evolve", hero: ally.id, card: allyCard.uid, name: allyCard.name });
-    log(state, hero.name, evo ? `ЭВОЛЮЦИЯ «${before.name}» + «${card.name}» → «${allyCard.name}» (${ally.name})` : `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost, merge: true, evolve: !!evo, detail: `${before.text} ⇒ ${allyCard.text}` });
+    log(state, hero.name, evo ? `ЭВОЛЮЦИЯ «${before.name}» + «${card.name}» → «${allyCard.name}» (${ally.name})` : `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost, merge: true, evolve: !!evo, detail: `${before.text} ⇒ ${allyCard.text}${wnotes && (allyCard.fired || []).length ? "; сработало: " + allyCard.fired.map((f) => f.text).join("; ") : ""}${wnotes && wnotes.length ? "; " + wnotes.join("; ") : ""}` });
     afterChange(state, false);
     return null;
   }
@@ -446,7 +455,9 @@ BP.Engine = (function () {
     aliveHeroes(state).forEach((h) => {
       h.out = false;
       const keep = h.hand.filter((c) => c.retain && !c.preMerge); // 13.11: мердж «на один ход» исчезает в конце хода
-      BP.Deck.discardAll(state, h, h.hand.filter((c) => !keep.includes(c)).map(BP.Gifts.expire));
+      const wr = BP.Wide && BP.Wide.on(state);
+      BP.Deck.discardAll(state, h, h.hand.filter((c) => !keep.includes(c)).map((c) => (wr ? BP.Wide.release(state, c, false) : BP.Gifts.expire(c))));
+      if (wr) BP.Wide.turnEnd(state, h); // Сила/Стойкость «на ход» сгорают
       h.hand = keep;
     });
     afterChange(state, true);
@@ -484,11 +495,16 @@ BP.Engine = (function () {
     const actual = targets.length || !it.targets ? targets : pickTargets(state, e, it.targets.length).map((id) => state.heroes.find((h) => h.id === id));
     if (it.type === "attack" || it.type === "disable") state.actingTargets = actual.map((h) => h.id);
     if (it.type === "attack") {
-      const missed = [];
+      const missed = [], dmg = e.weakNext ? Math.ceil(it.damage * (state.config.rules.weakFactor || 0.5)) : it.damage; // Слабость
       actual.forEach((h) => {
-        if (h.miss > 0) { h.miss--; missed.push(h.name); fx(state, { k: "hero", hero: h.id, amount: 0, blocked: 0, miss: true }); return; } // Дымовая завеса
-        for (let i = 0; i < (it.hits || 1); i++) hurtHero(state, h, it.damage);
+        if (h.miss > 0 || e.missAll) { if (h.miss > 0) h.miss--; missed.push(h.name); fx(state, { k: "hero", hero: h.id, amount: 0, blocked: 0, miss: true }); return; } // Дымовая завеса
+        for (let i = 0; i < (it.hits || 1); i++) {
+          if (h.barrier > 0) { h.barrier--; fx(state, { k: "hero", hero: h.id, amount: 0, blocked: dmg, miss: true }); continue; } // Барьер
+          hurtHero(state, h, dmg);
+          if (h.thorns && e.alive) hurtEnemy(state, e, h.thorns, h.id); // Шипы
+        }
       });
+      e.missAll = false; e.weakNext = false;
       if (it.armor) e.armor += it.armor; // удар с бронёй
       log(state, e.name, `атакует ${actual.map((h) => h.name).join(", ")}`, { detail: `${it.damage}${it.hits > 1 ? "×" + it.hits : ""} урона${missed.length ? ` (промах по ${missed.join(", ")})` : ""}${it.armor ? `, себе +${it.armor} брони` : ""}` });
     } else if (it.type === "disable") {
@@ -505,7 +521,7 @@ BP.Engine = (function () {
   function endEnemyPhase(state) {
     state.actingEnemy = null; state.actingTargets = [];
     aliveHeroes(state).forEach((h) => {
-      h.block = 0;
+      if (!h.keepBlock) h.block = 0; // wide-range: Несокрушимость — броня не сгорает
       h.debuffs.forEach((d) => d.turns--);
       h.debuffs = h.debuffs.filter((d) => d.turns > 0);
     });
@@ -644,5 +660,5 @@ BP.Engine = (function () {
     return s;
   }
 
-  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard, vectorAoe };
+  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard, vectorAoe, push, pushN };
 })();

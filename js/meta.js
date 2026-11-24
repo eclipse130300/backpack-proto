@@ -41,7 +41,7 @@ BP.Meta = (function () {
   }
 
   function rarityOf(state, cardId) {
-    const c = state.config.cards[cardId], r = (M(state).cardRarity || {})[cardId];
+    const c = state.config.cards[cardId], r = (M(state).cardRarity || {})[cardId] || c.rarity; // wide-range: cards.*.rarity
     if (r) return r;
     if (c.evolve || c.cost >= 3) return "rare";
     if (c.cost >= 2) return "uncommon";
@@ -86,6 +86,7 @@ BP.Meta = (function () {
     if (u.awaken && state.config.cards[u.awaken]) card.evolve = u.awaken;
     if (u.ignorecover) card.ignoreCover = true;
     if (u.generous) card.generous = true;
+    if (u.mfx && u.mfx.length && BP.Wide) BP.Wide.addFx(state, card, u.mfx); // wide-range: эффекты мерджа из наград
     card.ups = clone(u);
     card.upgraded = Object.keys(u).length > 0;
     card.text = BP.Cards.text(card);
@@ -129,6 +130,7 @@ BP.Meta = (function () {
       case "sharp": return hasDmg(c) && !!c.weapon && !c.alwaysCrit && (state.config.weapons[c.weapon] || {}).critEvery > (c.sharpPerm || 0) + 1;
       case "awaken": return !c.evolve && hasDmg(c) && evolutions(state, c).length > 0;
       case "ignorecover": return c.attack === "melee" && !c.ignoreCover && hasDmg(c);
+      case "mfx": return !!BP.Wide && BP.Wide.rewardFx(state, c).length > 0;
     }
     return false;
   }
@@ -147,6 +149,14 @@ BP.Meta = (function () {
   }
 
   // ---------- Награды ----------
+  // Случайный эффект мерджа по весам [{id, w}]
+  function weighted(list) {
+    const sum = list.reduce((a, x) => a + x.w, 0);
+    let r = Math.random() * sum;
+    for (const x of list) { r -= x.w; if (r < 0) return x.id; }
+    return list.length ? list[list.length - 1].id : null;
+  }
+
   function rollTier(weights) {
     const sum = weights.reduce((a, b) => a + b, 0);
     let r = Math.random() * sum;
@@ -191,6 +201,7 @@ BP.Meta = (function () {
       const o = { type: "up", up: id, spec: cand.spec, rarity: tier };
       if (id === "gift") o.gift = rand(giftOptions(state, cand));
       if (id === "awaken") o.evo = rand(evolutions(state, cand));
+      if (id === "mfx") o.mfx = weighted(BP.Wide.rewardFx(state, cand));
       used.add(id);
       return o;
     }
@@ -230,6 +241,7 @@ BP.Meta = (function () {
 
   function addUp(ups, o) {
     if (o.up === "gift") ups.gift = (ups.gift || []).concat(o.gift);
+    else if (o.up === "mfx") ups.mfx = (ups.mfx || []).concat(o.mfx);
     else if (o.up === "awaken") ups.awaken = o.evo;
     else ups[o.up] = (ups[o.up] || 0) + 1;
   }
@@ -312,6 +324,7 @@ BP.Meta = (function () {
     if (o.type === "card") return "Новая карта";
     if (o.type === "dupe") return "Копия карты";
     const u = M(state).upgrades[o.up];
+    if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `${BP.Wide.SIDE[f.side] || "🟩"} Эффект мерджа`; }
     return `${u.icon} ${u.name}${o.up === "gift" ? ": " + ((state.config.gifts[o.gift] || {}).name || o.gift) : ""}`;
   }
   function offerText(state, o) {
@@ -321,6 +334,7 @@ BP.Meta = (function () {
     if (o.up === "up") return M(state).upgradeMode === "flat" ? `+${M(state).upFlat} урона или блока карте` : `+${Math.round(M(state).upPercent * 100)}% урона или блока карте`;
     if (o.up === "gift") return `постоянный дар «${(state.config.gifts[o.gift] || {}).name}»: ${(state.config.gifts[o.gift] || {}).text}`;
     if (o.up === "awaken") return `эволюционирует в «${(state.config.cards[o.evo] || {}).name}»`;
+    if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `карта получает эффект мерджа: ${f.text || o.mfx}`; }
     return u.text;
   }
 

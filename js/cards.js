@@ -26,7 +26,7 @@ BP.Cards = (function () {
         case "blockHero": parts.push(`отдавшему дар ${e.amount} блока`); break;
         case "pull": parts.push("притянуть врага из заднего ряда вперёд (впереди кто-то есть — меняются местами)"); break;
         case "blockPartyPct": parts.push(`всем героям блок ${Math.round(e.pct * 100)}% урона`); break;
-        case "push": parts.push(`${card.target === "cell" ? "сначала толкнуть врага в клетке прицела" : "толкнуть"}${card.pushDist > 1 ? ` на ${card.pushDist} клетки` : ""} (выбор стороны)`); break;
+        case "push": if (e.far) { parts.push("толкнуть назад до столкновения"); break; } parts.push(`${card.target === "cell" ? "сначала толкнуть врага в клетке прицела" : "толкнуть"}${card.pushDist > 1 ? ` на ${card.pushDist} клетки` : ""} (выбор стороны)`); break;
         case "sparks": parts.push(`${e.count} выстрела по ${e.amount}: каждый с шансом ${Math.round((e.stray || 0) * 100)}% уходит в случайного соседа цели`); break;
         case "stun": parts.push(card.target === "cell" ? "оглушить всех задетых" : "оглушить (пропустит действие)"); break;
         case "buffDamage": parts.push(`до конца боя каждая карта цели +${e.amount} урона (складывается)`); break;
@@ -41,12 +41,13 @@ BP.Cards = (function () {
         case "sharedPool": parts.push("общий пул энергии пати до конца хода"); break;
         case "blockParty": parts.push(`всем героям ${e.amount} блока`); break;
         case "damageAllEnemies": parts.push(`всем врагам ${e.amount} урона`); break;
+        default: { const w = BP.Wide && BP.Wide.effText(card, e); if (w) parts.push(w); } // wide-range: новые эффекты (js/wide.js)
       }
     });
     if (card.alt) { const v = BP.Mech.altView(card); parts.push("или на фишку героя: " + text(v).toLowerCase()); }
-    if (card.ricochet && !card.pierce) parts.push("рикошет: сосед цели по выбранному направлению получает 100%");
+    if (card.ricochet && !card.pierce && !card.wr) parts.push("рикошет: сосед цели по выбранному направлению получает 100%");
     if (card.armorBreak) parts.push("по броне ×2");
-    if (card.alwaysCrit) parts.push("всегда крит");
+    if (card.alwaysCrit) parts.push(card.wr ? "эта атака критует" : "всегда крит");
     if (BP.Evolve) parts.push(...BP.Evolve.textExtra(card)); // эволюции и Рывок (js/evolve.js)
     if (BP.Gifts) parts.push(...BP.Gifts.textExtra(card)); // взрыв / цепь / повтор / пробой от даров (js/gifts.js)
     let t = parts.join(", ");
@@ -207,7 +208,8 @@ BP.Cards = (function () {
     if (!dmgEff) return [];
     const rules = state.config.rules;
     const targets = areaTargets(state, hero, card, target);
-    const base = Math.max(0, dmgEff.amount - weakness(hero) + (hero.dmgBuff || 0)); // + Сила (js/mech.js)
+    // + Сила (js/mech.js). wide-range: Сила ×strMult (Тяжёлый удар), урон = броня героя (Удар щитом), массовки + Сила стихий
+    const base = Math.max(0, dmgEff.amount + (card.dmgFromBlock ? hero.block || 0 : 0) - weakness(hero) + (hero.dmgBuff || 0) * (card.strMult || 1) + (card.attack === "aoe" ? hero.aoeBonus || 0 : 0));
     const areaHits = targets.map((t) => ({ enemy: t.e.uid, amount: Math.ceil(base * t.f - 1e-9) })); // до крита — для Повтора
     const crit = card.weapon && !card.weak ? hero.crit[card.weapon] : null; // слабые удары не двигают крит и не критуют (18.10)
     const every = crit ? Math.max(1, crit.every - (card.sharpPerm || 0)) : 0; // beta-meta: «Острота» — крит этой картой на N ударов раньше
@@ -216,12 +218,14 @@ BP.Cards = (function () {
     const hits = [];
     for (let i = 0; i < (dmgEff.hits || 1); i++) {
       let weaponCrit = false;
-      if (card.alwaysCrit) weaponCrit = true; // Верный выстрел: всегда крит, счётчик не трогает
+      if (card.alwaysCrit || (i === 0 && hero.critReady)) weaponCrit = true; // всегда крит / wide-range: «Крит готов» — первый удар
       else if (crit) { counter++; if (counter >= every) { weaponCrit = true; counter = 0; } }
       targets.forEach(({ e }, k) => {
         // card-mechanics-1: условного крита по оглушённому/толкнутому нет; столкнувшиеся враги получают +50% (складывается с критом)
-        const cond = !!(rules.collisionBonus && e.vuln);
-        const mult = 1 + (weaponCrit ? rules.critMultiplier - 1 : 0) + (cond ? rules.collisionBonus : 0) + insp;
+        // wide-range: Уязвимость стаками (e.vuln — число), Метка +50%, крит ×critMult у карты
+        const vs = e.vuln === true ? 1 : e.vuln || 0, cond = !!(rules.collisionBonus && vs);
+        const mk = e.mark && i === 0 ? rules.markBonus || 0.5 : 0;
+        const mult = 1 + (weaponCrit ? (card.critMult || rules.critMultiplier) - 1 : 0) + (cond ? rules.collisionBonus * vs : 0) + mk + insp;
         const exec = BP.Gifts ? BP.Gifts.executeMult(card, e) * BP.Gifts.bonusMult(state, card, e) : 1; // дары «Добивание», «По открытым/закрытым»
         const zone = targets[k].f !== 1; // клетка Взрыва
         let amount = areaHits[k].amount * mult * exec * (card.mult || 1); // mult — эволюции (Палач, Цепной крюк)
@@ -237,6 +241,7 @@ BP.Cards = (function () {
     hits.sort((a, b) => (a.step || 0) - (b.step || 0) || a.i - b.i);
     hits.forEach((h) => { delete h.i; });
     if (commit && crit) crit.count = Math.min(counter, crit.every - 1);
+    if (commit && hero.critReady && hits.length) hero.critReady = false; // wide-range: «Крит готов» потрачен
     return hits;
   }
 
@@ -244,7 +249,7 @@ BP.Cards = (function () {
   function critInfo(hero, card) {
     const dmg = (card.effects || []).find((e) => e.type === "damage");
     const c = card.weapon && !card.weak && hero.crit ? hero.crit[card.weapon] : null;
-    if (dmg && card.alwaysCrit) return { left: 1, every: 1, willCrit: true, always: true };
+    if (dmg && (card.alwaysCrit || hero.critReady)) return { left: 1, every: 1, willCrit: true, always: !!card.alwaysCrit };
     if (!dmg || !c) return null;
     const every = Math.max(1, c.every - (card.sharpPerm || 0)); // beta-meta: «Острота»
     const left = Math.max(1, every - c.count - (card.sharpen || 0)); // merge-6: Заточка

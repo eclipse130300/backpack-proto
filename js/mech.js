@@ -82,7 +82,7 @@ BP.Mech = (function () {
   // ---------- рикошет ----------
   // Сила рикошета (merge-7): родной + дары = N → N × 100% (сколько закинули, столько и работает)
   function rico(card) {
-    return (card.ricochet ? 1 : 0) + (card.pierce || 0);
+    return (card.ricochet === true ? 1 : card.ricochet || 0) + (card.pierce || 0); // wide-range: ricochet — число рикошетов
   }
 
   // Нужно ли выбирать направление атаки
@@ -99,7 +99,8 @@ BP.Mech = (function () {
     const t = target || {};
     if (t.dir !== undefined && t.dir !== null) return false;
     if (rico(card) && card.effects.some((e) => e.type === "damage")) return true;
-    if (BP.Cards.has(card, "push")) {
+    const pe = (card.effects || []).find((e) => e.type === "push");
+    if (pe && pe.dir === undefined) {
       if (card.target === "enemy") return true;
       if (card.target === "cell" && t.cell && BP.Cards.enemyAt(state, t.cell.col, t.cell.row)) return true;
     }

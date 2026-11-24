@@ -95,6 +95,7 @@ BP.CardTip = (function () {
       const g = state.config.gifts[b.id] || {};
       add({ icon: b.icon, value: b.value, color: b.color, face: true, short: g.name, long: `${perm.has(b.id) ? "Постоянный дар (улучшение забега)" : "Получено мерджем"} — ${g.name}: ${g.text}.` });
     });
+    if (BP.Wide) BP.Wide.tipParts(state, hero, c, add); // wide-range: новые эффекты, ключевые слова, эффекты мерджа
     // крит
     const ci = BP.Cards.critInfo(hero, c);
     if (ci && !ci.always) add({ icon: "💥", value: ci.willCrit ? "!" : ci.left, short: ci.willCrit ? "крит!" : `крит через ${ci.left}`, long: `Каждый ${ci.every}-й удар этим оружием — крит ×${state.config.rules.critMultiplier}. Слабые удары не считаются.` });
