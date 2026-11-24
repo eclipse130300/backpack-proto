@@ -209,7 +209,8 @@ BP.Cards = (function () {
     const rules = state.config.rules;
     const targets = areaTargets(state, hero, card, target);
     // + Сила (js/mech.js). wide-range: Сила ×strMult (Тяжёлый удар), урон = броня героя (Удар щитом), массовки + Сила стихий
-    const base = Math.max(0, dmgEff.amount + (card.dmgFromBlock ? hero.block || 0 : 0) - weakness(hero) + (hero.dmgBuff || 0) * (card.strMult || 1) + (card.attack === "aoe" ? hero.aoeBonus || 0 : 0));
+    const per = card.perHand ? hero.hand.filter((c) => c.uid !== card.uid).length : 1; // Разряд колчана: × карт в руке
+    const base = Math.max(0, dmgEff.amount * per + (card.perBone ? (hero.bones || 0) * card.perBone : 0) + (card.dmgFromBlock ? hero.block || 0 : 0) - weakness(hero) + (hero.dmgBuff || 0) * (card.strMult || 1) + (card.attack === "aoe" ? hero.aoeBonus || 0 : 0));
     const areaHits = targets.map((t) => ({ enemy: t.e.uid, amount: Math.ceil(base * t.f - 1e-9) })); // до крита — для Повтора
     const crit = card.weapon && !card.weak ? hero.crit[card.weapon] : null; // слабые удары не двигают крит и не критуют (18.10)
     const every = crit ? Math.max(1, crit.every - (card.sharpPerm || 0)) : 0; // beta-meta: «Острота» — крит этой картой на N ударов раньше

@@ -78,7 +78,9 @@ BP.UIGame = (function () {
         if (e) {
           const ed = state.config.enemies[e.type] || {};
           const covered = !BP.Cards.isExposed(state, e);
-          const badges = [e.stunned ? "оглушён" : "", e.vuln ? "💥 +50%" : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
+          const vs = e.vuln === true ? 1 : e.vuln || 0, tr = BP.Wide2 && BP.Wide2.trapAt(state, col, row);
+          const badges = [e.stunned ? "оглушён" : "", vs ? `💥 +${vs * 50}%` : "", e.mark ? "🎯 метка" : "", e.missAll ? "🌫 промах" : "", e.weakNext ? "слаб" : "",
+            e.deathMark ? "☠" : "", tr ? `${BP.Wide2.TRAP[tr.kind].icon} ловушка` : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
           html += `<div class="hex enemy row${row}${lane} ${state.actingEnemy === e.uid ? "acting" : ""}" data-drop="enemy" data-tip="enemy" data-enemy="${e.uid}" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner"><div class="etype">${ed.melee ? "мили" : "дальн."}</div><div class="ename">${esc(e.name)}</div>
             ${enemyBar(e)}${intentHtml(state, e)}<div class="badges">${badges}</div></div>
@@ -86,7 +88,8 @@ BP.UIGame = (function () {
         } else {
           // подкрепление (js/reinforce.js): клетка, куда выйдет враг в начале следующего хода
           const mk = rf && rf.marks.find((m) => m.col === col && m.row === row);
-          const label = mk ? `<span class="incoming-mark">⚠ ${esc((state.config.enemies[mk.type] || {}).name || mk.type)}</span>` : `<span class="rowlabel">${row === 0 ? "передний" : "задний"}</span>`;
+          const tr = BP.Wide2 && BP.Wide2.trapAt(state, col, row); // ловушка лучника (js/wide2.js)
+          const label = (tr ? `<span class="incoming-mark" title="${esc(BP.Wide2.TRAP[tr.kind].name)}">${BP.Wide2.TRAP[tr.kind].icon} ${esc(BP.Wide2.TRAP[tr.kind].name)}</span>` : "") + (mk ? `<span class="incoming-mark">⚠ ${esc((state.config.enemies[mk.type] || {}).name || mk.type)}</span>` : tr ? "" : `<span class="rowlabel">${row === 0 ? "передний" : row === g.rows - 1 ? "задний" : "средний"}</span>`);
           html += `<div class="hex row${row}${lane}${mk ? " incoming" : ""}" data-drop="cell" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner">${label}</div><div class="preview"></div></div>`;
         }
@@ -123,7 +126,10 @@ BP.UIGame = (function () {
       const owner = state.players[h.owner];
       const inc = incomingFor(state, h);
       // card-mechanics-1: выведен Жрецом, промах (Дымовая завеса), бафы Силы и Стойкости
-      const weak = [h.out ? "⛓ выведен" : "", h.disableNext ? "⛓ след. ход" : "", h.miss ? `🌫${h.miss > 1 ? h.miss : ""} промах` : "", h.dmgBuff ? `⚔+${h.dmgBuff}` : "", h.blockBuff ? `🛡+${h.blockBuff}` : ""].filter(Boolean).join(" ");
+      const weak = [h.out ? "⛓ выведен" : "", h.disableNext ? "⛓ след. ход" : "", h.miss ? `🌫${h.miss > 1 ? h.miss : ""} промах` : "", h.dmgBuff ? `⚔${h.dmgBuff > 0 ? "+" : ""}${h.dmgBuff}` : "", h.blockBuff ? `🛡+${h.blockBuff}` : "",
+        // wide-range: статусы героя (js/wide.js, js/wide2.js)
+        h.critReady ? "💥крит" : "", h.barrier ? `🔰${h.barrier}` : "", h.thorns ? `🌵${h.thorns}` : "", h.fade && h.fade.left ? `🩸−${h.fade.per}×${h.fade.left}` : "",
+        h.bones ? `🦴${h.bones}` : "", h.blood ? `🩸${h.blood}` : "", h.keepBlock ? "🧱" : ""].filter(Boolean).join(" ");
       const tgt = state.actingTargets && state.actingTargets.includes(h.id) ? "targeted" : "";
       html += `<div class="hero token ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"} ${tgt}" data-drop="hero" data-tip="hero" data-hero="${h.id}" style="width:${g.width / 3 - 14}px">
         ${portrait(state, h)}

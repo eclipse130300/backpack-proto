@@ -71,7 +71,7 @@ BP.Wide = (function () {
     if (c.critReady && (!holder || !holder.critReady)) return false;
     return true;
   }
-  const CARD_MODS = ["dmg", "block", "cap", "crit", "cheaper", "retain", "ricoDmg", "rico", "chainDmg", "barrier", "durFight", "blockFirst"];
+  const CARD_MODS = ["dmg", "block", "cap", "crit", "cheaper", "retain", "ricoDmg", "rico", "chainDmg", "barrier", "durFight", "blockFirst", "healPlus", "boneKill"];
 
   // Мердж src → dst. state.heroes нужны только для условий (ХП, «Крит готов»). Ничего, кроме dst и src, не меняет.
   function mergeInto(state, src, dst, giverId) {
@@ -147,6 +147,8 @@ BP.Wide = (function () {
     if (mods.barrier) { const br = dst.effects.find((e) => e.type === "barrier"); if (br) br.amount += mods.barrier; }
     if (mods.durFight) dst.effects.forEach((e) => { if ((e.type === "str" || e.type === "tough") && e.dur === "turn") e.dur = "fight"; });
     if (mods.blockFirst) dst.blockFirst = true;
+    if (mods.healPlus) dst.healPlus = mods.healPlus;
+    if (mods.boneKill) dst.boneKill = mods.boneKill;
     void wasHeroTarget;
   }
 
@@ -154,7 +156,7 @@ BP.Wide = (function () {
   function release0(card) {
     if (!card.wBase) return card;
     SNAP.forEach((k) => { if (card.wBase[k] !== undefined) card[k] = clone(card.wBase[k]); else delete card[k]; });
-    ["wBase", "donor", "donorUid", "donorOwner", "wMods", "wPending", "fired", "merged", "ricoBonus", "chainBonus", "blockFirst", "donorCard"].forEach((k) => delete card[k]);
+    ["wBase", "donor", "donorUid", "donorOwner", "wMods", "wPending", "fired", "merged", "ricoBonus", "chainBonus", "blockFirst", "donorCard", "healPlus", "boneKill"].forEach((k) => delete card[k]);
     card.text = BP.Cards.text(card);
     return card;
   }
@@ -168,6 +170,7 @@ BP.Wide = (function () {
       if (p.draw) { BP.Deck.draw(state, to, p.draw); notes.push(`${to.name} +${p.draw} карт`); }
       if (p.str) { addStr(to, p.str, p.dur); notes.push(`${to.name} +${p.str} Силы ${p.dur === "fight" ? "на бой" : "на ход"}`); }
       if (p.tough) { addTough(to, p.tough, p.dur); notes.push(`${to.name} +${p.tough} Стойкости ${p.dur === "fight" ? "на бой" : "на ход"}`); }
+      if (p.sharpen) { Object.values(to.crit || {}).forEach((c) => { c.every = Math.max(1, c.every - p.sharpen); c.count = Math.min(c.count, c.every - 1); }); notes.push(`${to.name}: крит на ${p.sharpen} удар раньше до конца боя`); }
       if (p.fadeHold) { to.fadeSkip = true; notes.push(`${to.name}: Угасание в этот ход не тикает`); }
       if (p.critMove && hero.critReady) { hero.critReady = false; ally.critReady = true; notes.push(`«Крит готов» → ${ally.name}`); }
       if (p.copy) {
@@ -203,7 +206,7 @@ BP.Wide = (function () {
   function addTough(h, n, dur) { h.blockBuff = (h.blockBuff || 0) + n; if (dur !== "fight") h.toughTurn = (h.toughTurn || 0) + n; }
 
   // Эффекты карт wide-range. Возвращает заметку или null (эффект не наш)
-  function applyEffect(state, hero, card, ef, tHero, primary, t) {
+  function applyEffect(state, hero, card, ef, tHero, primary, t, hits) {
     const to = tHero || hero, alive = state.heroes.filter((h) => h.alive);
     const who = ef.party ? alive : [to];
     switch (ef.type) {
@@ -230,7 +233,7 @@ BP.Wide = (function () {
         return out.join("; ");
       }
     }
-    return null;
+    return BP.Wide2 ? BP.Wide2.applyEffect(state, hero, card, ef, tHero, primary, t, hits) : null; // этап 2 (js/wide2.js)
   }
 
   // Броня до удара (эффект мерджа «Защита → её броня даётся до удара»)
@@ -257,6 +260,8 @@ BP.Wide = (function () {
   }
   // Начало боя: сброс статусов
   function fightStart(state, h) {
+    if (BP.Wide2) BP.Wide2.fightStart(state, h);
+    state.traps = []; state.costDown = 0;
     Object.assign(h, { strTurn: 0, toughTurn: 0, critReady: false, barrier: 0, thorns: 0, keepBlock: false, mergeStr: 0, aoeBonus: 0, fade: null, fadeSkip: false, exhausted: [] });
     if (state.config.tests.startBlock && state.config.tests.startBlock.enabled === false) { h.startBlock = 0; }
   }
@@ -287,19 +292,22 @@ BP.Wide = (function () {
       case "pushOut": return "растолкать врагов вокруг клетки от неё";
       case "push": return e.far ? "толкнуть назад до столкновения" : null;
     }
-    return null;
+    return BP.Wide2 ? BP.Wide2.effText(card, e) : null;
   }
   function textExtra(card) {
     const out = [];
     if (card.dmgFromBlock) out.push("урон = текущая броня героя");
     if (card.strMult > 1) out.push(`Сила действует ×${card.strMult}`);
     if (card.critMult) out.push(`крит ×${card.critMult}`);
+    if (card.perHand) out.push("урон × число карт в руке");
+    if (card.perBone) out.push(`+${card.perBone} урона за каждую Кость`);
     if (card.chain) out.push(`цепь: ${card.chain === 1 ? "прыжок" : card.chain + " прыжка"} по ${(card.chainDmg || (dmgOf(card) || {}).amount || 0) + (card.chainBonus || 0)} на соседа с наименьшим ХП`);
     if (card.ricochet) out.push(`рикошет${card.ricochet > 1 ? " ×" + card.ricochet : ""}: сосед цели по выбранному направлению ${(card.ricoDmg || (dmgOf(card) || {}).amount || 0) + (card.ricoBonus || 0)}`);
     if (card.donor) out.push(`вмерджена «${card.donor.name}»`);
     const kw = [];
     if (card.power) kw.push("Power"); if (card.ex) kw.push("Exhaust"); if (card.innate) kw.push("Innate"); if (card.retain) kw.push("Удержание");
     if (kw.length) out.push(kw.join(", "));
+    (card.mfx || []).forEach((f) => { if (f && f.text) out.push(`${SIDE[f.side] || ""} ${f.text}`); }); // эффекты мерджа (видно на странице «Карты»)
     return out;
   }
   const SIDE = { in: "🟩", out: "🟥", both: "🟩🟥" };
@@ -310,12 +318,14 @@ BP.Wide = (function () {
     if (!on(state)) return;
     (c.effects || []).forEach((e) => {
       const t = effText(c, e);
-      const ic = { str: "💪", tough: "🛡️", critReady: "💥", mark: "🎯", missEnemy: "🌫", barrier: "🔰", thorns: "🌵", keepBlock: "🧱", mergeStr: "🤝", aoeBonus: "🔥", critShift: "🗡", fade: "🩸", pushOut: "💨" }[e.type];
+      const ic = Object.assign({}, BP.Wide2 ? BP.Wide2.ICON : {}, { str: "💪", tough: "🛡️", critReady: "💥", mark: "🎯", missEnemy: "🌫", barrier: "🔰", thorns: "🌵", keepBlock: "🧱", mergeStr: "🤝", aoeBonus: "🔥", critShift: "🗡", fade: "🩸", pushOut: "💨" })[e.type];
       if (ic && t) add({ icon: ic, value: e.amount ? "+" + e.amount : e.now ? "+" + e.now : "", face: true, short: t, long: t.charAt(0).toUpperCase() + t.slice(1) + "." });
     });
     if (c.dmgFromBlock) add({ icon: "🧱", face: true, short: "урон = броня", long: "Урон карты = текущая броня героя (плюс урон карты, если он есть)." });
     if (c.strMult > 1) add({ icon: "💪", value: "×" + c.strMult, face: true, short: `Сила ×${c.strMult}`, long: `Сила героя действует на эту карту ${c.strMult} раза.` });
     if (c.critMult) add({ icon: "💥", value: "×" + c.critMult, face: true, short: `крит ×${c.critMult}`, long: `Крит этой картой ×${c.critMult} вместо ×2.` });
+    if (c.perHand) add({ icon: "🂠", value: "×", face: true, short: "урон × карт в руке", long: "Урон карты умножается на число карт в руке героя (без неё самой)." });
+    if (c.perBone) add({ icon: "🦴", value: "+" + c.perBone, face: true, short: `+${c.perBone} за Кость`, long: `+${c.perBone} урона за каждую Кость героя.` });
     if (c.chain) add({ icon: "🌩", value: (c.chainDmg || (dmgOf(c) || {}).amount || 0) + (c.chainBonus || 0), face: true, short: "цепь", long: "После удара прыгает на соседнего врага с наименьшим ХП." });
     if (c.power) add({ icon: "◆", face: true, short: "Power", long: "Эффект на весь бой. После розыгрыша карта уходит до конца боя. Не мерджится." });
     if (c.ex && !c.power) add({ icon: "🔥", face: true, short: "Exhaust", long: "После розыгрыша карта уходит до конца боя." });

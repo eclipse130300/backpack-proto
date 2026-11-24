@@ -128,7 +128,7 @@ BP.Mech = (function () {
   function findOption(state, o) {
     const h = state.heroes.find((x) => x.id === o.owner);
     if (!h) return null;
-    const c = h.draw.find((x) => x.uid === o.uid) || h.discard.find((x) => x.uid === o.uid);
+    const c = h.draw.find((x) => x.uid === o.uid) || h.discard.find((x) => x.uid === o.uid) || h.hand.find((x) => x.uid === o.uid); // wide-range: выбор из руки
     return c ? { h, c } : null;
   }
 
@@ -136,6 +136,7 @@ BP.Mech = (function () {
   function choose(state, uid) {
     const ch = state.choice;
     if (!ch) return "Нет выбора";
+    if (ch.kind === "discard" || ch.kind === "burn") return BP.Wide2.chooseHand(state, uid); // Подготовка / Подношение
     const o = ch.options.find((x) => x.uid === uid);
     if (!o) return "Этой карты нет среди вариантов";
     const f = findOption(state, o), owner = f && f.h, card = f && f.c;
@@ -153,6 +154,7 @@ BP.Mech = (function () {
   function autoPick(state) {
     const ch = state.choice;
     if (!ch) return null;
+    if (ch.kind === "discard" || ch.kind === "burn") return BP.Wide2.autoHand(state);
     let best = null, bv = -1;
     ch.options.forEach((o) => {
       const f = findOption(state, o), c = f && f.c;

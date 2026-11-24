@@ -100,7 +100,7 @@ BP.Engine = (function () {
 
   // Подкрепления вышли на поле: враги + намерения + лог
   function arrive(state, list) {
-    list.forEach((e) => { state.enemies.push(e); computeIntent(state, e); });
+    list.forEach((e) => { state.enemies.push(e); computeIntent(state, e); if (BP.Wide2) BP.Wide2.onMove(state, e); }); // ловушка на клетке (js/wide2.js)
     if (list.length) log(state, "—", `Подкрепление: ${list.map((e) => e.name).join(", ")}`);
   }
   const maker = (state) => (type, col, row) => makeEnemy(state, type, col, row);
@@ -150,7 +150,7 @@ BP.Engine = (function () {
       drawCards(state, h, state.config.rules.drawPerTurn); // фиксированный добор, не «до N»
     });
     arrive(state, BP.Reinforce.onTurnStart(state, maker(state)));
-    state.enemies.forEach((e) => { if (e.alive) { e.pushedThisTurn = false; e.vuln = false; computeIntent(state, e); } });
+    state.enemies.forEach((e) => { if (e.alive) { e.pushedThisTurn = false; e.vuln = false; e.deathMark = null; computeIntent(state, e); } });
     Object.values(state.players).forEach((p) => (p.ready = false));
   }
 
@@ -170,6 +170,7 @@ BP.Engine = (function () {
       e.hp = 0; e.alive = false; state.turnStats.kills++;
       if (state.playKills) state.playKills.push(e.uid); // для квестов: кого убила текущая карта
       log(state, e.name, "погиб");
+      if (BP.Wide2) BP.Wide2.onKill(state, e, heroId); // Кости: Метка смерти, Некромантия
     }
     return amount;
   }
@@ -180,6 +181,7 @@ BP.Engine = (function () {
     const b = Math.min(h.block, left); h.block -= b; left -= b;
     const sb = Math.min(h.startBlock, left); h.startBlock -= sb; left -= sb;
     h.hp -= left; h.stats.taken += left;
+    if (BP.Wide2 && left > 0) BP.Wide2.lostHp(state, h, Math.min(left, h.hp + left)); // Кровь, Пакт крови
     fx(state, { k: "hero", hero: h.id, amount: Math.min(left, h.hp + left), blocked: amount - left });
     if (h.hp <= 0) {
       h.hp = 0; h.alive = false;
@@ -219,6 +221,7 @@ BP.Engine = (function () {
     }
     e.col = n.col; e.row = n.row;
     BP.Reinforce.fixMarks(state); // встал на клетку подкрепления — метка сдвигается
+    if (BP.Wide2) BP.Wide2.onMove(state, e); // ловушка (js/wide2.js)
     // РЕШЕНО (17.10): толчок меняет цель — враг пересчитывает её по новому коридору (провокация «Вызов» сильнее).
     // Прикрытие тоже пересчитывается у всех: вытолкнули переднего — задний мили открылся и будет бить, и наоборот.
     const before = (e.intent && e.intent.targets || []).join(",");
@@ -314,12 +317,13 @@ BP.Engine = (function () {
         per[e.name] = (per[e.name] || []).concat(h.amount + (h.crit ? "!" : ""));
       });
       hits.forEach((h) => { const e = state.enemies.find((x) => x.uid === h.enemy); if (e) e.mark = false; }); // Метка потрачена
+      if (BP.Wide2) BP.Wide2.afterHits(state, hero, card, t, hits); // лучник бьёт по ловушкам
       notes.push(Object.entries(per).map(([n, a]) => `${n}: ${a.join("+")}`).join(", "));
     }
 
     const BO = (a) => BP.Mech.blockOf(hero, a); // + Стойкость героя (js/mech.js)
     card.effects.forEach((ef) => {
-      const wr = BP.Wide && BP.Wide.on(state) ? BP.Wide.applyEffect(state, hero, card, ef, tHero, primary, t) : null; // wide-range (js/wide.js)
+      const wr = BP.Wide && BP.Wide.on(state) ? BP.Wide.applyEffect(state, hero, card, ef, tHero, primary, t, hits) : null; // wide-range (js/wide.js, js/wide2.js)
       if (wr !== null) { if (wr) notes.push(wr); return; }
       const mine = BP.Mech.applyEffect(state, hero, card, ef, tHero, primary, hits); // Сила, Стойкость, промах, выбор карты, оглушение
       if (mine !== null) { if (mine) notes.push(mine); return; }
@@ -454,12 +458,14 @@ BP.Engine = (function () {
     if (state.choice) { const u = BP.Mech.autoPick(state); BP.Mech.choose(state, u); } // выбор карты не сделан — берём сами
     aliveHeroes(state).forEach((h) => {
       h.out = false;
-      const keep = h.hand.filter((c) => c.retain && !c.preMerge); // 13.11: мердж «на один ход» исчезает в конце хода
       const wr = BP.Wide && BP.Wide.on(state);
+      if (wr && BP.Wide2) BP.Wide2.turnEndHero(state, h); // Колчан накопителя
+      const keep = h.hand.filter((c) => (c.retain || h.retainAll) && !c.preMerge); // 13.11: мердж «на один ход» исчезает в конце хода; Терпение
       BP.Deck.discardAll(state, h, h.hand.filter((c) => !keep.includes(c)).map((c) => (wr ? BP.Wide.release(state, c, false) : BP.Gifts.expire(c))));
-      if (wr) BP.Wide.turnEnd(state, h); // Сила/Стойкость «на ход» сгорают
+      if (wr) { BP.Wide.turnEnd(state, h); h.retainAll = false; } // Сила/Стойкость «на ход» сгорают
       h.hand = keep;
     });
+    if (BP.Wide2) BP.Wide2.partyTurnEnd(state); // «Приказ полководца» закончился
     afterChange(state, true);
     if (checkFightEnd(state)) return;
     state.phase = "enemies";
@@ -660,5 +666,5 @@ BP.Engine = (function () {
     return s;
   }
 
-  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard, vectorAoe, push, pushN };
+  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard, vectorAoe, push, pushN, hurtEnemy };
 })();

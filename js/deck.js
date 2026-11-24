@@ -71,6 +71,7 @@ BP.Deck = (function () {
         // wide-range: лимит руки пати (rules.partyHand) — лишняя карта сгорает в сброс
         if (BP.Wide && !BP.Wide.handRoom(state)) { const c = hero.draw.pop(); hero.discard.push(c); BP.Engine.log(state, hero.name, `рука пати полна — «${c.name}» сгорела`); continue; }
         hero.hand.push(hero.draw.pop());
+        if (BP.Wide2) BP.Wide2.costDown(state, hero.hand[hero.hand.length - 1]); // «Приказ полководца»
         continue;
       }
       if (!hero.draw.length && !sh.draw.length) {

@@ -120,13 +120,16 @@ BP.Meta = (function () {
     if (!m.multiUpgrade && Object.keys(u).length) return false;
     switch (id) {
       case "up": return hasDB(c);
-      case "gift": return giftOptions(state, c).length > 0;
+      case "gift": return !(BP.Wide && BP.Wide.on(state)) && giftOptions(state, c).length > 0; // wide-range: даров нет
       case "draw": case "inspire": case "killenergy": case "echo": return !u[id] && (id === "inspire" || id === "killenergy" ? hasDmg(c) : true);
       case "feed": case "freemerge": case "generous": return !u[id] && !!c.gift;
       case "armorbreak": return hasDmg(c) && !c.armorBreak;
       case "cheaper": return c.cost > 0;
       case "retain": return !c.retain;
-      case "innate": return !c.innate;
+      case "innate": { // wide-range: не больше meta.innateMax Innate-карт в колоде героя
+        const h = state.heroes.find((x) => x.id === c.owner), n = h ? (h.runCards || []).filter((x) => x.innate).length : 0;
+        return !c.innate && n < (m.innateMax || 99);
+      }
       case "sharp": return hasDmg(c) && !!c.weapon && !c.alwaysCrit && (state.config.weapons[c.weapon] || {}).critEvery > (c.sharpPerm || 0) + 1;
       case "awaken": return !c.evolve && hasDmg(c) && evolutions(state, c).length > 0;
       case "ignorecover": return c.attack === "melee" && !c.ignoreCover && hasDmg(c);
@@ -149,6 +152,20 @@ BP.Meta = (function () {
   }
 
   // ---------- Награды ----------
+  // Псевдорандом «ведром» (wide-range, 24.11): в ведре каждый вариант лежит w раз; вытянутое из ведра уходит.
+  // Пока ведро полное — шансы как по весам; когда частое уже вытянуто, остаток тянется без процентов, поэтому
+  // редкое гарантированно выпадет за один цикл ведра. Ведро пустое (или в нём нет подходящего) — наполняется заново.
+  function bag(state, key, items) {
+    if (!items.length) return null;
+    const bags = state.run.bags || (state.run.bags = {}), ok = new Set(items.map((x) => x.id));
+    let b = (bags[key] || []).filter((id) => ok.has(id));
+    if (!b.length) { b = []; items.forEach((x) => { for (let i = 0; i < Math.max(1, Math.round(x.w)); i++) b.push(x.id); }); }
+    const k = Math.floor(Math.random() * b.length), id = b[k];
+    b.splice(k, 1);
+    bags[key] = (bags[key] || []).filter((x) => !ok.has(x)).concat(b);
+    return id;
+  }
+
   // Случайный эффект мерджа по весам [{id, w}]
   function weighted(list) {
     const sum = list.reduce((a, x) => a + x.w, 0);
@@ -185,7 +202,7 @@ BP.Meta = (function () {
     const m = M(state), h = state.heroes.find((x) => x.id === hid);
     // улучшения герою — не больше одного в награде и реже карточных (иначе вытесняют интересные улучшения карт)
     const heroUsed = [...used].some((id) => (m.upgrades[id] || {}).on === "hero");
-    const ids = shuffle(Object.keys(m.upgrades).filter((id) => {
+    const ids0 = shuffle(Object.keys(m.upgrades).filter((id) => {
       const u = m.upgrades[id];
       if (u.tier !== tier || used.has(id)) return false;
       if (u.on === "hero" && (heroUsed || Math.random() < 0.5)) return false;
@@ -193,15 +210,21 @@ BP.Meta = (function () {
       if (u.eliteOnly) return (kind === "elite" || kind === "treasure") && !state.run.relics[id];
       return true;
     }));
+    // wide-range: вид улучшения тянется из «ведра» (псевдорандом): редкое (w меньше) гарантированно выпадет за цикл ведра
+    const okIds = ids0.filter((id) => { const u = m.upgrades[id]; return u.on !== "card" || h.runCards.some((c) => fits(state, id, c, specOf(state, hid, c.spec))); });
+    const first = okIds.length ? bag(state, "up:" + hid + ":" + tier, okIds.map((id) => ({ id, w: m.upgrades[id].w || 2 }))) : null;
+    const ids = first ? [first].concat(ids0.filter((id) => id !== first)) : ids0;
     for (const id of ids) {
       const u = m.upgrades[id];
       if (u.on === "hero" || u.on === "party") { used.add(id); return { type: "up", up: id, rarity: tier }; }
-      const cand = shuffle(h.runCards.slice()).find((c) => fits(state, id, c, specOf(state, hid, c.spec)));
+      const fitting = shuffle(h.runCards.slice()).filter((c) => fits(state, id, c, specOf(state, hid, c.spec)));
+      // Innate — чаще на Power (их хочется иметь с начала боя)
+      const cand = id === "innate" && Math.random() < 0.7 ? fitting.find((c) => c.power) || fitting[0] : fitting[0];
       if (!cand) continue;
       const o = { type: "up", up: id, spec: cand.spec, rarity: tier };
       if (id === "gift") o.gift = rand(giftOptions(state, cand));
       if (id === "awaken") o.evo = rand(evolutions(state, cand));
-      if (id === "mfx") o.mfx = weighted(BP.Wide.rewardFx(state, cand));
+      if (id === "mfx") o.mfx = bag(state, "mfx:" + cand.id, BP.Wide.rewardFx(state, cand));
       used.add(id);
       return o;
     }
