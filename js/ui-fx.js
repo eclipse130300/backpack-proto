@@ -44,15 +44,18 @@ BP.FX = (function () {
   }
 
   function spawnNumber(s, ev, shift) {
-    const r = ev.k === "enemy" ? enemyRect(s, ev) : (document.querySelector(`.hero.token[data-hero="${ev.hero}"]`) || { getBoundingClientRect: () => null }).getBoundingClientRect();
+    const byEl = (sel) => { const el = document.querySelector(sel); return el ? el.getBoundingClientRect() : null; };
+    const r = ev.k === "enemy" ? enemyRect(s, ev) : ev.k === "foe" ? byEl(`.hex[data-enemy="${ev.uid}"]`) : byEl(`.hero.token[data-hero="${ev.hero}"]`);
     if (!r) return;
     const d = document.createElement("div");
-    const main = ev.miss ? "промах" : ev.amount > 0 ? `−${ev.amount}` : ev.blocked > 0 ? "блок" : ev.armor > 0 ? "броня" : "0";
-    d.className = `dmg-num ${ev.k} ${ev.crit ? "crit" : ""} ${ev.amount > 0 ? "" : "blocked-only"}`;
+    // правки 25.11: ev.text (действие врага: Сила, броня) и ev.status (дебафф герою) — надпись вместо числа
+    const word = ev.text || ev.status;
+    const main = word ? BP.UIGame.esc(word) : ev.miss ? "промах" : ev.amount > 0 ? `−${ev.amount}` : ev.blocked > 0 ? "блок" : ev.armor > 0 ? "броня" : "0";
+    d.className = `dmg-num ${ev.k === "foe" ? "enemy" : ev.k} ${ev.crit ? "crit" : ""} ${word ? "word" : ev.amount > 0 ? "" : "blocked-only"}`;
     const ic = ev.k === "enemy" ? srcIcon(s, ev) : "";
     d.innerHTML = `${ev.crit ? '<span class="critword">КРИТ!</span>' : ""}<span class="nrow">${ic ? `<span class="src">${ic}</span>` : ""}<span class="n">${main}</span></span>${ev.blocked > 0 ? `<span class="b">🛡${ev.blocked}</span>` : ""}${ev.armor > 0 ? `<span class="b">⬢−${ev.armor}${ev.ab ? " ×2" : ""}</span>` : ""}`;
     d.style.left = r.left + r.width / 2 + (shift || 0) + (Math.random() * 10 - 5) + "px";
-    d.style.top = r.top + (ev.k === "enemy" ? r.height * 0.35 : -18) + "px";
+    d.style.top = r.top + (ev.k !== "hero" ? r.height * 0.35 : -18) + "px";
     layer.appendChild(d);
     setTimeout(() => d.remove(), 1500);
   }
@@ -73,7 +76,7 @@ BP.FX = (function () {
     (s.fx || []).forEach((ev) => {
       if (ev.id <= lastFx) return;
       if (ev.k === "evolve") { evolveBanner(ev); return; } // эволюция (js/evolve.js) — надпись по центру поля
-      const key = ev.k === "enemy" ? "e:" + ev.uid : "h:" + ev.hero;
+      const key = ev.k === "enemy" || ev.k === "foe" ? "e:" + ev.uid : "h:" + ev.hero;
       let q = numQueue[key] && numQueue[key].t > now ? numQueue[key] : { t: now, n: 0 };
       if (ev.play && ev.k === "enemy") { // шаг розыгрыша: не раньше, чем start + step × STEP_GAP
         if (!playStart[ev.play]) playStart[ev.play] = now;
@@ -124,7 +127,7 @@ BP.FX = (function () {
     const pairs = [];
     const add = (e, heroId, strong) => {
       const from = document.querySelector(`.hex[data-enemy="${e.uid}"]`), to = document.querySelector(`.hero.token[data-hero="${heroId}"]`);
-      if (from && to && !pairs.some((p) => p.from === from && p.to === to)) pairs.push({ from, to, strong, curse: e.intent && e.intent.type === "disable" });
+      if (from && to && !pairs.some((p) => p.from === from && p.to === to)) pairs.push({ from, to, strong, curse: e.intent && (e.intent.type === "disable" || e.intent.type === "debuff") });
     };
     if (s.phase === "enemies" && s.actingEnemy) {
       const e = s.enemies.find((x) => x.uid === s.actingEnemy);
@@ -154,7 +157,7 @@ BP.FX = (function () {
       case "arriving": return "Только что вышел — в этот ход не атакует.";
       case "block": return `Защищается: +${it.amount} блока.`;
     }
-    return "—";
+    return BP.Foes.long(s, e, it) || "—";
   }
 
   function actionShort(a) {
@@ -163,7 +166,7 @@ BP.FX = (function () {
       case "disable": return "⛓ вывести героя из игры на ход";
       case "block": return `🛡 +${a.amount} блока`;
     }
-    return a.type;
+    return BP.Foes.short(a) || a.type;
   }
 
   // Мердж «дар»: что карта отдаст союзнику и какие дары уже получила
@@ -196,6 +199,7 @@ BP.FX = (function () {
         ${ci ? `<div class="tip-note ${ci.willCrit ? "good" : ""}">Крит ×${s.config.rules.critMultiplier} каждый ${ci.every}-й удар оружием «${esc(c.weaponName)}». ${ci.willCrit ? "<b>Эта карта критует!</b>" : `До крита: ${ci.left} уд.`}</div>` : ""}
         ${giftTip(s, c)}`;
     }
+    if (kind === "status") return BP.Status.tip(s, el); // значок статуса (js/status.js)
     if (kind === "enemy") {
       const e = s.enemies.find((x) => x.uid === el.dataset.enemy);
       if (!e) return null;
@@ -278,7 +282,7 @@ BP.FX = (function () {
     ensure();
     if (!s || s.phase === "lobby") { tip.style.display = "none"; svg.innerHTML = ""; return; }
     const el = BP.Drag.isDragging() || document.querySelector(".modal-back") ? null : hoverElement();
-    const key = el ? el.dataset.tip + ":" + (el.dataset.enemy || el.dataset.card || el.dataset.hero || el.dataset.idx || "") : null;
+    const key = el ? el.dataset.tip + ":" + (el.dataset.sid || "") + (el.dataset.enemy || el.dataset.card || el.dataset.hero || el.dataset.idx || "") + ":" + (el.dataset.idx || "") : null;
     if (key !== tipKey) {
       const e = el && el.dataset.tip === "enemy" ? s.enemies.find((x) => x.uid === el.dataset.enemy) : null;
       const ids = e && e.alive && e.intent && e.intent.targets ? e.intent.targets.slice() : [];

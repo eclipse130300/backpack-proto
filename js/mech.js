@@ -194,6 +194,7 @@ BP.Mech = (function () {
   // Какое действие враг выберет сейчас: по кругу; раненый (≤50% ХП) — действие с бронёй (но не два раза подряд)
   function pickAction(state, e) {
     const n = e.actions.length, idx = e.actionIndex % n;
+    if (e.lastAct >= 0 && (e.actions[e.lastAct] || {}).type === "charge") return idx; // после замаха — удар по плану (js/foes.js)
     if (e.hp * 2 <= e.maxHp && !armorAct(e.actions[idx])) {
       const ai = e.actions.findIndex(armorAct);
       if (ai >= 0 && e.lastAct !== ai) return ai;

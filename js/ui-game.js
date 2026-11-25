@@ -56,7 +56,7 @@ BP.UIGame = (function () {
       case "arriving": return `<div class="intent covered">👀 осматривается</div>`;
       case "block": return `<div class="intent def">🛡 +${it.amount}</div>`;
     }
-    return "";
+    return BP.Foes.badge(state, e, it) || "";
   }
 
   // merge-7: одна полоска врага — ХП красным, броня синим. 13.11: число — общий запас (ХП + броня), рядом ⬢ броня. Блок — отдельно 🛡
@@ -77,10 +77,7 @@ BP.UIGame = (function () {
         const e = state.enemies.find((x) => x.alive && x.col === col && x.row === row);
         if (e) {
           const ed = state.config.enemies[e.type] || {};
-          const covered = !BP.Cards.isExposed(state, e);
-          const vs = e.vuln === true ? 1 : e.vuln || 0, tr = BP.Wide2 && BP.Wide2.trapAt(state, col, row);
-          const badges = [e.stunned ? "оглушён" : "", vs ? `💥 +${vs * 50}%` : "", e.mark ? "🎯 метка" : "", e.missAll ? "🌫 промах" : "", e.weakNext ? "слаб" : "",
-            e.deathMark ? "☠" : "", tr ? `${BP.Wide2.TRAP[tr.kind].icon} ловушка` : "", covered ? "⛨ прикрыт" : ""].filter(Boolean).join(" · ");
+          const badges = BP.Status.chips(BP.Status.enemy(state, e), "enemy", e.uid); // правки 25.11: статусы значками с подсказкой (js/status.js)
           html += `<div class="hex enemy row${row}${lane} ${state.actingEnemy === e.uid ? "acting" : ""}" data-drop="enemy" data-tip="enemy" data-enemy="${e.uid}" data-col="${col}" data-row="${row}" style="left:${p.left}px;top:${p.top}px">
             <div class="inner"><div class="etype">${ed.melee ? "мили" : "дальн."}</div><div class="ename">${esc(e.name)}</div>
             ${enemyBar(e)}${intentHtml(state, e)}<div class="badges">${badges}</div></div>
@@ -102,7 +99,7 @@ BP.UIGame = (function () {
   function incomingFor(state, hero) {
     let dmg = 0;
     state.enemies.forEach((e) => {
-      if (e.alive && e.intent && e.intent.type === "attack" && (e.intent.targets || []).includes(hero.id)) dmg += e.intent.damage * (e.intent.hits || 1);
+      if (e.alive && e.intent && e.intent.type === "attack" && (e.intent.targets || []).includes(hero.id)) dmg += BP.Foes.heroDmg(hero, e.intent.damage) * (e.intent.hits || 1);
     });
     return dmg;
   }
@@ -126,17 +123,15 @@ BP.UIGame = (function () {
       const owner = state.players[h.owner];
       const inc = incomingFor(state, h);
       // card-mechanics-1: выведен Жрецом, промах (Дымовая завеса), бафы Силы и Стойкости
-      const weak = [h.out ? "⛓ выведен" : "", h.disableNext ? "⛓ след. ход" : "", h.miss ? `🌫${h.miss > 1 ? h.miss : ""} промах` : "", h.dmgBuff ? `⚔${h.dmgBuff > 0 ? "+" : ""}${h.dmgBuff}` : "", h.blockBuff ? `🛡+${h.blockBuff}` : "",
-        // wide-range: статусы героя (js/wide.js, js/wide2.js)
-        h.critReady ? "💥крит" : "", h.barrier ? `🔰${h.barrier}` : "", h.thorns ? `🌵${h.thorns}` : "", h.fade && h.fade.left ? `🩸−${h.fade.per}×${h.fade.left}` : "",
-        h.bones ? `🦴${h.bones}` : "", h.blood ? `🩸${h.blood}` : "", h.keepBlock ? "🧱" : ""].filter(Boolean).join(" ");
+      // статусы героя значками (правки 25.11, js/status.js): наведи — что делает, сколько ходов осталось
+      const weak = BP.Status.chips(BP.Status.hero(state, h), "hero", h.id);
       const tgt = state.actingTargets && state.actingTargets.includes(h.id) ? "targeted" : "";
       html += `<div class="hero token ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"} ${tgt}" data-drop="hero" data-tip="hero" data-hero="${h.id}" style="width:${g.width / 3 - 14}px">
         ${portrait(state, h)}
         <div class="tinfo">
           <div class="hname">${esc(h.name)} ${weaponsHtml(state, h)} ${state.phase === "players" && owner ? `<span class="readytag">${owner.ready ? "✅" : "⏳"}</span>` : ""}</div>
           ${hpBar(h)}
-          <div class="stats"><span title="Блок (сгорает после хода врагов)">🛡 ${h.block}</span>${h.startBlock ? `<span title="Стартовый блок — как доп. ХП на бой">⛨ ${h.startBlock}</span>` : ""}${inc ? `<span class="incoming">⚔ ${inc}</span>` : ""}${weak ? `<span class="debuff">${weak}</span>` : ""}</div>
+          <div class="stats"><span title="Блок (сгорает после хода врагов)">🛡 ${h.block}</span>${h.startBlock ? `<span title="Стартовый блок — как доп. ХП на бой">⛨ ${h.startBlock}</span>` : ""}${inc ? `<span class="incoming">⚔ ${inc}</span>` : ""}${weak ? `<span class="st-row">${weak}</span>` : ""}</div>
         </div>
       </div>`;
     });
@@ -172,9 +167,15 @@ BP.UIGame = (function () {
       owner = c.shared ? `<div class="cowner shared">общая</div>` : `<div class="cowner hc${oi}">${esc((state.heroes[oi] || hero).name)}</div>`;
     }
     const mergeOk = !readonly && BP.Gifts.mergeable(c) && BP.Cards.mergeCost(state, hero, c) <= avail;
+    // обдуманный мердж (js/offer.js): выбранную свою карту можно выложить для мерджа, если в игре есть другие игроки
+    const off = BP.Offer.offered(state, hero), isOff = !!off && off.uid === c.uid;
+    const others = BP.Offer.on(state) && state.heroes.some((x) => x.owner && x.owner !== hero.owner);
+    const offerBtn = !readonly && others && ui.selected === c.uid && (isOff || BP.Wide.mergeable(c)) && !c.donor
+      ? `<button class="offer-btn ${isOff ? "" : "primary"}" data-act="offer" data-hero="${hero.id}" data-card="${isOff ? "" : c.uid}">${isOff ? "✕ Убрать со стола" : "⇪ Выложить для мерджа"}</button>` : "";
     const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", grey(state, hero, c, avail) ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : "",
       // эволюция (js/evolve.js): золотая рамка — эволюционная, фиолетовое свечение — можно эволюционировать сейчас
-      BP.Evolve.evolvable(state, c) ? "evo" : "", hero.alive && BP.Evolve.ready(state, hero, c) ? "evo-ready" : "", c.evolvedFrom ? "evolved" : ""].join(" ");
+      BP.Evolve.evolvable(state, c) ? "evo" : "", hero.alive && BP.Evolve.ready(state, hero, c) ? "evo-ready" : "", c.evolvedFrom ? "evolved" : "",
+      isOff ? "offered" : ""].join(" ");
     const needsBtn = !readonly && ui.selected === c.uid && (c.target === "none" || c.target === "self");
     const ci = BP.Cards.critInfo(hero, c);
     const crit = ci ? `<div class="crit ${ci.willCrit ? "on" : ""}">${ci.willCrit ? "💥 КРИТ" : `💥 через ${ci.left}`}</div>` : "";
@@ -187,7 +188,8 @@ BP.UIGame = (function () {
       ${BP.CardTip.faceHtml(state, hero, c)}
       ${c.merged ? `<div class="cmerged"${c.preMerge ? ' title="Мердж на один ход: в конце хода карта станет прежней"' : ""}>★${c.merged > 1 ? c.merged : ""}${c.preMerge ? "⏳" : ""}</div>` : ""}
       ${BP.Gifts.isOn(state) && c.gift ? `<div class="cgift">🎁${esc(BP.Gifts.labels(state, c).ownIcon)}</div>` : ""}
-      ${needsBtn ? `<button class="play-btn primary" data-act="play-self">▶ Сыграть</button>` : ""}
+      ${needsBtn ? `<button class="play-btn primary" data-act="play-self">▶ Сыграть</button>` : ""}${offerBtn}
+      ${isOff ? `<div class="offer-tag">выложена для мерджа</div>` : ""}
     </div>`;
   }
 
@@ -202,7 +204,14 @@ BP.UIGame = (function () {
       const n = h.hand.length, gap = 8, hs = state.config.rules.drawPerTurn || 4;
       const handW = Math.min(secW, Math.max(hs, 1) * z.cardW + (hs - 1) * gap);
       const over = n > 1 ? Math.min(gap, (handW - n * z.cardW) / (n - 1)) : gap;
-      const cards = h.alive ? (h.hand.map((c, k) => cardHtml(state, h, c, ui, readonly, k ? over : 0)).join("") || `<span class="muted small">Рука пуста</span>`) : `<span class="muted">пал в бою</span>`;
+      let cards = h.alive ? (h.hand.map((c, k) => cardHtml(state, h, c, ui, readonly, k ? over : 0)).join("") || `<span class="muted small">Рука пуста</span>`) : `<span class="muted">пал в бою</span>`;
+      // обдуманный мердж (js/offer.js): рука другого игрока скрыта — рубашки и выложенная карта
+      const hidden = h.alive && BP.Offer.hidden(state, h, myPid);
+      if (hidden) {
+        const off = BP.Offer.offered(state, h), backs = h.hand.length - (off ? 1 : 0);
+        cards = `<div class="cbacks" title="Карты союзника скрыты (обдуманный мердж). Попроси его выложить карту для мерджа.">${Array.from({ length: Math.min(backs, 8) }, () => "<i></i>").join("")}<span>${backs} ${backs === 1 ? "карта" : backs < 5 ? "карты" : "карт"}</span></div>`
+          + (off ? cardHtml(state, h, off, ui, true, 0) : `<span class="muted small offer-none">ничего не выложено</span>`);
+      }
       const maxE = state.config.rules.energy;
       const en = state.pool ? `<span class="pool">⚡ пул ${state.pool.amount}</span>` : `<span class="pips">${Array.from({ length: Math.max(maxE, h.energy) }, (_, k) => `<i class="${k < h.energy ? "on" : ""}"></i>`).join("")}</span>`;
       return `<div class="hsec ${lanes ? "lane" + i : ""} ${h.owner === myPid ? "mine" : ""} ${ui.activeHero === h.id ? "active" : ""} ${h.alive ? "" : "dead"}" data-drop="hero" data-hero="${h.id}">
@@ -212,7 +221,7 @@ BP.UIGame = (function () {
           ${hpBar(h)}${en}
           <span class="pile" title="${state.shared ? "Своя колода (оружие и щит) / свой сброс" : "Колода / сброс"}">🂠 ${h.draw.length} · ♻ ${h.discard.length}</span>
         </div>
-        <div class="hand ${over < 0 ? "overlap" : ""}">${cards}</div>
+        <div class="hand ${over < 0 && !hidden ? "overlap" : ""} ${hidden ? "hidden-hand" : ""}">${cards}</div>
       </div>`;
     }).join("");
     return `<div class="handbar">${html}</div>`;

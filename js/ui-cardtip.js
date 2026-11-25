@@ -6,7 +6,7 @@
 window.BP = window.BP || {};
 
 BP.CardTip = (function () {
-  const DELAY1 = 500, DELAY2 = 1000, GRACE = 220;
+  const DELAY1 = 250, DELAY2 = 1000, GRACE = 120; // правки 25.11: крупная карта через 0.25 с
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const st = () => BP.Session.state;
 
@@ -148,9 +148,11 @@ BP.CardTip = (function () {
     return document.querySelector(`.hand .card[data-card="${cur.uid}"][data-hero="${cur.hero}"]`);
   }
 
+  // правки 25.11: вместо столбика иконок — крупная карта словами (js/ui-bigcard.js)
   function rowsHtml(state) {
     const h = state.heroes.find((x) => x.id === cur.hero), c = h && h.hand.find((x) => x.uid === cur.uid);
     if (!c) return null;
+    if (BP.BigCard) return BP.BigCard.html(state, h, c);
     cur.parts = parts(state, h, c);
     return `<div class="ctip-title">${esc(c.name)}</div>` + cur.parts.map((p, i) => `<div class="ctip-row${p.cls ? " " + p.cls : ""}" data-i="${i}"><span class="ci">${esc(p.icon)}${p.value !== undefined && p.value !== "" ? `<b>${esc(p.value)}</b>` : ""}</span><span>${esc(p.short)}</span></div>`).join("");
   }
@@ -160,7 +162,7 @@ BP.CardTip = (function () {
     if (!el) return;
     const r = el.getBoundingClientRect(), w = box.offsetWidth, h = box.offsetHeight;
     const x = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - 8));
-    const y = Math.max(8, r.top - h - 4);
+    const y = Math.max(8, Math.min(r.top - h - 4, innerHeight - h - 8)); // крупная карта выезжает вверх и может перекрыть поле
     box.style.left = x + "px"; box.style.top = y + "px";
   }
 
@@ -170,6 +172,7 @@ BP.CardTip = (function () {
     const html = rowsHtml(s);
     if (!html) return hide();
     box.innerHTML = html; box.style.display = "block"; rowKey = null;
+    box.classList.toggle("big", !!BP.BigCard);
     place();
   }
 
@@ -196,7 +199,7 @@ BP.CardTip = (function () {
     if (!s || s.phase === "lobby" || (BP.Drag && BP.Drag.isDragging())) { hide(); return; }
     const overTip = e.target.closest && (e.target.closest(".ctip") || e.target.closest(".ctip2"));
     const cardEl = e.target.closest && e.target.closest(".hand .card[data-card]");
-    if (overTip && cur) { clearTimeout(hideT); hideT = null; return; }
+    if (overTip && cur && !BP.BigCard) { clearTimeout(hideT); hideT = null; return; }
     if (cardEl) {
       clearTimeout(hideT); hideT = null;
       if (cur && cur.uid === cardEl.dataset.card) return;

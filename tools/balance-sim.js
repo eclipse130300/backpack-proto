@@ -37,7 +37,7 @@
 const path = require("path");
 global.window = global;
 const ROOT = path.join(__dirname, "..");
-["config.js", "js/hex.js", "js/cards.js", "js/gifts.js", "js/evolve.js", "js/reinforce.js", "js/weak.js", "js/deck.js", "js/mech.js", "js/wide.js", "js/wide2.js", "js/engine.js", "js/meta.js", "js/mforge.js", "js/runmap.js", "js/sim.js"].forEach((f) => require(path.join(ROOT, f)));
+["config.js", "js/hex.js", "js/cards.js", "js/gifts.js", "js/evolve.js", "js/reinforce.js", "js/foes.js", "js/offer.js", "js/weak.js", "js/deck.js", "js/mech.js", "js/wide.js", "js/wide2.js", "js/engine.js", "js/meta.js", "js/mforge.js", "js/runmap.js", "js/sim.js"].forEach((f) => require(path.join(ROOT, f)));
 const BP = global.BP, CFG = global.GAME_CONFIG;
 // Временная правка чисел без правки config.js: BP_SET='{"meta":{"enemyHp":0.8}}' node tools/balance-sim.js ...
 if (process.env.BP_SET) {
@@ -77,6 +77,11 @@ function report(bot, sum) {
   const line = Object.entries(sum.cards).filter(([, c]) => c.played).sort((a, b) => b[1].perFight - a[1].perFight)
     .map(([k, c]) => `${k} ${c.perFight.toFixed(2)}${c.playRate !== null ? ` (${pct(c.playRate)})` : ""}`).join(", ");
   console.log("  Карт за бой: " + line);
+  // правки 25.11: как часто боты пользуются механиками (по полю build карт): сыграно / отдано в мердж за бой
+  const NAMES = { def: "защита", str: "Сила", crit: "крит", trap: "ловушки", aoe: "массовки", acc: "Накопитель", bone: "Кости", blood: "Кровь", volley: "залп", sac: "жертва", ber: "берсерк", power: "Power" };
+  const mech = Object.entries(sum.mech || {}).sort((a, b) => b[1].played + b[1].merged - a[1].played - a[1].merged)
+    .map(([k, m]) => `${NAMES[k] || k} ${m.played.toFixed(2)}/${m.merged.toFixed(2)}`).join(", ");
+  if (mech) console.log("  Механики за бой (сыграно/мердж): " + mech);
 }
 
 const t0 = Date.now();

@@ -539,3 +539,64 @@ button.evo-btn { background: #6a3aa8; border-color: #b77cff; color: #fff; }
 /* merge-7: пока карта поднята — карты союзников, в которые её нельзя замерджить, темнеют */
 .hsec.dim-costs .card[data-drop="merge"]:not(.valid) { opacity: 0.4; filter: grayscale(0.6); }
 @media (max-height: 860px) { .hsec-head .bar.hpar.hero-bar { width: 80px; } }
+
+/* ---------- правки 25.11: статусы значками (js/status.js), новые намерения врагов (js/foes.js) ---------- */
+.st-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px; margin: 1px 2px 0 0; border-radius: 9px; font-size: 13px; line-height: 16px;
+  background: #ffffff14; border: 1px solid #ffffff33; cursor: help; pointer-events: auto; }
+.st-chip b { font-size: 12px; color: #fff; }
+.st-chip.bad { background: #ff3a3a26; border-color: #ff6a5a; }
+.st-row { display: inline-flex; flex-wrap: wrap; }
+.hex .badges { display: flex; flex-wrap: wrap; justify-content: center; }
+.hex .intent.buff { color: #ffd36a; }
+.hex .intent.charge { color: #ff9a4a; }
+.dmg-num.word .n { font-size: 26px; color: #ffd36a; white-space: nowrap; }
+.dmg-num.hero.word .n { color: #d6b0f5; }
+
+/* ---------- правки 25.11: крупная карта (js/ui-bigcard.js) ---------- */
+.ctip.big { padding: 0; background: none; border: none; box-shadow: none; pointer-events: none; max-width: none; }
+.bigcard { width: 300px; background: linear-gradient(180deg, #2a2236, #1a1522); border: 3px solid var(--kc, #888); border-radius: 16px;
+  box-shadow: 0 14px 40px #000c, 0 0 0 1px #000; color: #f1ead8; font-size: 15px; line-height: 1.35; padding: 12px 14px 12px; text-align: left; }
+.bigcard .bc-head { display: flex; align-items: center; gap: 10px; }
+.bigcard .bc-cost { flex: none; width: 38px; height: 38px; border-radius: 50%; background: #1e5fb3; border: 2px solid #9cc8ff; display: grid; place-items: center;
+  font-weight: 900; font-size: 18px; }
+.bigcard .bc-name { font-size: 21px; font-weight: 900; line-height: 1.1; }
+.bigcard .bc-type { font-size: 12px; color: #c6bba6; margin: 4px 0 6px; }
+.bigcard .bc-art { height: 70px; display: grid; place-items: center; background: #0003; border-radius: 10px; color: var(--kc); }
+.bigcard .bc-art svg { width: 62px; height: 62px; }
+.bigcard .bc-text { font-size: 17px; font-weight: 600; margin: 10px 0 6px; }
+.bigcard .bc-now { font-size: 13px; color: #ffd98a; margin: 2px 0; }
+.bigcard .bc-up { font-size: 13px; color: #9ccaff; margin: 3px 0; }
+.bigcard .bc-hl { margin: 8px 0; padding: 7px 9px; border: 2px dashed #ffd36a; border-radius: 10px; background: #ffd36a1a; font-size: 14px; }
+.bigcard .bc-hl b { color: #ffd36a; }
+.bigcard .bc-sec { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #b9a6e8; margin-bottom: 3px; }
+.bigcard .bc-merge { margin-top: 8px; padding: 7px 9px; border-radius: 10px; background: #7a5cff1f; border: 1px solid #7a5cff66; }
+.bigcard .bc-mfx { display: flex; gap: 7px; font-size: 14px; margin: 3px 0; }
+.bigcard .bc-mfx small { display: block; font-size: 11px; color: #c9bde8; }
+.bigcard .bc-mfx.none { color: #b8afc9; font-size: 13px; }
+.bigcard .bc-kws { margin-top: 8px; font-size: 12px; color: #cfc6b2; border-top: 1px solid #ffffff22; padding-top: 6px; }
+.bigcard .bc-kw { margin: 2px 0; }
+
+/* ---------- правки 25.11: награда — строки с «Развернуть» ---------- */
+.ropt .rkind { display: flex; justify-content: space-between; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #d9c79f; }
+.ropt .rtitle { font-size: 19px; font-weight: 900; }
+.ropt .rshort { font-size: 14px; color: #e8dcc4; }
+.ropt .rbtns { display: flex; gap: 8px; justify-content: flex-end; }
+.ropt .rfull { display: flex; justify-content: center; margin-top: 6px; }
+.ropt .rfull .bigcard { width: 100%; max-width: 320px; }
+.rhero { display: flex; gap: 10px; align-items: center; padding: 10px; background: #0003; border-radius: 10px; width: 100%; }
+.rhero .portrait { width: 64px; height: 64px; }
+.rhero-big { font-size: 24px; font-weight: 900; color: #ffd36a; }
+.rskip { align-self: flex-start; }
+.rcols { align-items: start; }
+
+/* ---------- правки 25.11: обдуманный мердж (js/offer.js) ---------- */
+.card .offer-btn { position: absolute; left: 4px; right: 4px; bottom: 40px; padding: 4px 2px; font-size: 12px; z-index: 3; white-space: normal; line-height: 1.1; }
+.card.offered { transform: translateY(-22px) scale(1.12); z-index: 5; box-shadow: 0 0 0 3px #ffd36a, 0 0 26px #ffd36acc; }
+.card .offer-tag { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); background: #ffd36a; color: #2a1a00; font-size: 11px; font-weight: 800;
+  padding: 1px 7px; border-radius: 8px; white-space: nowrap; }
+.hand.hidden-hand { align-items: flex-end; gap: 14px; }
+.cbacks { display: flex; align-items: center; gap: 0; padding: 6px 8px; }
+.cbacks i { width: 34px; height: 50px; margin-right: -18px; border-radius: 5px; border: 2px solid #8a6a3a; background: repeating-linear-gradient(45deg, #3a2614, #3a2614 5px, #4a3018 5px, #4a3018 10px); box-shadow: 0 2px 4px #0008; }
+.cbacks span { margin-left: 26px; font-size: 13px; color: #cdbb98; white-space: nowrap; }
+.offer-none { align-self: center; }
+.hidden-hand .card.offered { transform: translateY(-4px) scale(1.04); }

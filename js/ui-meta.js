@@ -75,13 +75,40 @@ BP.UIMeta = (function () {
   }
 
   // ---------- Награда ----------
-  function optionHtml(s, h, o, i, mine) {
-    const pv = o.preview ? BP.UIDeck.miniCard({ c: o.preview, n: 1 }) : "";
-    return `<div class="ropt r-${o.rarity}"><div class="rhead"><b>${esc(BP.Meta.offerTitle(s, o))}</b><span class="rrar">${RAR[o.rarity] || ""}</span></div>
-      <div class="small">${esc(BP.Meta.offerText(s, o))}</div>${pv}
-      ${o.preview && o.preview.before ? `<div class="muted small">было: ${esc(o.preview.before)}</div>` : ""}
-      ${mine ? `<button class="primary" data-act="reward-pick" data-hero="${h.id}" data-idx="${i}">Взять</button>` : ""}</div>`;
+  // правки 25.11: у героя строки «Новая карта» / «Улучшение» / «Пропустить». В строке — название и коротко,
+  // «Развернуть» показывает карту целиком (js/ui-bigcard.js): новую карту, карту с улучшением в рамке или героя с бонусом.
+  const opened = {}; // какие строки развёрнуты: "rewardId:hero:idx" → true (только у этого игрока)
+  function heroBoost(s, h, o) {
+    const u = s.config.meta.upgrades[o.up] || {};
+    const big = { maxhp: "+8 макс. ХП", startblock: "+2 стартового блока", strength: "+1 Сила навсегда", fortitude: "+1 Стойкость навсегда" }[o.up] || u.name;
+    return `<div class="rhero">${portrait(s, h)}<div><div class="rhero-big">${esc(u.icon || "")} ${esc(big)}</div><div class="small">${esc(h.name)}: ${esc(u.text || "")}</div></div></div>`;
   }
+  function optionHtml(s, h, o, i, mine) {
+    const key = `${s.reward.id}:${h.id}:${i}`, open = !!opened[key];
+    const u = o.type === "up" ? s.config.meta.upgrades[o.up] || {} : null;
+    const pv = o.preview;
+    let kind, title, short, full;
+    if (o.type === "card" || o.type === "dupe") {
+      kind = o.type === "card" ? "🂠 Новая карта" : "🂠 Копия карты";
+      title = pv ? pv.name : "?"; short = pv ? BP.BigCard.body(pv) : "";
+      full = pv ? BP.BigCard.html(s, h, pv) : "";
+    } else if (u && (u.on === "hero" || u.on === "party")) {
+      kind = u.on === "hero" ? "❤ Усиление героя" : "🤝 Всей пати";
+      title = u.name; short = BP.Meta.offerText(s, o);
+      full = heroBoost(s, h, o);
+    } else {
+      kind = "⬆ Улучшение карты";
+      title = pv ? `«${pv.name}»` : "?"; short = `${BP.Meta.offerTitle(s, o).replace(/^\S+ /, "")}: ${BP.Meta.offerText(s, o)}`;
+      full = pv ? BP.BigCard.html(s, h, pv, { highlight: `<div class="bc-hl"><b>＋ ${esc(BP.Meta.offerTitle(s, o))}</b><br>${esc(BP.Meta.offerText(s, o))}</div>` }) : "";
+    }
+    return `<div class="ropt r-${o.rarity} ${open ? "open" : ""}">
+      <div class="rkind">${esc(kind)}<span class="rrar">${RAR[o.rarity] || ""}</span></div>
+      <div class="rtitle">${esc(title)}</div><div class="rshort">${esc(short)}</div>
+      <div class="rbtns"><button class="small" data-act="reward-open" data-key="${key}">${open ? "Свернуть ▴" : "Развернуть ▾"}</button>
+      ${mine ? `<button class="primary" data-act="reward-pick" data-hero="${h.id}" data-idx="${i}">Взять</button>` : ""}</div>
+      ${open ? `<div class="rfull">${full}</div>` : ""}</div>`;
+  }
+  function toggleOpen(key) { opened[key] = !opened[key]; }
 
   function renderReward(s, me) {
     const rw = s.reward;
@@ -90,11 +117,11 @@ BP.UIMeta = (function () {
       let body;
       if (pk) body = `<div class="rdone">✔ ${esc(pk.text)}</div>`;
       else if (!mine) body = `<div class="muted rwait">${esc(pname(s, h.owner))} выбирает…</div>`; // выбор не виден, пока не сделан
-      else body = (rw.offers[h.id] || []).map((o, i) => optionHtml(s, h, o, i, true)).join("") + `<button data-act="reward-pick" data-hero="${h.id}" data-idx="-1">Пропустить</button>`;
+      else body = (rw.offers[h.id] || []).map((o, i) => optionHtml(s, h, o, i, true)).join("") + `<button class="rskip" data-act="reward-pick" data-hero="${h.id}" data-idx="-1">✕ Пропустить</button>`;
       return `<div class="rcol lane${heroIdx(s, h.id)}"><div class="rcol-head">${portrait(s, h)}<b>${esc(h.name)}</b><span class="muted small">❤ ${h.hp}/${h.maxHp} · 🂠 ${(s.run.decks[h.id] || []).length}</span></div>${body}</div>`;
     }).join("");
     const sm = s.summary && s.summary.win ? `<div class="muted">«${esc(s.summary.name)}» пройден за ${s.summary.turns} ход${s.summary.turns === 1 ? "" : s.summary.turns < 5 ? "а" : "ов"}.</div>` : "";
-    return `<div class="mscreen">${sm}<div class="mstatus">Каждый герой берёт одно из трёх: слот 1 — карта, остальные — улучшения. Можно пропустить. Посмотреть колоды — «🂠 Колода» сверху.</div>
+    return `<div class="mscreen">${sm}<div class="mstatus">Каждый герой берёт одно: новую карту, улучшение или пропуск. «Развернуть» — посмотреть целиком. Посмотреть колоды — «🂠 Колода» сверху.</div>
       <div class="rcols">${cols}</div>${readyBar(s, me)}${party(s, me)}</div>`;
   }
 
@@ -241,5 +268,5 @@ BP.UIMeta = (function () {
     tick();
   }
 
-  return { PHASES, render, upgradesModal, upsText, afterRender };
+  return { toggleOpen, PHASES, render, upgradesModal, upsText, afterRender };
 })();

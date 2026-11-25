@@ -29,9 +29,14 @@ BP.Sim = (function () {
   function threat(s, e) {
     const acts = s.config.enemies[e.type].actions;
     let sum = 0;
+    const allies = s.enemies.filter((x) => x.alive).length;
     acts.forEach((a) => {
-      if (a.type === "attack") sum += a.damage * (a.hits || 1) * (a.targets || 1);
+      if (a.type === "attack") sum += (a.damage + (e.str || 0)) * (a.hits || 1) * (a.targets || 1);
       if (a.type === "disable") sum += 8;
+      // правки 25.11 (js/foes.js): хитрые враги — Сила всем, дебаффы, броня союзникам
+      if (a.type === "buff") sum += a.str * allies * 2.5;
+      if (a.type === "debuff") sum += a.status === "hvuln" ? 8 : (a.amount || 2) * 3;
+      if (a.type === "guard") sum += a.armor * 0.6;
     });
     return sum / acts.length;
   }
@@ -80,6 +85,33 @@ BP.Sim = (function () {
   }
 
   // ---------- оценка позиции для smart ----------
+  // правки 25.11: ценность долгих статусов героев (Сила на бой, ловушки, Кости, Колчан…) — иначе бот их не видит за один ход
+  const WS = { str: 4, tough: 2.5, thorns: 1.5, keepBlock: 6, barrier: 3, mergeStr: 3, aoeBonus: 2, critReady: 4, bones: 1.5, blood: 0.3, quiver: 2.5, trap: 5,
+    strTurn: 1.2, toughTurn: 0.8, hand: 3 };
+  function statusValue(c) {
+    let v = 0;
+    c.heroes.forEach((h) => {
+      if (!h.alive) return;
+      v += (h.dmgBuff || 0) * WS.str + (h.blockBuff || 0) * WS.tough + (h.thorns || 0) * WS.thorns + (h.keepBlock ? WS.keepBlock : 0)
+        + (h.barrier || 0) * WS.barrier + (h.mergeStr || 0) * WS.mergeStr + (h.aoeBonus || 0) * WS.aoeBonus + (h.critReady ? WS.critReady : 0)
+        + (h.bones || 0) * WS.bones + (h.blood || 0) * WS.blood + (h.quiver || 0) * WS.quiver;
+      if (h.fade && h.fade.left) v -= h.fade.per * h.fade.left * 1.5;
+    });
+    v += (c.traps || []).length * WS.trap;
+    return v;
+  }
+  // Сила / Стойкость «на ход» окупаются только картами, которые ещё сыграют в этот ход
+  function turnBuffValue(c) {
+    let v = 0;
+    c.heroes.forEach((h) => {
+      if (!h.alive) return;
+      const left = playable(c, h);
+      if (h.strTurn) v += h.strTurn * WS.strTurn * Math.min(3, left.filter((x) => BP.Cards.has(x, "damage")).length + 0.5);
+      if (h.toughTurn) v += h.toughTurn * WS.toughTurn * Math.min(3, left.filter((x) => (x.effects || []).some((e) => /^block/.test(e.type))).length + 0.5);
+    });
+    return v;
+  }
+
   const W = { dmg: 1, killBase: 4, killThreat: 1.0, hp: 1.4, startBlock: 0.6, death: 25, weakNow: 2, weakNext: 1.5, win: 40, wastedBlock: 0.05,
     // мердж: прирост «ценности» карты союзника × (1, если он сыграет её в этот ход) + mergeFuture (ожидаемые розыгрыши до конца боя)
     mergeFuture: 0.5, mergeCands: 2, mergeBlock: 0.6, mergePush: 2, mergeTaunt: 3 };
@@ -90,6 +122,7 @@ BP.Sim = (function () {
     let v = 0;
     c.heroes.forEach((h) => { if (h.alive) v -= BP.Cards.weakness(h) * W.weakNow * Math.min(2, playable(c, h).length); });
     const blockBefore = c.heroes.reduce((a, h) => a + (h.alive ? h.block : 0), 0);
+    v += turnBuffValue(c);
     act(c, { a: "forceEnd" });
     let guard = 0;
     while (c.phase === "enemies" && c.enemyQueue.length && guard++ < 50) BP.Engine.enemyStep(c);
@@ -104,6 +137,7 @@ BP.Sim = (function () {
       else { v -= BP.Cards.weakness(h) * W.weakNext; blockLeft += h.block; }
     });
     v -= Math.min(blockLeft, blockBefore + 99) * W.wastedBlock;
+    v += statusValue(c);
     return v;
   }
 
@@ -154,7 +188,10 @@ BP.Sim = (function () {
         return v;
       };
       const withM = bestPlay(after, a2, d2), without = bestPlay(s, a, d);
-      const now = withM !== null && without !== null ? withM - without : evaluate(after) - base;
+      // эффекты мерджа «сразу» (добор, энергия) видны по руке и энергии пати после мерджа
+      const handN = (st) => st.heroes.reduce((x, h) => x + (h.alive ? h.hand.length : 0), 0), enN = (st) => st.heroes.reduce((x, h) => x + (h.alive ? h.energy : 0), 0);
+      const extra = (handN(after) - handN(s) + 1) * WS.hand + (enN(after) - enN(s) + cost) * 3;
+      const now = (withM !== null && without !== null ? withM - without : evaluate(after) - base) + extra;
       // отданная карта уходит чистой: её собственные усиления теряются
       const lost = card.giftBase ? cardValue(s, hero, card) - cardValue(s, hero, BP.Gifts.stripped(card)) : 0;
       const score = now + (gain - lost) * W.mergeFuture;
@@ -287,7 +324,8 @@ BP.Sim = (function () {
     s.heroes.forEach((h) => (h.owner = "host"));
     act(s, { a: "start" });
     const maxTotal = () => s.heroes.reduce((a, h) => a + h.maxHp, 0);
-    const fights = [], cards = {};
+    const fights = [], cards = {}, mech = {}; // правки 25.11: mech — розыгрыши и мерджи по механикам (build карт), mfx — сработавшие эффекты мерджа
+    const mc = (t) => (mech[t] = mech[t] || { played: 0, merged: 0 });
     const cc = (id) => (cards[id] = cards[id] || { seen: 0, played: 0, merged: 0 });
     let cur = null;
     const turnFn = BOT_TURN[bot];
@@ -311,7 +349,12 @@ BP.Sim = (function () {
           act(s, { a: "ready" });
         }
         while (BP.Engine.enemyStep(s)) {}
-        s.log.forEach((l) => { if (l.card && cur) { if (l.merge) { cc(l.card).merged++; cur.merges = (cur.merges || 0) + 1; if (l.evolve) cur.evolves = (cur.evolves || 0) + 1; } else cc(l.card).played++; } });
+        s.log.forEach((l) => {
+          if (!l.card || !cur) return;
+          const tags = ((s.config.cards[l.card] || {}).build || []).concat((s.config.cards[l.card] || {}).power ? ["power"] : []);
+          if (l.merge) { cc(l.card).merged++; cur.merges = (cur.merges || 0) + 1; if (l.evolve) cur.evolves = (cur.evolves || 0) + 1; tags.forEach((t) => mc(t).merged++); if (/сработало/.test(l.detail || "")) mc("эффект мерджа").merged++; }
+          else { cc(l.card).played++; tags.forEach((t) => mc(t).played++); }
+        });
         s.log = []; s.fx = [];
         continue;
       }
@@ -323,7 +366,7 @@ BP.Sim = (function () {
     }
     const win = s.phase === "victory";
     const finalHp = hpNow();
-    return { win, fights, cards, runLost: win ? 1 - finalHp / maxTotal() : null, deck: s.run ? s.heroes.map((h) => s.run.decks[h.id].length) : null };
+    return { win, fights, cards, mech, runLost: win ? 1 - finalHp / maxTotal() : null, deck: s.run ? s.heroes.map((h) => s.run.decks[h.id].length) : null };
   }
 
   // ---------- сводка по многим забегам ----------
@@ -367,6 +410,8 @@ BP.Sim = (function () {
       fightsPerRun: avg(runs.map((r) => r.fights.length)),
       deckSize: runs[0] && runs[0].deck ? avg([].concat(...runs.map((r) => r.deck))) : null,
       fights: per, cards,
+      mech: (() => { const m = {}; runs.forEach((r) => Object.entries(r.mech || {}).forEach(([k, v]) => { const t = (m[k] = m[k] || { played: 0, merged: 0 }); t.played += v.played; t.merged += v.merged; }));
+        Object.values(m).forEach((t) => { t.played /= allF.length || 1; t.merged /= allF.length || 1; }); return m; })(),
     };
   }
 

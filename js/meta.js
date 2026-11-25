@@ -205,6 +205,7 @@ BP.Meta = (function () {
     const ids0 = shuffle(Object.keys(m.upgrades).filter((id) => {
       const u = m.upgrades[id];
       if (u.tier !== tier || used.has(id)) return false;
+      if (id === "startblock" && !((state.config.tests || {}).startBlock || {}).enabled) return false; // правки 25.11: без стартовой брони — бесполезно
       if (u.on === "hero" && (heroUsed || Math.random() < 0.5)) return false;
       if (u.treasureOnly) return kind === "treasure" && !state.run.relics[id];
       if (u.eliteOnly) return (kind === "elite" || kind === "treasure") && !state.run.relics[id];
@@ -239,7 +240,8 @@ BP.Meta = (function () {
     const relicHero = kind === "treasure" || kind === "elite" ? rand(state.heroes).id : null;
     state.heroes.forEach((h) => {
       const used = new Set(), list = [cardOffer(state, h.id, kind)];
-      let tiers = kind === "fight" ? ["common", "common"].map((t) => (Math.random() < (rw.uncommonChance || 0) ? "uncommon" : t)) : ["uncommon", "rare"];
+      // правки 25.11: три варианта — новая карта / ОДНО улучшение (карты или героя) / пропустить (rw.ups — сколько улучшений)
+      let tiers = (kind === "fight" ? ["common", "common"].map((t) => (Math.random() < (rw.uncommonChance || 0) ? "uncommon" : t)) : ["rare", "uncommon"]).slice(0, rw.ups || 1);
       if (h.id !== relicHero) used.add("partymerge");
       tiers.forEach((t) => { const o = upOffer(state, h.id, t, used, kind); if (o) list.push(o); });
       list.forEach((o) => (o.preview = preview(state, h, o)));

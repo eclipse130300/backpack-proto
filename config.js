@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 20,   // wide-range (24.11): новые карты, мердж-сложение, статусы
+  version: 21,   // wide-range, правки 25.11: бои без волн, новые враги, обдуманный мердж
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -71,7 +71,13 @@ window.GAME_CONFIG = {
       unplayed: "split",
       // mfxFromRewards — true: карты приходят без эффектов мерджа, эффекты выпадают только наградами после боя
       //   (ограничения с fixed: true стоят всегда). false — карты сразу со своими эффектами (для теста).
-      mfxFromRewards: false },
+      mfxFromRewards: false,
+      // deliberate — «обдуманный мердж» (правки 25.11, тест против квотербека; из GDD «Режим обдуманного мерджа»):
+      //   true — карты героев ДРУГИХ игроков скрыты (видно только число рубашек). Игрок кликает свою карту → «Выложить для мерджа»:
+      //   карта выдвигается вперёд крупно и видна всем, любой союзник может в неё мерджнуть. Выложить можно одну карту за раз;
+      //   повторный клик убирает её. Карта уходит со стола, когда её сыграли, или в конце хода. Один игрок за всех — видит всё.
+      //   false — все карты союзников видны, мерджить можно прямо им в руку (как раньше).
+      deliberate: true },
 
     // Векторные массовки (merge-7, 12.11): у массовки своя фигура (fixedShape у карты); наводишься на клетку,
     // и фигура поворачивается в сторону курсора (6 направлений хекса). Клетки за краем поля пропадают.
@@ -95,7 +101,7 @@ window.GAME_CONFIG = {
     // («осматривается»), зато получает lateArmor брони. Толкнул врага на клетку ⚠ — метка переезжает на ближайшую свободную.
     // beta-meta (11.11): every 1 — следующая волна выходит каждый ход (бои короче, ориентир по таблице времени)
     // merge-7 (12.11): every 2 — следующая волна выходит раз в 2 хода (бои длиннее, 4–8 ходов)
-    reinforcements: { enabled: true, every: 2, perWave: 2, lateArmor: 5 }
+    reinforcements: { enabled: false, every: 2, perWave: 2, lateArmor: 5 }   // правки 25.11: бои без волн — выключено
   },
 
   // ---------- Дары (мердж, js/gifts.js) ----------
@@ -355,15 +361,27 @@ window.GAME_CONFIG = {
     //   Культист 28→25, Лучник 24→22, Громила 58→52, Жрец 72→60 (medium 55% → ~67%)
     // merge-6 (10.11, боты medium ~70%): ХП врагов ×0.85 (Упырь 36→31, Гончая 22→19, Культист 25→21, Лучник 22→19, Громила 52→44),
     //   Жрец ХП 60→42 и удар 10→8 — без массовок и Зоны пати бьёт по площади слабее.
-    ghoul:   { name: "Упырь",        hp: 31, armor: 15, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 3, targets: 2, armor: 4 }] },
-    hound:   { name: "Гончая",       hp: 19, armor: 8,  melee: true,  actions: [{ type: "attack", damage: 3 }, { type: "attack", damage: 5 }] },
-    cultist: { name: "Культист",     hp: 21, armor: 9,  melee: false, actions: [{ type: "attack", damage: 4, armor: 5 }, { type: "attack", damage: 6 }] },
-    archer:  { name: "Костяной лучник", hp: 19, armor: 7, melee: false, actions: [{ type: "attack", damage: 2, targets: 3 }, { type: "attack", damage: 4 }] },
-    brute:   { name: "Громила",      hp: 44, armor: 30, melee: true,  actions: [{ type: "attack", damage: 3, armor: 8 }, { type: "attack", damage: 6, targets: 3 }] },
-    // Жрец (финальный босс): выводит героя из игры на ход, удар с бронёй вместо проклятия.
-    // Баланс 21.10 (card-mechanics-1, бот medium): с выводом героя medium выигрывал 33% — ХП 95→72, броня 30→25, удары 12→10 и 7×2→6×2 (≈66%)
-    // wide-range этап 2 (24.11): Жрец ХП 42 → 34 — боты чаще всего гибли на боссе
-  priest:  { name: "Падший жрец",  hp: 34, armor: 25, melee: false, actions: [{ type: "attack", damage: 8 }, { type: "disable", targets: 1 }, { type: "attack", damage: 6, targets: 2 }, { type: "attack", damage: 5, targets: 3, armor: 10 }] }
+    // wide-range, правки 25.11 (бои без волн, враги как в Slay the Spire): в бою 1–2 «хитрых» врага, остальные простые.
+    //   Простые только бьют и защищаются: Гончая, Упырь, Костяной лучник, Громила (замах — видно по намерению).
+    //   Хитрые (role: "special"): Культист — Сила всем врагам; Ведьма — дебаффы героям; Страж — броня союзнику.
+    //   Числа ниже — база; в забеге их умножают meta.enemyHp / enemyDmg и рост за этаж.
+    // Новые действия (js/foes.js):
+    //   buff {str}            — Сила всем живым врагам: +str к каждому их удару до конца боя
+    //   guard {armor}         — самому побитому союзнику (или себе) +armor брони
+    //   charge                — замах: в этот ход ничего не делает, следующее действие (обычно сильный удар) идёт по плану
+    //   debuff {status, amount, turns, targets} — статус герою на turns его ходов, виден в статусах героя:
+    //       weak  — Слабость: каждая карта героя наносит на amount урона меньше
+    //       hvuln — Уязвимость: удары врагов по герою на 50% сильнее
+    //   attack {damage, hits, targets, armor} | block {amount} | disable {targets} — как раньше
+    ghoul:   { name: "Упырь",        hp: 34, armor: 8,  melee: true,  actions: [{ type: "attack", damage: 8 }, { type: "attack", damage: 5, armor: 6 }] },
+    hound:   { name: "Гончая",       hp: 20, armor: 0,  melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 6 }] },
+    archer:  { name: "Костяной лучник", hp: 24, armor: 0, melee: false, actions: [{ type: "attack", damage: 6 }, { type: "attack", damage: 3, hits: 2 }] },
+    brute:   { name: "Громила",      hp: 52, armor: 14, melee: true,  actions: [{ type: "attack", damage: 7, armor: 8 }, { type: "charge" }, { type: "attack", damage: 18 }] },
+    cultist: { name: "Культист",     hp: 30, armor: 6,  melee: false, role: "special", actions: [{ type: "buff", str: 2 }, { type: "attack", damage: 6 }, { type: "attack", damage: 6 }] },
+    hexer:   { name: "Ведьма",       hp: 28, armor: 0,  melee: false, role: "special", actions: [{ type: "debuff", status: "weak", amount: 3, turns: 2 }, { type: "attack", damage: 7 }, { type: "debuff", status: "hvuln", turns: 2 }, { type: "attack", damage: 7 }] },
+    warden:  { name: "Страж",        hp: 40, armor: 12, melee: true,  role: "special", actions: [{ type: "guard", armor: 10 }, { type: "attack", damage: 7 }] },
+    // Жрец (финальный босс): выводит героя из игры на ход, усиливает всех врагов, бьёт по нескольким героям.
+    priest:  { name: "Падший жрец",  hp: 70, armor: 20, melee: false, role: "special", actions: [{ type: "attack", damage: 12 }, { type: "disable", targets: 1 }, { type: "buff", str: 2 }, { type: "attack", damage: 7, targets: 3, armor: 10 }] }
   },
 
 
@@ -404,9 +422,11 @@ window.GAME_CONFIG = {
     // Шансы наград. card — редкость карты в слоте 1: [обычная, средняя, редкая]. dupe — шанс, что слот 1 = копия карты из колоды.
     // up — слоты 2–3. После обычного боя оба обычные, но каждый с шансом uncommonChance становится средним.
     // После элиты и в сокровище — одно среднее + одно редкое.
+    // правки 25.11: у каждого героя три варианта — новая карта / ups улучшений (по умолчанию 1: карты или героя) / пропустить.
+    //   Элита — улучшение редкое. Экран наград: строка с названием и коротким описанием, «Развернуть» — карта целиком.
     rewards: {
-      fight:    { card: [55, 35, 10], dupe: 0.25, uncommonChance: 0.15 },
-      elite:    { card: [20, 50, 30], dupe: 0.2 },
+      fight:    { card: [55, 35, 10], dupe: 0.25, uncommonChance: 0.15, ups: 1 },
+      elite:    { card: [20, 50, 30], dupe: 0.2, ups: 1 },
       treasure: { card: [0, 40, 60],  dupe: 0 }   // сокровища на карте сейчас нет (11.11 → мердж-кузни), оставлено на будущее
     },
     // id: tier (common | uncommon | rare), on: card — на конкретную карту, hero — герою, party — всей пати.
@@ -446,7 +466,7 @@ window.GAME_CONFIG = {
     map: { floors: 13, width: 3, campFloor: 7, eliteFrom: 4, forges: 2, mforges: 3,
       weights: { w2: 45, w3: 38, elite: 17 } },
 
-    // ---------- Бои по волнам ----------
+    // ---------- Бои (до 25.11 — по волнам) ----------
     // Бой = несколько волн. Первая волна стоит на поле, следующие выходят подкреплением (tests.reinforcements:
     // каждые every ходов или сразу, когда поле зачищено). Ориентир (11.11): 2 волны ≈ 2–3 хода, 3 волны ≈ 4, элита ≈ 5–6, босс ≈ 6.
     // Волна — список врагов; мили встают вперёд, дальники — назад (за мили, если можно).
@@ -455,33 +475,38 @@ window.GAME_CONFIG = {
     //   кривая сложности: в начале мягко, рост за этаж сильнее (этаж 12 — ХП +88%, урон +66%). Было: 0.4 / 0.04 / 2.4 / 0.025
     // wide-range (24.11, боты medium ~70–75%): пустые стартовые колоды и без стартовой брони — враги слабее (было 0.75 / 1.05)
     // этап 2 (24.11): пул карт шире (общие карты, ловушки, кровь, кости) — 0.47 → 0.45; боты medium ~50–58% (шумно, боссы трудные)
-    enemyHp: 0.45,            // множитель ХП и брони всех врагов в забеге
-    hpPerFloor: 0.08,         // + к ХП и броне врагов за каждый этаж
-    enemyDmg: 0.78,           // множитель урона всех врагов в забеге
-    dmgPerFloor: 0.06,        // + к урону врагов за каждый этаж
+    // правки 25.11: бои без волн и новые враги — базовые числа врагов пересобраны, множители заново подобраны ботами.
+    //   Боты medium (≈60 забегов): урон 0.7 → ~81% побед, 0.75 → ~63%; контроль 0.73 → 56% (шумно, 16 забегов); взято 0.71 (цель 65–70%). ХП/бой ~10% (как в StS: обычный бой
+    //   −10%, неудачный до −30%). Ходы: стычка ~4, бой ~5.5, элита ~7.5, босс ~9. Рост за этаж: ХП +5%, урон +4% (было 8% / 6%).
+    enemyHp: 1.0,             // множитель ХП и брони всех врагов в забеге
+    hpPerFloor: 0.05,         // + к ХП и броне врагов за каждый этаж
+    enemyDmg: 0.71,           // множитель урона всех врагов в забеге
+    dmgPerFloor: 0.04,        // + к урону врагов за каждый этаж
+    // wide-range, правки 25.11: волн больше нет — бой = одна расстановка врагов на ~5–7 ходов, сразу награда.
+    // first — из какого списка ниже брать расстановку. В расстановке максимум 1–2 хитрых врага (role: "special").
     fights: {
-      w2:    { name: "Стычка (2 волны)",   waves: 2 },
-      w3:    { name: "Бой (3 волны)",      waves: 3 },
-      elite: { name: "Элита (4 волны)",    waves: 4, first: "elite" },
-      boss:  { name: "Босс: Падший жрец",  waves: 3, first: "boss" }
+      w2:    { name: "Стычка",             waves: 1, first: "small" },
+      w3:    { name: "Бой",                waves: 1, first: "first" },
+      elite: { name: "Элита",              waves: 1, first: "elite" },
+      boss:  { name: "Босс: Падший жрец",  waves: 1, first: "boss" }
     },
-    // merge-7 (12.11): виды обычных боёв — разнообразие встреч. on — к каким боям, weight — вес, first/next — списки волн ниже,
+    // merge-7 (12.11): виды обычных боёв — разнообразие встреч. on — к каким боям, weight — вес, first — список расстановок ниже,
     // hp / dmg — доп. множители ХП и урона врагов этого вида, name — приписка к названию боя.
-    //   mixed — обычный; thick — 1–2 толстых врага (окупается накачанная мерджем карта); swarm — 4–5 мелких (Цепь, Рикошет, массовки)
+    //   mixed — обычный; thick — Громила + 1 враг (окупается накачанная мерджем карта); swarm — 4–5 слабых (Цепь, Рикошет, массовки)
     flavors: {
-      mixed: { on: ["w2", "w3"], weight: 50 },
-      thick: { on: ["w2", "w3"], weight: 25, first: "thick", next: "thickNext", hp: 1.3, name: "толстые" },
-      swarm: { on: ["w2", "w3"], weight: 25, first: "swarm", next: "swarmNext", hp: 0.5, dmg: 0.6, name: "рой" }
+      mixed: { on: ["w2", "w3"], weight: 60 },
+      thick: { on: ["w3"],       weight: 20, first: "thick", name: "толстые" },
+      swarm: { on: ["w2", "w3"], weight: 20, first: "swarm", hp: 0.8, name: "стая" }
     },
+    // Расстановки (одна на бой). Мили встают вперёд, дальники — за ними.
     waves: {
-      thick: [["brute"], ["brute", "ghoul"], ["ghoul", "ghoul"]],
-      thickNext: [["brute"], ["ghoul"], ["ghoul", "cultist"]],
-      swarm: [["hound", "hound", "hound", "archer", "hound"], ["hound", "archer", "hound", "archer", "cultist"], ["hound", "hound", "cultist", "hound"]],
-      swarmNext: [["hound", "hound", "hound"], ["archer", "hound", "archer"], ["hound", "cultist", "hound"]],
-      first: [["ghoul", "cultist", "hound"], ["hound", "hound", "archer"], ["ghoul", "ghoul", "archer"], ["ghoul", "hound", "cultist"], ["hound", "hound", "cultist"]],
-      next:  [["hound", "hound"], ["ghoul", "archer"], ["cultist", "hound"], ["ghoul", "hound"], ["archer", "hound"], ["ghoul", "cultist"]],
-      elite: [["brute", "cultist", "hound"], ["brute", "archer", "ghoul"]],
-      boss:  [["priest", "ghoul", "ghoul", "archer"]]
+      small: [["hound", "hound", "ghoul"], ["ghoul", "archer", "hound"], ["ghoul", "ghoul", "archer"], ["hound", "hound", "archer"], ["ghoul", "hound", "cultist"]],
+      first: [["ghoul", "hound", "archer", "cultist"], ["ghoul", "ghoul", "hexer"], ["warden", "ghoul", "archer", "hound"], ["ghoul", "archer", "archer", "cultist"],
+              ["hound", "hound", "ghoul", "hexer"], ["warden", "ghoul", "ghoul", "archer"]],
+      thick: [["brute", "ghoul"], ["brute", "archer"], ["brute", "hound", "hound"]],
+      swarm: [["hound", "hound", "hound", "hound", "hound"], ["hound", "hound", "hound", "hound", "archer"], ["hound", "hound", "hound", "archer", "archer"]],
+      elite: [["brute", "warden", "cultist"], ["brute", "ghoul", "hexer"], ["brute", "archer", "archer"]],
+      boss:  [["priest", "ghoul", "archer"]]
     }
   }
 };
