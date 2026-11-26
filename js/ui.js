@@ -198,8 +198,8 @@ BP.UI = (function () {
       // beta-meta (js/ui-meta.js)
       case "map-vote": BP.Session.dispatch({ a: "mapVote", node: el.dataset.node }); break;
       case "offer": BP.Session.dispatch({ a: "offer", hero: el.dataset.hero, card: el.dataset.card || "" }); ui.selected = null; render(); break; // обдуманный мердж
-      case "reward-open": BP.UIMeta.toggleOpen(el.dataset.key); render(); break; // правки 25.11: развернуть вариант награды
-      case "reward-pick": BP.Session.dispatch({ a: "rewardPick", hero: el.dataset.hero, idx: +el.dataset.idx }); break;
+      case "reward-tab": BP.UIMeta.toggleOpen(el.dataset.hero); render(); break; // правки 26.11: вкладка героя на экране награды
+      case "reward-pick": BP.UIMeta.toggleOpen(null); BP.Session.dispatch({ a: "rewardPick", hero: el.dataset.hero, idx: +el.dataset.idx }); break; // после выбора — следующий свой герой
       case "forge": BP.Session.dispatch({ a: "forge", hero: el.dataset.hero, card: el.dataset.card, op: el.dataset.op }); break;
       case "meta-ready": { const me = s.players[BP.Session.myPid]; BP.Session.dispatch({ a: "metaReady", value: !(me && me.ready) }); break; }
       case "upgrades-view": ui.modal = "upgrades"; render(); break;

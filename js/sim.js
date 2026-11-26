@@ -37,8 +37,17 @@ BP.Sim = (function () {
       if (a.type === "buff") sum += a.str * allies * 2.5;
       if (a.type === "debuff") sum += a.status === "hvuln" ? 8 : (a.amount || 2) * 3;
       if (a.type === "guard") sum += a.armor * 0.6;
+      // правки 26.11 (js/foes2.js): ритуал и рост копят Силу, лечение, призыв, мусор
+      if (a.type === "ritual") sum += a.str * 6;
+      if (a.type === "grow") sum += a.str * 2;
+      if (a.type === "heal") sum += a.amount * 0.6;
+      if (a.type === "summon") sum += 10 * (a.n || 1);
+      if (a.type === "junk") sum += 3 * (a.n || 1);
     });
-    return sum / acts.length;
+    const p = e.pass || {};
+    let extra = (e.ritual || 0) * 3 + (p.enrage || 0) * 3;
+    if (e.asleep > 0) extra -= 4;
+    return sum / acts.length + extra;
   }
 
   // Все допустимые цели карты. smart: все повороты, дубли фигур (одинаковый набор врагов) убираются.

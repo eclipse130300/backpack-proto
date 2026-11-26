@@ -4,7 +4,7 @@ window.BP = window.BP || {};
 BP.UIGame = (function () {
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const icon = (n, cls) => BP.Icons.svg(n, cls);
-  const corridors = (state) => state.config.tests.enemyTargeting === "A";
+  const corridors = (state) => ["A", "C"].includes(state.config.tests.enemyTargeting); // C — коридоры + фокус (правки 26.11)
 
   function sizes() {
     const compact = window.innerHeight <= 860, big = window.innerHeight >= 1000;
@@ -154,7 +154,7 @@ BP.UIGame = (function () {
   // Считается одинаково для своих рук и для рук союзников — в мультиплеере все видят одно и то же.
   function grey(state, hero, c, avail) {
     if (state.phase !== "players") return false;
-    return !hero.alive || hero.out || c.cost > avail;
+    return !hero.alive || hero.out || c.cost > avail || !!c.unplayable || (BP.Foes.has(hero, "entangle") && (c.effects || []).some((e) => e.type === "damage"));
   }
 
   function cardHtml(state, hero, c, ui, readonly, ml) {
@@ -170,7 +170,7 @@ BP.UIGame = (function () {
     // обдуманный мердж (js/offer.js): выбранную свою карту можно выложить для мерджа, если в игре есть другие игроки
     const off = BP.Offer.offered(state, hero), isOff = !!off && off.uid === c.uid;
     const others = BP.Offer.on(state) && state.heroes.some((x) => x.owner && x.owner !== hero.owner);
-    const offerBtn = !readonly && others && ui.selected === c.uid && (isOff || BP.Wide.mergeable(c)) && !c.donor
+    const offerBtn = !readonly && others && ui.selected === c.uid && (isOff || BP.Wide.mergeable(c)) && (!c.donor || BP.Wide.multi(state))
       ? `<button class="offer-btn ${isOff ? "" : "primary"}" data-act="offer" data-hero="${hero.id}" data-card="${isOff ? "" : c.uid}">${isOff ? "✕ Убрать со стола" : "⇪ Выложить для мерджа"}</button>` : "";
     const cls = ["card", "k-" + kind, state.shared ? (c.shared ? "is-shared" : "is-own") : "", readonly ? "readonly" : "", grey(state, hero, c, avail) ? "unaffordable" : "", mergeOk ? "can-merge" : "", ui.selected === c.uid ? "selected" : "", c.id && /^unity/.test(c.id) ? "test" : "", c.questCard ? "quest-card" : "",
       // эволюция (js/evolve.js): золотая рамка — эволюционная, фиолетовое свечение — можно эволюционировать сейчас
@@ -254,7 +254,7 @@ BP.UIGame = (function () {
       <span class="title">${state.run ? `Этаж ${state.run.floor}/${state.config.meta.map.floors + 1} · ${esc(enc.name || "")}` : `Бой ${state.fightIndex + 1}/${state.config.encounters.length}: ${esc(enc.name || "")}`}</span>
       <span class="chip">Ход ${state.turn}</span>${pool}${shared}${insp}
       <span class="grow"></span>${ready}${roomInfo}
-      <span class="chip" data-tip="targeting">Цели врагов: ${corridors(state) ? "коридоры" : "любой"}</span>
+      <span class="chip" data-tip="targeting">Цели врагов: ${state.config.tests.enemyTargeting === "C" ? "коридоры + фокус" : corridors(state) ? "коридоры" : "любой"}</span>
       ${BP.Session.isHost() ? `<button data-act="settings">⚙</button>` : ""}
       <button data-act="deck-view" title="Что лежит в колодах (порядок скрыт)">🂠 Колода</button>
       <button data-act="discard-view" title="Что лежит в сбросах">♻ Сброс</button>

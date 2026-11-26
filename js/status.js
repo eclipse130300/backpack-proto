@@ -33,13 +33,14 @@ BP.Status = (function () {
   function enemy(state, e) {
     const out = [], add = (icon, name, text, bad) => out.push({ icon, name, text, bad: !!bad });
     const vs = e.vuln === true ? 1 : e.vuln || 0;
-    if (e.str) add("💪", `Сила +${e.str}`, `Каждый удар врага сильнее на ${e.str} до конца боя.`, true);
+    if (e.str) add("💪", `Сила ${e.str > 0 ? "+" : ""}${e.str}`, `Каждый удар врага ${e.str > 0 ? "сильнее" : "слабее"} на ${Math.abs(e.str)} до конца боя.`, e.str > 0);
     if (e.stunned) add("💫", "Оглушён", "Пропустит своё действие.");
     if (vs) add("💥", `Уязвимость +${vs * 50}%`, `Получает на ${vs * 50}% больше урона до конца хода.`);
     if (e.mark) add("🎯", "Метка", "Следующий удар по нему +50%.");
     if (e.missAll) add("🌫", "Ослеплён", "В этот ход промахивается всеми ударами.");
     if (e.weakNext) add("🥀", "Слабость", "Его следующий удар вдвое слабее.");
     if (e.deathMark) add("☠", "Метка смерти", "Умрёт в этот ход — герой получит Кости.");
+    if (BP.Foes2) BP.Foes2.statuses(state, e, add); // правки 26.11: пассивки (Сон, Ритуал, Панцирь, Шипы, Деление, Споры, Злость)
     const tr = BP.Wide2 && BP.Wide2.trapAt(state, e.col, e.row);
     if (tr) add(BP.Wide2.TRAP[tr.kind].icon, BP.Wide2.TRAP[tr.kind].name, "Ловушка лучника на этой клетке.");
     if (!BP.Cards.isExposed(state, e)) add("⛨", "Прикрыт", "Его прикрывают спереди: мили-герои его не достанут.");

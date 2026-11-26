@@ -600,3 +600,30 @@ button.evo-btn { background: #6a3aa8; border-color: #b77cff; color: #fff; }
 .cbacks span { margin-left: 26px; font-size: 13px; color: #cdbb98; white-space: nowrap; }
 .offer-none { align-self: center; }
 .hidden-hand .card.offered { transform: translateY(-4px) scale(1.04); }
+
+/* ---------- Экран награды (правки 26.11, как в Slay the Spire): вкладки героев + крупные карты в ряд ---------- */
+.rtabs { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.rtab { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 10px; background: var(--panel); border: 2px solid var(--line); border-bottom-width: 4px; color: inherit; cursor: pointer; text-align: left; min-width: 190px; }
+.rtab span { display: flex; flex-direction: column; } .rtab small { color: #c9bda4; font-size: 12px; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rtab.lane0 { border-bottom-color: var(--lane0); } .rtab.lane1 { border-bottom-color: var(--lane1); } .rtab.lane2 { border-bottom-color: var(--lane2); }
+.rtab.on { background: #3a2f22; border-color: #ffd36a; box-shadow: 0 0 12px #ffd36a55; }
+.rtab.done small { color: #8fd18f; }
+.rstage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 6px 0; }
+.rrow { display: flex; gap: 22px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+.rpick { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; border-radius: 18px; padding: 6px; transition: transform .12s, box-shadow .12s; }
+.rpick:hover { transform: translateY(-6px) scale(1.02); box-shadow: 0 0 0 3px #ffd36a, 0 8px 22px #000a; }
+.rpick .bigcard { pointer-events: none; }
+.rpick.r-uncommon .rlabel { color: #8fbcff; } .rpick.r-rare .rlabel { color: #ffb060; }
+.rlabel { display: flex; gap: 10px; justify-content: center; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: #e8dcc4; font-weight: 700; }
+.rlabel .rrar { opacity: .75; font-weight: 400; }
+.rtake { padding: 5px 22px; border-radius: 8px; background: #2f6b2f; border: 1px solid #6fbf6f; font-weight: 800; }
+.rpick:hover .rtake { background: #3f8f3f; }
+.rskip.big { font-size: 16px; padding: 8px 26px; }
+.rdone.big, .rwait.big { font-size: 20px; padding: 40px 10px; text-align: center; }
+.bigcard.herocard { --kc: #ffd36a; text-align: center; }
+.bigcard.herocard .hc-portrait { display: flex; justify-content: center; margin: 10px 0; }
+.bigcard.herocard .hc-portrait .portrait { width: 96px; height: 96px; }
+.bigcard.herocard .rhero-big { font-size: 28px; margin: 6px 0; }
+.bigcard .bc-risk { margin: 8px 0; padding: 6px 9px; border: 2px solid #d84a4a; border-radius: 10px; background: #d84a4a22; color: #ffb0a8; font-size: 14px; font-weight: 700; }
+.bigcard .bc-riskt { color: #ff9a90; }
+.rstage .rskip.big { align-self: center; margin: 0; }

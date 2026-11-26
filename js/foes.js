@@ -14,7 +14,10 @@ BP.Foes = (function () {
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const DEBUFF = {
     weak:  { icon: "🥀", name: "Слабость",   text: (d) => `Каждая карта героя наносит на ${d.amount} урона меньше.` },
-    hvuln: { icon: "💔", name: "Уязвимость", text: () => "Удары врагов по герою на 50% сильнее." }
+    hvuln: { icon: "💔", name: "Уязвимость", text: () => "Удары врагов по герою на 50% сильнее." },
+    // правки 26.11
+    frail: { icon: "🦴", name: "Хрупкость",  text: () => "Броня с карт героя на 25% меньше." },
+    entangle: { icon: "🕸", name: "Опутан",  text: () => "Герой не может играть атаки." }
   };
   const VULN = 1.5;
   const alive = (s) => s.enemies.filter((e) => e.alive);
@@ -39,8 +42,9 @@ BP.Foes = (function () {
       const n = e.actions[(e.intentIdx + 1) % e.actions.length];
       if (n && n.damage) { it.next = n.damage + (e.str || 0); it.nextHits = n.hits || 1; }
     }
+    if (BP.Foes2) BP.Foes2.prepare(state, e, a, it);
   }
-  const needsTargets = (a) => a.type === "debuff";
+  const needsTargets = (a) => a.type === "debuff" || (BP.Foes2 && BP.Foes2.needsTargets(a));
 
   // Выполнить действие. true — действие наше (обработано здесь)
   function act(state, e, it, heroes, log, fx) {
@@ -66,17 +70,25 @@ BP.Foes = (function () {
       case "debuff": {
         const D = DEBUFF[it.status];
         if (!D) return true;
-        heroes.forEach((h) => {
-          const old = (h.debuffs = h.debuffs || []).find((d) => d.type === it.status);
-          if (old) { old.turns = Math.max(old.turns, it.turns + 1); old.amount = Math.max(old.amount || 0, it.amount || 0); }
-          else h.debuffs.push({ type: it.status, amount: it.amount || 0, turns: it.turns + 1, from: e.name });
-          fx(state, { k: "hero", hero: h.id, amount: 0, blocked: 0, status: D.icon + " " + D.name });
-        });
+        applyDebuff(state, e, it, heroes);
         log(state, e.name, `${D.name}: ${heroes.map((h) => h.name).join(", ")}`, { detail: `${D.text({ amount: it.amount })} ${it.turns} хода` });
         return true;
       }
     }
-    return false;
+    return BP.Foes2 ? BP.Foes2.act(state, e, it, heroes, log, fx) : false; // правки 26.11: ритуал, рост, лечение, призыв, мусор, сон
+  }
+
+  // Повесить дебафф героям (действие debuff и Споры). Ход врагов ещё идёт — поэтому turns + 1
+  function applyDebuff(state, e, it, heroes) {
+    const D = DEBUFF[it.status];
+    if (!D) return;
+    heroes.forEach((h) => {
+      const old = (h.debuffs = h.debuffs || []).find((d) => d.type === it.status);
+      const turns = it.turns + (state.phase === "enemies" ? 1 : 0);
+      if (old) { old.turns = Math.max(old.turns, turns); old.amount = Math.max(old.amount || 0, it.amount || 0); }
+      else h.debuffs.push({ type: it.status, amount: it.amount || 0, turns, from: e.name });
+      BP.Engine.fxPublic(state, { k: "hero", hero: h.id, amount: 0, blocked: 0, status: D.icon + " " + D.name });
+    });
   }
 
   // ---------- тексты для интерфейса ----------
@@ -89,7 +101,7 @@ BP.Foes = (function () {
       case "charge": return `<div class="intent charge">⏳ замах → ⚔${it.next || "?"}${it.nextHits > 1 ? "×" + it.nextHits : ""}</div>`;
       case "debuff": { const D = DEBUFF[it.status] || {}; return `<div class="intent curse">${D.icon || ""} ${esc(D.name || it.status)}${esc(tgt(s, it))}</div>`; }
     }
-    return null;
+    return BP.Foes2 ? BP.Foes2.badge(s, e, it) : null;
   }
   // Длинное описание намерения в подсказке врага
   function long(s, e, it) {
@@ -100,7 +112,7 @@ BP.Foes = (function () {
       case "charge": return `Замахивается: в этот ход не бьёт, а в следующий ударит на <b>${it.next || "?"}</b>${it.nextHits > 1 ? " × " + it.nextHits : ""}. Убей, оглуши или запасись блоком.`;
       case "debuff": { const D = DEBUFF[it.status] || { text: () => "" }; return `Накладывает <b>${D.name}</b> на <b>${esc(names)}</b> на ${it.turns} хода: ${D.text({ amount: it.amount })}`; }
     }
-    return null;
+    return BP.Foes2 ? BP.Foes2.long(s, e, it) : null;
   }
   // Действие в списке «по кругу»
   function short(a) {
@@ -108,10 +120,10 @@ BP.Foes = (function () {
       case "buff": return `📯 Сила +${a.str} всем врагам`;
       case "guard": return `⬢ +${a.armor} брони союзнику`;
       case "charge": return "⏳ замах (следующий удар сильный)";
-      case "debuff": { const D = DEBUFF[a.status] || {}; return `${D.icon || ""} ${D.name || a.status}${a.amount ? " " + a.amount : ""} на ${a.turns} хода`; }
+      case "debuff": { const D = DEBUFF[a.status] || {}; return `${D.icon || ""} ${D.name || a.status}${a.amount ? " " + a.amount : ""} на ${a.turns} хода${a.targets > 1 ? ` (${a.targets} героям)` : ""}`; }
     }
-    return null;
+    return BP.Foes2 ? BP.Foes2.short(a) : null;
   }
 
-  return { DEBUFF, heroDmg, has, prepare, needsTargets, act, badge, long, short, guardTarget };
+  return { DEBUFF, heroDmg, has, prepare, needsTargets, act, applyDebuff, badge, long, short, guardTarget };
 })();

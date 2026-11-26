@@ -67,7 +67,8 @@ BP.Engine = (function () {
     const cfg = state.config, enc = typeof encOrIndex === "number" ? cfg.encounters[encOrIndex] : encOrIndex;
     state.fightIndex = typeof encOrIndex === "number" ? encOrIndex : (state.enc ? state.fightIndex + 1 : 0);
     state.enc = enc; state.turn = 0; state.phase = "players"; state.inspire = 0;
-    state.enemies = enc.enemies.map((ec) => makeEnemy(state, ec.type, ec.col, ec.row));
+    state.enemies = []; state.stagCount = {}; state.focusHero = null;
+    state.enemies = enc.enemies.map((ec) => { const e = makeEnemy(state, ec.type, ec.col, ec.row); return e; });
     BP.Reinforce.setup(state, enc); // подкрепления (tests.reinforcements) — js/reinforce.js
     state.heroes.forEach((h, i) => {
       const hc = cfg.heroes[i];
@@ -87,7 +88,7 @@ BP.Engine = (function () {
     startPlayerTurn(state);
   }
 
-  function makeEnemy(state, type, col, row) {
+  function makeEnemy0(state, type, col, row) {
     const ed = state.config.enemies[type], k = (state.enc && state.enc.hpMult) || 1; // beta-meta: ХП и броня растут по этажам
     const hp = Math.max(1, Math.round(ed.hp * k)), dk = (state.enc && state.enc.dmgMult) || 1;
     const actions = clone(ed.actions);
@@ -95,13 +96,15 @@ BP.Engine = (function () {
     const armor = Math.round((ed.armor || 0) * k);
     return { uid: "e" + state.seq++, type, name: ed.name, hp, maxHp: hp, block: 0, armor, maxArmor: armor, // броня — js/mech.js
       col, row, actions, actionIndex: 0, intent: null, lastAct: -1,
-      stunned: false, pushedThisTurn: false, vuln: false, skip: false, alive: true };
+      stunned: false, pushedThisTurn: false, vuln: false, skip: false, alive: true, str: 0 };
   }
+  // правки 26.11: пассивки врагов (js/foes2.js)
+  const makeEnemy = (state, type, col, row) => { const e = makeEnemy0(state, type, col, row); if (BP.Foes2) BP.Foes2.init(state, e, state.config.enemies[type]); return e; };
 
   // Подкрепления вышли на поле: враги + намерения + лог
-  function arrive(state, list) {
+  function arrive(state, list, silent) {
     list.forEach((e) => { state.enemies.push(e); computeIntent(state, e); if (BP.Wide2) BP.Wide2.onMove(state, e); }); // ловушка на клетке (js/wide2.js)
-    if (list.length) log(state, "—", `Подкрепление: ${list.map((e) => e.name).join(", ")}`);
+    if (list.length && !silent) log(state, "—", `Подкрепление: ${list.map((e) => e.name).join(", ")}`);
   }
   const maker = (state) => (type, col, row) => makeEnemy(state, type, col, row);
 
@@ -114,8 +117,11 @@ BP.Engine = (function () {
     if (!alive.length) return [];
     const idx = (h) => state.heroes.indexOf(h);
     let primary;
-    if (state.config.tests.enemyTargeting === "B") {
+    const mode = state.config.tests.enemyTargeting, focus = mode === "C" && alive.find((h) => h.id === state.focusHero);
+    if (mode === "B") {
       primary = alive[Math.floor(Math.random() * alive.length)];
+    } else if (focus && Math.random() < (state.config.tests.focusChance || 0.45)) {
+      primary = focus; // правки 26.11: фокус — часть врагов бьёт «жертву» хода
     } else {
       const want = Math.min(2, Math.floor(enemy.col / (state.config.rules.cols / 3)));
       primary = alive.slice().sort((a, b) => Math.abs(idx(a) - want) - Math.abs(idx(b) - want))[0];
@@ -129,6 +135,7 @@ BP.Engine = (function () {
   function computeIntent(state, e) {
     if (e.stunned) { e.intent = { type: "stunned" }; return; }
     if (e.skip) { e.intent = { type: "arriving" }; return; } // вышел посреди хода игроков — осматривается (js/mech.js)
+    if (BP.Foes2 && BP.Foes2.intent(state, e)) return; // спит (js/foes2.js)
     e.intentIdx = BP.Mech.pickAction(state, e); // раненый выбирает действие с бронёй
     const a = e.actions[e.intentIdx];
     // враг-мили за чужой спиной не дотягивается до героев и ждёт
@@ -144,6 +151,7 @@ BP.Engine = (function () {
     state.fightStats.turns = state.turn;
     state.phase = "players"; state.pool = null; state.actingEnemy = null;
     state.turnStats = { played: [], damageBy: {}, kills: 0, merges: {}, mergesTotal: 0 };
+    { const al = aliveHeroes(state); state.focusHero = al.length ? al[Math.floor(Math.random() * al.length)].id : null; } // фокус врагов (tests.enemyTargeting "C")
     aliveHeroes(state).forEach((h) => {
       if (BP.Mech.heroTurnStart(h)) { h.energy = 0; h.bonusEnergy = 0; log(state, h.name, "выведен из игры на этот ход"); return; } // Жрец
       h.energy = state.config.rules.energy + h.bonusEnergy; h.bonusEnergy = 0;
@@ -161,17 +169,19 @@ BP.Engine = (function () {
     // блок → броня → ХП (js/mech.js). noBlock — сквозь блок и броню (эволюции), armorBreak — по броне ×2
     const ab = BP.Mech.absorb(e, amount, noBlock, armorBreak), toHp = ab.toHp, absorbed = amount - toHp;
     e.hp -= toHp;
+    if (BP.Foes2) BP.Foes2.onHurt(state, e, amount, toHp, heroId); // Панцирь, Шипы, Сон, Деление (js/foes2.js)
     fx(state, { k: "enemy", uid: e.uid, col: e.col, row: e.row, amount: Math.min(toHp, e.hp + toHp), blocked: ab.blocked, armor: ab.armorHit, ab: !!armorBreak, crit: !!crit, src: src || "", step: step || 0, play: state.playSeq || 0 });
     if (heroId) {
       const h = state.heroes.find((x) => x.id === heroId);
       if (h) h.stats.damage += amount - absorbed;
       (state.turnStats.damageBy[e.uid] = state.turnStats.damageBy[e.uid] || []).includes(heroId) || state.turnStats.damageBy[e.uid].push(heroId);
     }
-    if (e.hp <= 0) {
+    if (e.alive && e.hp <= 0) {
       e.hp = 0; e.alive = false; state.turnStats.kills++;
       if (state.playKills) state.playKills.push(e.uid); // для квестов: кого убила текущая карта
       log(state, e.name, "погиб");
       if (BP.Wide2) BP.Wide2.onKill(state, e, heroId); // Кости: Метка смерти, Некромантия
+      if (BP.Foes2) BP.Foes2.onDeath(state, e); // Споры
     }
     return amount;
   }
@@ -362,15 +372,20 @@ BP.Engine = (function () {
     if (card.upInspire) { state.inspire = (state.inspire || 0) + card.upInspire; notes.push(`следующая атака пати +${state.inspire * 50}%`); }
     if (card.upKillEnergy && (state.playKills || []).length) { hero.energy += card.upKillEnergy; notes.push(`добивание: +${card.upKillEnergy} энергии`); }
     if (card.upDraw) { drawCards(state, hero, card.upDraw); notes.push(`добор +${card.upDraw}`); }
+    if (card.upBlock) { const a = BO(card.upBlock); hero.block += a; notes.push(`щиток: +${a} брони`); } // правки 26.11
     // Палач (эволюция): убил цель — карта возвращается в руку; Эхо — раз за бой; иначе в сброс (квестовая — пропадает)
     if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(realCard); notes.push(`«${card.name}» вернулась в руку`); }
-    else if (realCard.echo && !realCard.echoUsed) { realCard.echoUsed = true; hero.hand.push(realCard); notes.push(`эхо: «${card.name}» вернулась в руку`); }
+    else if (realCard.echo && !realCard.echoUsed) { // правки 26.11: «Кровавое эхо» — возврат стоит 3 ХП
+      realCard.echoUsed = true; hero.hand.push(realCard); notes.push(`эхо: «${card.name}» вернулась в руку`);
+      if (realCard.echoCost) { hero.hp = Math.max(1, hero.hp - realCard.echoCost); notes.push(`${hero.name} −${realCard.echoCost} ХП`); }
+    }
     else if (BP.Wide && BP.Wide.on(state)) { delete realCard._bf; const rc = BP.Wide.release(state, realCard, true); if (!BP.Wide.exhaustPlayed(state, hero, rc)) BP.Deck.discard(state, hero, rc); } // распад мерджа, Power/Exhaust
     else BP.Deck.discard(state, hero, BP.Gifts.expire(realCard)); // 13.11: режим «на один ход» — в сброс уходит исходная карта
     BP.Gifts.afterPlay(state, realCard); // merge-7: одноразовый урон от мерджа сгорает (tests.merge.keepDamage: false)
     hero.stats.cards++;
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id });
     state.playKills = null;
+    if (BP.Foes2) BP.Foes2.onCardPlayed(state, hero, card); // Злость врагов (js/foes2.js)
     entry.detail = notes.filter(Boolean).join("; ");
     afterChange(state, false);
     return null;
@@ -398,7 +413,7 @@ BP.Engine = (function () {
     state.turnStats.played.push({ hero: hero.id, cost: card.cost, card: card.id, merge: true });
     const evo = allyCard.evolvedFrom && !before.evolvedFrom; // эволюция (js/evolve.js)
     if (evo) fx(state, { k: "evolve", hero: ally.id, card: allyCard.uid, name: allyCard.name });
-    log(state, hero.name, evo ? `ЭВОЛЮЦИЯ «${before.name}» + «${card.name}» → «${allyCard.name}» (${ally.name})` : `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost, merge: true, evolve: !!evo, detail: `${before.text} ⇒ ${allyCard.text}${wnotes && (allyCard.fired || []).length ? "; сработало: " + allyCard.fired.map((f) => f.text).join("; ") : ""}${wnotes && wnotes.length ? "; " + wnotes.join("; ") : ""}` });
+    log(state, hero.name, evo ? `ЭВОЛЮЦИЯ «${before.name}» + «${card.name}» → «${allyCard.name}» (${ally.name})` : `мердж «${card.name}» → «${allyCard.name}» (${ally.name})`, { card: card.id, cost, merge: true, evolve: !!evo, detail: `${before.text} ⇒ ${allyCard.text}${wnotes && (allyCard.fired || []).length ? "; сработало: " + BP.Wide.firedText(allyCard) : ""}${wnotes && wnotes.length ? "; " + wnotes.join("; ") : ""}` });
     afterChange(state, false);
     return null;
   }
@@ -461,8 +476,10 @@ BP.Engine = (function () {
       h.out = false;
       const wr = BP.Wide && BP.Wide.on(state);
       if (wr && BP.Wide2) BP.Wide2.turnEndHero(state, h); // Колчан накопителя
-      const keep = h.hand.filter((c) => (c.retain || h.retainAll) && !c.preMerge); // 13.11: мердж «на один ход» исчезает в конце хода; Терпение
-      BP.Deck.discardAll(state, h, h.hand.filter((c) => !keep.includes(c)).map((c) => (wr ? BP.Wide.release(state, c, false) : BP.Gifts.expire(c))));
+      const keep = h.hand.filter((c) => (c.retain || h.retainAll) && !c.preMerge && !c.ethereal); // 13.11: мердж «на один ход» исчезает в конце хода; Терпение
+      const eth = h.hand.filter((c) => c.ethereal); // правки 26.11: мусор («Оглушение») исчезает из руки до конца боя
+      if (eth.length) h.exhausted = (h.exhausted || []).concat(eth);
+      BP.Deck.discardAll(state, h, h.hand.filter((c) => !keep.includes(c) && !c.ethereal).map((c) => (wr ? BP.Wide.release(state, c, false) : BP.Gifts.expire(c))));
       if (wr) { BP.Wide.turnEnd(state, h); h.retainAll = false; } // Сила/Стойкость «на ход» сгорают
       h.hand = keep;
     });
@@ -524,8 +541,12 @@ BP.Engine = (function () {
       e.block += it.amount;
       log(state, e.name, `защищается (+${it.amount} блока)`);
     }
-    e.lastAct = e.intentIdx !== undefined ? e.intentIdx : e.actionIndex % e.actions.length;
-    e.actionIndex = e.lastAct + 1;
+    if (it.type !== "sleep") { // сон не двигает цикл действий (js/foes2.js)
+      e.lastAct = e.intentIdx !== undefined ? e.intentIdx : e.actionIndex % e.actions.length;
+      e.actionIndex = e.lastAct + 1;
+      const la = e.actions[e.lastAct]; if (la && la.once) (e.used = e.used || {})[e.lastAct] = true; // действие «один раз за бой»
+    }
+    if (BP.Foes2) BP.Foes2.afterAct(state, e); // Ритуал, броня во сне
   }
 
   function endEnemyPhase(state) {
@@ -677,5 +698,5 @@ BP.Engine = (function () {
     return s;
   }
 
-  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard, vectorAoe, push, pushN, hurtEnemy };
+  return { createRun, startFight, applyAction, enemyStep, playerLeft, playerBack, publicState, requiredPlayers, metaPlayers, metaDone, canPay, log, makeCard, vectorAoe, push, pushN, hurtEnemy, hurtHero, makeEnemy, arrive, fxPublic: fx };
 })();

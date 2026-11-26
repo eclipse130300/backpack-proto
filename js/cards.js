@@ -80,6 +80,8 @@ BP.Cards = (function () {
   // Можно ли сыграть карту с этой целью. target: {enemy, cell:{col,row}, hero, dir}
   function checkTarget(state, hero, card, target) {
     const t = target || {};
+    if (card.unplayable) return "Эту карту нельзя сыграть"; // правки 26.11: мусор от врагов
+    if (hero && BP.Foes && BP.Foes.has(hero, "entangle") && (card.effects || []).some((e) => e.type === "damage")) return "Герой опутан: атаки в этот ход нельзя";
     if (card.alt && t.hero && !t.enemy) return checkTarget(state, hero, BP.Mech.altView(card), t); // merge-6: второй режим карты (Искра → блок)
     switch (card.target) {
       case "none": case "self": return null;

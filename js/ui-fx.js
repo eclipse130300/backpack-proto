@@ -4,6 +4,12 @@ window.BP = window.BP || {};
 
 BP.FX = (function () {
   const esc = (s) => BP.UIGame.esc(s);
+  // правки 26.11: особенности врага (пассивки из js/foes2.js) — в подсказке врага
+  function passives(s, e) {
+    const out = [];
+    if (BP.Foes2) BP.Foes2.statuses(s, e, (icon, name, text) => out.push(`<div>${icon} <b>${esc(name)}</b> — ${esc(text)}</div>`));
+    return out.length ? `<div class="tip-sec">Особенности</div>${out.join("")}` : "";
+  }
   let layer = null, svg = null, tip = null;
   let lastFx = -1, shakes = {}, mx = -1, my = -1, tipKey = null;
   let arrowPts = [];      // точки стрелок намерений — тултип старается их не закрывать
@@ -213,7 +219,7 @@ BP.FX = (function () {
         ${s.config.enemies[e.type] && s.config.enemies[e.type].actions.some(BP.Mech.armorAct) ? `<div class="muted small">Раненый (≤50% ХП) выбирает действие с бронёй.</div>` : ""}
         <div class="tip-note ${exposed ? "" : "bad"}">${exposed ? "Открыт: мили-герои могут его бить." : "Прикрыт спереди: мили-герои его не достанут. Нужны дальние атаки, массовки или толчок."}</div>
         <div class="tip-sec">Сейчас</div><div>${intentLong(s, e)}</div>
-        <div class="tip-sec">Действия по кругу</div><ol class="tip-actions">${list}</ol>`;
+        <div class="tip-sec">Действия по кругу</div><ol class="tip-actions">${list}</ol>${passives(s, e)}`;
     }
     if (kind === "hero") {
       const h = s.heroes.find((x) => x.id === el.dataset.hero);
@@ -229,6 +235,10 @@ BP.FX = (function () {
         <div class="tip-sec">Его будут бить</div>${inc.length ? inc.map((e) => `<div>⚔ ${esc(e.name)}: ${e.intent.damage}${e.intent.hits > 1 ? "×" + e.intent.hits : ""}</div>`).join("") : '<div class="muted">никто</div>'}`;
     }
     if (kind === "targeting") {
+      if (s.config.tests.enemyTargeting === "C") {
+        const f = s.heroes.find((h) => h.id === s.focusHero);
+        return `<div class="tip-title">Коридоры + фокус</div><div>Враг бьёт героя своего коридора (колонки подкрашены цветом героя). Но каждый ход у врагов есть «жертва»${f ? ` — сейчас это <b>${esc(f.name)}</b>` : ""}: часть врагов бьёт её вместо своего коридора. Смотри на стрелки намерений: иногда всё летит в одного героя.</div>`;
+      }
       return s.config.tests.enemyTargeting === "A"
         ? `<div class="tip-title">Коридоры</div><div>Каждый герой стоит под своими двумя колонками (они подкрашены его цветом). Враг бьёт героя своего коридора; если тот пал — ближайшего.</div>`
         : `<div class="tip-title">Любой герой</div><div>Каждый враг выбирает цель случайно среди живых героев.</div>`;

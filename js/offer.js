@@ -13,7 +13,7 @@ BP.Offer = (function () {
   function offered(state, h) {
     const uid = on(state) && state.offers && state.offers[h.id];
     const c = uid && h.hand.find((x) => x.uid === uid);
-    return c && !c.donor ? c : null;
+    return c && (!c.donor || (BP.Wide && BP.Wide.multi(state))) ? c : null; // правки 26.11: несколько доноров — карта остаётся на столе
   }
 
   // Скрыта ли рука героя h от игрока myPid
@@ -28,7 +28,7 @@ BP.Offer = (function () {
     if (!uid || state.offers[hero.id] === uid) { delete state.offers[hero.id]; return null; }
     const c = hero.hand.find((x) => x.uid === uid);
     if (!c) return "Карты нет в руке";
-    const ok = BP.Wide && BP.Wide.on(state) ? BP.Wide.mergeable(c) && !c.donor : BP.Gifts.mergeable(c);
+    const ok = BP.Wide && BP.Wide.on(state) ? BP.Wide.mergeable(c) && (!c.donor || BP.Wide.multi(state)) : BP.Gifts.mergeable(c);
     if (!ok) return "В эту карту нельзя вмерджить";
     state.offers[hero.id] = uid;
     BP.Engine.log(state, hero.name, `выкладывает для мерджа «${c.name}»`);

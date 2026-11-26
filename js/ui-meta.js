@@ -75,54 +75,51 @@ BP.UIMeta = (function () {
   }
 
   // ---------- Награда ----------
-  // правки 25.11: у героя строки «Новая карта» / «Улучшение» / «Пропустить». В строке — название и коротко,
-  // «Развернуть» показывает карту целиком (js/ui-bigcard.js): новую карту, карту с улучшением в рамке или героя с бонусом.
-  const opened = {}; // какие строки развёрнуты: "rewardId:hero:idx" → true (только у этого игрока)
+  // правки 26.11 (как в Slay the Spire): сверху вкладки героев (портрет + «выбирает / выбрал»), ниже — варианты героя
+  // сразу крупными картами в ряд (новая карта, карта с улучшением в рамке, герой с бонусом). Клик по карте — взять.
+  // Отдельная большая кнопка «Пропустить». Чужие герои: видно только «выбирает…» и итог.
+  const tabs = {}; // какая вкладка открыта у этого игрока: rewardId → heroId
   function heroBoost(s, h, o) {
     const u = s.config.meta.upgrades[o.up] || {};
-    const big = { maxhp: "+8 макс. ХП", startblock: "+2 стартового блока", strength: "+1 Сила навсегда", fortitude: "+1 Стойкость навсегда" }[o.up] || u.name;
-    return `<div class="rhero">${portrait(s, h)}<div><div class="rhero-big">${esc(u.icon || "")} ${esc(big)}</div><div class="small">${esc(h.name)}: ${esc(u.text || "")}</div></div></div>`;
+    const big = { maxhp: "+8 макс. ХП", startblock: "+2 стартового блока", strength: "+2 Силы навсегда", fortitude: "+2 Стойкости навсегда", partymerge: "Мердж бесплатно" }[o.up] || u.name;
+    return `<div class="bigcard herocard"><div class="bc-head"><span class="bc-name">${esc(u.icon || "")} ${esc(u.name)}</span></div>
+      <div class="bc-type">${u.on === "party" ? "Всей пати" : "Усиление героя · " + esc(h.name)}</div>
+      <div class="hc-portrait">${portrait(s, h)}</div><div class="rhero-big">${esc(big)}</div>
+      <div class="bc-text">${esc(u.text || "")}</div>${u.risk ? `<div class="bc-risk">Минус: ${esc(u.risk)}</div>` : ""}</div>`;
   }
-  function optionHtml(s, h, o, i, mine) {
-    const key = `${s.reward.id}:${h.id}:${i}`, open = !!opened[key];
-    const u = o.type === "up" ? s.config.meta.upgrades[o.up] || {} : null;
-    const pv = o.preview;
-    let kind, title, short, full;
-    if (o.type === "card" || o.type === "dupe") {
-      kind = o.type === "card" ? "🂠 Новая карта" : "🂠 Копия карты";
-      title = pv ? pv.name : "?"; short = pv ? BP.BigCard.body(pv) : "";
-      full = pv ? BP.BigCard.html(s, h, pv) : "";
-    } else if (u && (u.on === "hero" || u.on === "party")) {
-      kind = u.on === "hero" ? "❤ Усиление героя" : "🤝 Всей пати";
-      title = u.name; short = BP.Meta.offerText(s, o);
-      full = heroBoost(s, h, o);
-    } else {
-      kind = "⬆ Улучшение карты";
-      title = pv ? `«${pv.name}»` : "?"; short = `${BP.Meta.offerTitle(s, o).replace(/^\S+ /, "")}: ${BP.Meta.offerText(s, o)}`;
-      full = pv ? BP.BigCard.html(s, h, pv, { highlight: `<div class="bc-hl"><b>＋ ${esc(BP.Meta.offerTitle(s, o))}</b><br>${esc(BP.Meta.offerText(s, o))}</div>` }) : "";
-    }
-    return `<div class="ropt r-${o.rarity} ${open ? "open" : ""}">
-      <div class="rkind">${esc(kind)}<span class="rrar">${RAR[o.rarity] || ""}</span></div>
-      <div class="rtitle">${esc(title)}</div><div class="rshort">${esc(short)}</div>
-      <div class="rbtns"><button class="small" data-act="reward-open" data-key="${key}">${open ? "Свернуть ▴" : "Развернуть ▾"}</button>
-      ${mine ? `<button class="primary" data-act="reward-pick" data-hero="${h.id}" data-idx="${i}">Взять</button>` : ""}</div>
-      ${open ? `<div class="rfull">${full}</div>` : ""}</div>`;
+  function tileHtml(s, h, o) {
+    const u = o.type === "up" ? s.config.meta.upgrades[o.up] || {} : null, pv = o.preview;
+    if (o.type === "card" || o.type === "dupe") return { kind: o.type === "card" ? "🂠 Новая карта" : "🂠 Копия карты", html: pv ? BP.BigCard.html(s, h, pv) : "" };
+    if (u && (u.on === "hero" || u.on === "party")) return { kind: u.on === "hero" ? "❤ Усиление героя" : "🤝 Всей пати", html: heroBoost(s, h, o) };
+    const hl = `<div class="bc-hl"><b>＋ ${esc(BP.Meta.offerTitle(s, o))}</b><br>${esc(BP.Meta.offerText(s, o))}</div>`;
+    return { kind: "⬆ Улучшение карты", html: pv ? BP.BigCard.html(s, h, pv, { highlight: hl, skipUp: o.up }) : "" };
   }
-  function toggleOpen(key) { opened[key] = !opened[key]; }
+  function toggleOpen(heroId) { if (s0 && s0.reward) tabs[s0.reward.id] = heroId; }
+  let s0 = null;
 
   function renderReward(s, me) {
-    const rw = s.reward;
-    const cols = s.heroes.map((h) => {
-      const pk = rw.picks[h.id], mine = h.owner === me;
-      let body;
-      if (pk) body = `<div class="rdone">✔ ${esc(pk.text)}</div>`;
-      else if (!mine) body = `<div class="muted rwait">${esc(pname(s, h.owner))} выбирает…</div>`; // выбор не виден, пока не сделан
-      else body = (rw.offers[h.id] || []).map((o, i) => optionHtml(s, h, o, i, true)).join("") + `<button class="rskip" data-act="reward-pick" data-hero="${h.id}" data-idx="-1">✕ Пропустить</button>`;
-      return `<div class="rcol lane${heroIdx(s, h.id)}"><div class="rcol-head">${portrait(s, h)}<b>${esc(h.name)}</b><span class="muted small">❤ ${h.hp}/${h.maxHp} · 🂠 ${(s.run.decks[h.id] || []).length}</span></div>${body}</div>`;
+    const rw = s.reward; s0 = s;
+    const mine = s.heroes.filter((h) => h.owner === me);
+    let cur = s.heroes.find((h) => h.id === tabs[rw.id]);
+    if (!cur) cur = mine.find((h) => rw.picks[h.id] === undefined) || mine[0] || s.heroes[0];
+    const tabRow = s.heroes.map((h) => {
+      const pk = rw.picks[h.id], my = h.owner === me;
+      const st = pk ? `✔ ${pk.text}` : my ? "выбирает" : `${pname(s, h.owner)} выбирает…`;
+      return `<button class="rtab lane${heroIdx(s, h.id)} ${h === cur ? "on" : ""} ${pk ? "done" : ""}" data-act="reward-tab" data-hero="${h.id}">
+        ${portrait(s, h)}<span><b>${esc(h.name)}</b><small>${esc(st)}</small></span></button>`;
     }).join("");
-    const sm = s.summary && s.summary.win ? `<div class="muted">«${esc(s.summary.name)}» пройден за ${s.summary.turns} ход${s.summary.turns === 1 ? "" : s.summary.turns < 5 ? "а" : "ов"}.</div>` : "";
-    return `<div class="mscreen">${sm}<div class="mstatus">Каждый герой берёт одно: новую карту, улучшение или пропуск. «Развернуть» — посмотреть целиком. Посмотреть колоды — «🂠 Колода» сверху.</div>
-      <div class="rcols">${cols}</div>${readyBar(s, me)}${party(s, me)}</div>`;
+    const pk = rw.picks[cur.id], my = cur.owner === me;
+    let body;
+    if (pk) body = `<div class="rdone big">✔ ${esc(cur.name)}: ${esc(pk.text)}</div>`;
+    else if (!my) body = `<div class="muted rwait big">${esc(pname(s, cur.owner))} выбирает награду для героя «${esc(cur.name)}»…</div>`; // выбор не виден, пока не сделан
+    else body = `<div class="rrow">${(rw.offers[cur.id] || []).map((o, i) => {
+      const t = tileHtml(s, cur, o);
+      return `<div class="rpick r-${o.rarity}" data-act="reward-pick" data-hero="${cur.id}" data-idx="${i}" title="Нажми, чтобы взять">
+        <div class="rlabel">${esc(t.kind)}<span class="rrar">${RAR[o.rarity] || ""}</span></div>${t.html}<div class="rtake">Взять</div></div>`;
+    }).join("")}</div><button class="rskip big" data-act="reward-pick" data-hero="${cur.id}" data-idx="-1">✕ Пропустить награду</button>`;
+    const sm = s.summary && s.summary.win ? `«${esc(s.summary.name)}» пройден за ${s.summary.turns} ход${s.summary.turns === 1 ? "" : s.summary.turns < 5 ? "а" : "ов"}. ` : "";
+    return `<div class="mscreen"><div class="mstatus">${sm}Каждый герой берёт одно: новую карту, улучшение или пропуск. Нажми на карту, чтобы взять её.</div>
+      <div class="rtabs">${tabRow}</div><div class="rstage lane${heroIdx(s, cur.id)}">${body}</div>${readyBar(s, me)}${party(s, me)}</div>`;
   }
 
   function readyBar(s, me) {

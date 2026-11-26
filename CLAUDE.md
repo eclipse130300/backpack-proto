@@ -38,6 +38,18 @@
   `js/offer.js` — обдуманный мердж (`tests.merge.deliberate`): `state.offers[heroId] = uid`, действие `offer`, `Offer.mergeBlock` в `merge`,
   `Offer.hidden` — рука чужого игрока рубашками (ui-game). Боты: `sim.statusValue/turnBuffValue` (долгие статусы), угроза новых врагов,
   добор/энергия от эффектов мерджа; отчёт «Механики за бой» по `cards.*.build`.
+- wide-range, правки 26.11: `js/foes2.js` — пассивки врагов (`config.enemies.*.passive` → `e.pass`: curl, thorns, split, spores, sleep+metal,
+  enrage, stagger) и действия ritual / grow / heal / summon / junk (через `Foes.act` → `Foes2.act`). Хуки в engine: `makeEnemy` → `Foes2.init`,
+  `hurtEnemy` → `onHurt`/`onDeath` (Деление снимает врага без «убийства»), `actEnemy` → `afterAct` (сон не двигает цикл, `once`-действия —
+  `e.used`, пропуск в `mech.pickAction`), `playCard` → `onCardPlayed` (Злость), `computeIntent` → `intent` (сон). Дебаффы `frail`
+  (`Mech.blockOf`) и `entangle` (`Cards.checkTarget`, `ui-game.grey`). Мусор `junk_daze`: `unplayable`, `ethereal` (в `endPlayerTurn` → `h.exhausted`).
+  Цели врагов `tests.enemyTargeting: "C"` — коридоры + фокус (`state.focusHero` на ход, `tests.focusChance`).
+  Мердж: РЕШЕНО — эффект мерджа работает на владельца карты с плашкой (`Wide.mergeInto` → `fire(fx, side, owner)`, бонус герою → `to = owner`),
+  side по умолчанию "both"; `do.energy`; `do.flat` (массовки/мультиудары, только у хозяина, за каждого донора). Несколько доноров —
+  `tests.merge.multiDonor` (`card.donors[]`, `donorUids`, `donorOwners`, `donorCards` в режиме "lose"; `card.donor` = первый — для совместимости),
+  `Wide.firedText` сворачивает одинаковые эффекты. Награда: экран вкладками героев (`UIMeta.renderReward`, действие `reward-tab`),
+  улучшения `guardup` (`card.upBlock`), `fury`, риск `upgrades.*.risk` (echo → `echoCost`, strength/fortitude −8 макс. ХП); защита и карты с mfx
+  чаще в `Meta.cardOffer`. Ловушки — зона клетка + 6 соседей (`wide2.ZONE`).
 - `js/evolve.js` — эволюция (merge-3, `tests.evolution`): карта с `evolve` (все за 2+ энергии, класс `evo` — золотая рамка); две мерджнутые эволюционные карты разных героев (`Evolve.ready` → класс `evo-ready`, фиолетовое свечение). `Cards.canMerge/mergeInto` сначала спрашивают `Evolve.can/apply`: целевая карта становится `cards[evolve]` (`evolved: true`), урон = база обеих + прибавки, дары переходят (`Gifts.incoming`), `evolvedFrom`. Свойства эволюций: `mult`, `finisher`, `ignoreBlock` (`hit.nb` → `hurtEnemy(..., noBlock)`), `returnOnKill`, `ignoreCover`; area `row`/`all`/`withCover`; эффекты `pull`, `blockPartyPct` (в `engine.js`). fx `evolve` → надпись по центру поля (`ui-fx.js`). Боты эволюционируют через обычный `bestMerge`.
 - `js/mech.js` — card-mechanics-1 (21.10): броня врагов (`e.armor`, `absorb`: блок → броня → ХП, `armorBreak` ×2, `ignoreBlock` мимо обоих), рикошет (`rico`, дар `pierce`, `needsDir` — одно направление атаки на толчок и рикошет), столкновение → `e.vuln` (+`rules.collisionBonus`), динамические массовки (`area: "rays"`/`"level"`, `dynCells`, дар Зона несёт `rays`/`level`), поддержка (`buffDamage`/`buffBlock`/`miss`, `h.dmgBuff/blockBuff/miss`), выбор карты (`state.choice`, действие `choose`, `autoPick` для ботов и конца хода), враги (`pickAction`: раненый берёт действие с бронёй; `disable` Жреца → `h.disableNext/out`), `botBonus` для ботов. Эволюции `retain`.
 - `js/reinforce.js` — подкрепления (merge-3, `tests.reinforcements`): `encounters.*.reserve`, `state.reinf = {left, next, marks}`; `onTurnStart` в `startPlayerTurn`, `spawnNow` в `checkFightEnd` (поле пустое — волна сразу), `engine.makeEnemy/arrive`. Метки клеток — класс `hex.incoming`, счётчик `.reinf` над полем.

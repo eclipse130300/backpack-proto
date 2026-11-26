@@ -1,10 +1,15 @@
 // wide-range (24.11, РЕШЕНО 21.11): мердж = сложение + эффекты мерджа + статусы героев и врагов.
 // Включается tests.merge.mode = "sum". Подробно — config.js (tests.merge, mergeFx, описание полей карт).
 //  Мердж: свою карту (донор) кладёшь на карту в руке союзника (хозяин). Хозяин сохраняет цель, тип и фигуру.
-//    Урон донора прибавляется к урону хозяина (к каждому удару; ограничение cap — «мердж даёт максимум +N»).
+//    Урон донора прибавляется к урону хозяина (к каждому удару; у массовок и мультиударов — ровно flat за донора).
 //    Остальные базовые эффекты донора и его ключевые слова (Exhaust, Удержание) переходят хозяину. Позиционка (толчки) — нет.
-//    Атака в защиту: хозяин становится атакой с целью донора, его броня идёт своему герою. Один донор на карту.
-//  Эффекты мерджа (card.mfx — список описаний из config.mergeFx): 🟩 in — у хозяина, 🟥 out — у донора, both — оба.
+//    Атака в защиту: хозяин становится атакой с целью донора, его броня идёт своему герою.
+//    Доноров: правки 26.11 — несколько (tests.merge.multiDonor, dst.donors[]), иначе один.
+//  Эффекты мерджа (card.mfx — список описаний из config.mergeFx): both (обычные) — срабатывают и когда карту отдают, и когда
+//    в неё вмерджили; редкие in (🟩) — только у хозяина, out (🟥) — только у донора.
+//    РЕШЕНО 26.11: эффект работает на владельца карты с плашкой — бонус к карте идёт в смердженную карту,
+//    бонус герою (энергия, добор, Сила…) — владельцу карты с плашкой (отдал свою карту с «+1 энергии» — энергия тебе).
+//    flat (массовки, мультиудары) — мердж в эту карту прибавляет ровно N урона за каждого донора.
 //    Эффекты «на карту» лежат в dst.wMods и учитываются в rebuild; «сразу» (добор, Сила…) — dst.wPending, их выполняет
 //    engine.mergeCard через fire() (в расчётах ботов на копиях ничего не происходит).
 //  После розыгрыша хозяин очищается (release), донор уже в сбросе владельца (или пропадает — tests.merge.unplayed "lose").
@@ -43,6 +48,7 @@ BP.Wide = (function () {
     card.mfx = (card.mfx || []).concat(resolveFx(state, ids.filter((id) => !have.has(id))));
   }
 
+  const multi = (state) => !!(state && state.config.tests.merge && state.config.tests.merge.multiDonor);
   const mergeable = (card) => !!card && !card.noMerge && !card.power && !card.weak && !card.questCard;
   function kindOf(card) {
     const b = card.wBase || card, effs = b.effects || [];
@@ -56,7 +62,7 @@ BP.Wide = (function () {
     if (!mergeable(src)) return "эту карту нельзя отдать";
     if (src.donor) return "в эту карту уже вмерджили — отдать её нельзя";
     if (!mergeable(dst)) return "в эту карту нельзя мерджить";
-    if (dst.donor) return "в карту уже вмерджили (один донор на карту)";
+    if (dst.donor && !multi(state)) return "в карту уже вмерджили (один донор на карту)";
     if (src.owner && dst.owner && src.owner === dst.owner) return "только в карту союзника";
     return null;
   }
@@ -71,70 +77,83 @@ BP.Wide = (function () {
     if (c.critReady && (!holder || !holder.critReady)) return false;
     return true;
   }
-  const CARD_MODS = ["dmg", "block", "cap", "crit", "cheaper", "retain", "ricoDmg", "rico", "chainDmg", "barrier", "durFight", "blockFirst", "healPlus", "boneKill"];
+  const CARD_MODS = ["dmg", "block", "flat", "crit", "cheaper", "retain", "ricoDmg", "rico", "chainDmg", "barrier", "durFight", "blockFirst", "healPlus", "boneKill"];
 
   // Мердж src → dst. state.heroes нужны только для условий (ХП, «Крит готов»). Ничего, кроме dst и src, не меняет.
+  // Эффекты мерджа: у плашки хозяина (in/both) — бонус герою получает хозяин, у плашки донора (out/both) — отдавший.
   function mergeInto(state, src, dst, giverId) {
     if (mergeBlock(state, src, dst)) return false;
     const giver = state.heroes.find((h) => h.id === giverId), holder = state.heroes.find((h) => h.id === dst.owner);
     if (!dst.wBase) { dst.wBase = {}; SNAP.forEach((k) => { if (dst[k] !== undefined) dst.wBase[k] = clone(dst[k]); }); }
     const d = clone(src); release0(d);
-    dst.donor = d; dst.donorUid = src.uid; dst.donorOwner = giverId;
-    dst.wMods = []; dst.wPending = []; dst.fired = [];
-    const fire = (fx, side, h, other) => {
+    dst.donors = (dst.donors || []).concat(d); dst.donor = dst.donors[0];
+    dst.donorUids = (dst.donorUids || []).concat(src.uid); dst.donorOwners = (dst.donorOwners || []).concat(giverId);
+    dst.wMods = dst.wMods || []; dst.wPending = []; dst.fired = dst.fired || [];
+    const fire = (fx, side, owner) => {
       dst.fired.push({ side, text: fx.text });
       const mod = {}, now = {};
-      Object.keys(fx.do || {}).forEach((k) => { if (CARD_MODS.includes(k)) mod[k] = fx.do[k]; else now[k] = fx.do[k]; });
+      Object.keys(fx.do || {}).forEach((k) => { if (k === "flat") return; if (CARD_MODS.includes(k)) mod[k] = fx.do[k]; else now[k] = fx.do[k]; });
       if (Object.keys(mod).length) dst.wMods.push(mod);
       if (Object.keys(now).length) {
-        const to = now.copy ? giverId : side === "in" ? (holder && holder.id) : (holder && holder.id);
-        dst.wPending.push(Object.assign({ to, from: h && h.id, side, text: fx.text }, now));
+        const to = now.critMove ? holder && holder.id : owner && owner.id; // бонус герою — владельцу карты с плашкой
+        dst.wPending.push(Object.assign({ to, from: giverId, side, text: fx.text }, now));
       }
     };
-    (dst.mfx || []).forEach((fx) => { if (fx.side !== "out" && condOk(fx, src, holder)) fire(fx, "in", holder, giver); });
-    (src.mfx || []).forEach((fx) => { if (fx.side !== "in" && condOk(fx, dst, giver)) fire(fx, "out", giver, holder); });
+    (dst.mfx || []).forEach((fx) => { if (fx.side !== "out" && !(fx.do || {}).flat && condOk(fx, src, holder)) fire(fx, "in", holder); });
+    (src.mfx || []).forEach((fx) => { if (fx.side !== "in" && condOk(fx, dst, giver)) fire(fx, "out", giver); });
     rebuild(dst);
-    dst.merged = 1;
+    dst.merged = dst.donors.length;
     dst.text = BP.Cards.text(dst);
     return true;
   }
 
-  // Пересобрать хозяина: исходник + донор + эффекты мерджа «на карту»
+  // Сработавшие эффекты мерджа одной строкой: одинаковые сворачиваются («+2 урона ×3»)
+  function firedText(card) {
+    const n = {};
+    (card.fired || []).forEach((f) => (n[f.text] = (n[f.text] || 0) + 1));
+    return Object.entries(n).map(([t, k]) => (k > 1 ? `${t} ×${k}` : t)).join("; ");
+  }
+  const donorNames = (card) => (card.donors || (card.donor ? [card.donor] : [])).map((d) => `«${d.name}»`).join(", ");
+
+  // Пересобрать хозяина: исходник + доноры (по очереди) + эффекты мерджа «на карту»
   function rebuild(dst) {
-    const b = dst.wBase, d = dst.donor;
+    const b = dst.wBase, donors = dst.donors || (dst.donor ? [dst.donor] : []);
     if (!b) return;
     SNAP.forEach((k) => { if (b[k] !== undefined) dst[k] = clone(b[k]); else delete dst[k]; });
-    if (!d) return;
+    if (!donors.length) return;
     const mods = {};
     (dst.wMods || []).forEach((m) => Object.keys(m).forEach((k) => {
-      if (typeof m[k] === "number") mods[k] = k === "cap" ? Math.min(mods[k] === undefined ? 99 : mods[k], m[k]) : (mods[k] || 0) + m[k];
+      if (typeof m[k] === "number") mods[k] = (mods[k] || 0) + m[k];
       else mods[k] = m[k];
     }));
-    const db = d.wBase || d, dd = (db.effects || []).find((e) => e.type === "damage");
-    let hd = dmgOf(dst);
-    const wasHeroTarget = dst.target === "hero" || dst.target === "ally";
-    if (dd) {
-      const add = dd.amount * (dd.hits || 1);
-      if (hd) hd.amount += mods.cap !== undefined ? Math.min(add, mods.cap) : add;
-      else { // атака в защиту/навык: хозяин бьёт цель донора, своя броня — своему герою
-        ["target", "attack", "area", "shape", "fixedShape", "fixed", "shapeSteps", "shapeName", "rays"].forEach((k) => { if (db[k] !== undefined) dst[k] = clone(db[k]); else delete dst[k]; });
-        dst.effects.forEach((e) => { if (e.type === "block") e.type = "blockSelf"; });
-        dst.effects.unshift(clone(dd));
-        hd = dmgOf(dst);
-        ["strMult", "critMult", "dmgFromBlock", "chain", "chainDmg", "ricochet", "ricoDmg"].forEach((k) => { if (db[k] !== undefined && dst[k] === undefined) dst[k] = db[k]; });
+    // массовка / мультиудар: мердж прибавляет ровно flat урона за донора (плашка самой карты, fixed)
+    const hostFlat = ((dst.mfx || []).find((f) => f.do && f.do.flat) || { do: {} }).do.flat;
+    donors.forEach((d) => {
+      const db = d.wBase || d, dd = (db.effects || []).find((e) => e.type === "damage");
+      let hd = dmgOf(dst);
+      if (dd) {
+        const add = dd.amount * (dd.hits || 1);
+        if (hd) hd.amount += hostFlat !== undefined ? hostFlat : add;
+        else { // атака в защиту/навык: хозяин бьёт цель донора, своя броня — своему герою
+          ["target", "attack", "area", "shape", "fixedShape", "fixed", "shapeSteps", "shapeName", "rays"].forEach((k) => { if (db[k] !== undefined) dst[k] = clone(db[k]); else delete dst[k]; });
+          dst.effects.forEach((e) => { if (e.type === "block") e.type = "blockSelf"; });
+          dst.effects.unshift(clone(dd));
+          ["strMult", "critMult", "dmgFromBlock", "chain", "chainDmg", "ricochet", "ricoDmg"].forEach((k) => { if (db[k] !== undefined && dst[k] === undefined) dst[k] = db[k]; });
+        }
       }
-    }
-    (db.effects || []).forEach((e) => {
-      if (e.type === "damage" || POSITIONAL.includes(e.type)) return;
-      const ee = clone(e);
-      if (e.type === "block") ee.type = dst.target === "hero" || dst.target === "ally" || dst.target === "self" ? "block" : "blockSelf";
-      const same = dst.effects.find((x) => x.type === ee.type && x.dur === ee.dur && !!x.party === !!ee.party && x.amount !== undefined);
-      if (same && ee.amount !== undefined) same.amount += ee.amount; else dst.effects.push(ee);
+      (db.effects || []).forEach((e) => {
+        if (e.type === "damage" || POSITIONAL.includes(e.type)) return;
+        const ee = clone(e);
+        if (e.type === "block") ee.type = dst.target === "hero" || dst.target === "ally" || dst.target === "self" ? "block" : "blockSelf";
+        const same = dst.effects.find((x) => x.type === ee.type && x.dur === ee.dur && !!x.party === !!ee.party && x.amount !== undefined);
+        if (same && ee.amount !== undefined) same.amount += ee.amount; else if (!same || ee.amount !== undefined) dst.effects.push(ee);
+      });
+      if (db.ex) dst.ex = true;
+      if (db.retain) dst.retain = true;
+      if (db.chain) { dst.chain = (dst.chain || 0) + db.chain; if (!dst.chainDmg && db.chainDmg) dst.chainDmg = db.chainDmg; }
+      if (db.ricochet && dst.ricochet !== undefined && b.ricochet) dst.ricochet += db.ricochet; else if (db.ricochet && !dst.ricochet) { dst.ricochet = db.ricochet; if (db.ricoDmg) dst.ricoDmg = db.ricoDmg; }
     });
-    if (db.ex) dst.ex = true;
-    if (db.retain) dst.retain = true;
-    if (db.chain) { dst.chain = (dst.chain || 0) + db.chain; if (!dst.chainDmg && db.chainDmg) dst.chainDmg = db.chainDmg; }
-    if (db.ricochet && dst.ricochet !== undefined && b.ricochet) dst.ricochet += db.ricochet; else if (db.ricochet && !dst.ricochet) { dst.ricochet = db.ricochet; if (db.ricoDmg) dst.ricoDmg = db.ricoDmg; }
+    const hd = dmgOf(dst);
     // эффекты мерджа на карту
     if (mods.dmg && hd) hd.amount += mods.dmg;
     if (mods.block) { const bl = dst.effects.find(isBlk); if (bl) bl.amount += mods.block; else dst.effects.push({ type: dst.target === "self" ? "block" : "blockSelf", amount: mods.block }); }
@@ -149,14 +168,13 @@ BP.Wide = (function () {
     if (mods.blockFirst) dst.blockFirst = true;
     if (mods.healPlus) dst.healPlus = mods.healPlus;
     if (mods.boneKill) dst.boneKill = mods.boneKill;
-    void wasHeroTarget;
   }
 
   // Убрать мердж с карты (вернуть исходник)
   function release0(card) {
     if (!card.wBase) return card;
     SNAP.forEach((k) => { if (card.wBase[k] !== undefined) card[k] = clone(card.wBase[k]); else delete card[k]; });
-    ["wBase", "donor", "donorUid", "donorOwner", "wMods", "wPending", "fired", "merged", "ricoBonus", "chainBonus", "blockFirst", "donorCard", "healPlus", "boneKill"].forEach((k) => delete card[k]);
+    ["wBase", "donor", "donors", "donorUids", "donorOwners", "donorCards", "donorUid", "donorOwner", "wMods", "wPending", "fired", "merged", "ricoBonus", "chainBonus", "blockFirst", "donorCard", "healPlus", "boneKill"].forEach((k) => delete card[k]);
     card.text = BP.Cards.text(card);
     return card;
   }
@@ -168,6 +186,7 @@ BP.Wide = (function () {
     (allyCard.wPending || []).forEach((p) => {
       const to = state.heroes.find((h) => h.id === p.to) || ally;
       if (p.draw) { BP.Deck.draw(state, to, p.draw); notes.push(`${to.name} +${p.draw} карт`); }
+      if (p.energy) { to.energy += p.energy; notes.push(`${to.name} +${p.energy} энергии`); } // правки 26.11
       if (p.str) { addStr(to, p.str, p.dur); notes.push(`${to.name} +${p.str} Силы ${p.dur === "fight" ? "на бой" : "на ход"}`); }
       if (p.tough) { addTough(to, p.tough, p.dur); notes.push(`${to.name} +${p.tough} Стойкости ${p.dur === "fight" ? "на бой" : "на ход"}`); }
       if (p.sharpen) { Object.values(to.crit || {}).forEach((c) => { c.every = Math.max(1, c.every - p.sharpen); c.count = Math.min(c.count, c.every - 1); }); notes.push(`${to.name}: крит на ${p.sharpen} удар раньше до конца боя`); }
@@ -175,23 +194,24 @@ BP.Wide = (function () {
       if (p.critMove && hero.critReady) { hero.critReady = false; ally.critReady = true; notes.push(`«Крит готов» → ${ally.name}`); }
       if (p.copy) {
         const cp = release0(clone(card)); cp.uid = "c" + state.seq++; cp.ex = true; cp.exhaust = true; cp.copyOf = card.name; cp.owner = hero.id;
+        cp.cost = Math.max(0, cp.cost - 1); cp.text = BP.Cards.text(cp); // правки 26.11: копия на 1 дешевле
         hero.hand.push(cp); notes.push(`копия «${card.name}» в руку ${hero.name}`);
       }
     });
     allyCard.wPending = [];
     if (ally.mergeStr) { addStr(ally, ally.mergeStr, "fight"); notes.push(`Ярость товарищей: ${ally.name} +${ally.mergeStr} Силы`); }
-    if (state.config.tests.merge.unplayed === "lose") allyCard.donorCard = card; // отданная — внутри, в сброс после розыгрыша
+    if (state.config.tests.merge.unplayed === "lose") allyCard.donorCards = (allyCard.donorCards || []).concat({ card, owner: hero.id }); // отданные — внутри, в сброс после розыгрыша
     else BP.Deck.discard(state, hero, release0(card));
     return notes;
   }
 
   // Сыграна или сброшена смердженная карта: донор — в сброс владельца (или пропадает), хозяин — чистый
   function release(state, card, played) {
-    if (card.donorCard) {
-      const owner = state.heroes.find((h) => h.id === card.donorOwner);
-      if (played && owner) BP.Deck.discard(state, owner, release0(card.donorCard));
-      else if (owner) { owner.exhausted = (owner.exhausted || []).concat(release0(card.donorCard)); }
-    }
+    (card.donorCards || []).forEach((dc) => {
+      const owner = state.heroes.find((h) => h.id === dc.owner);
+      if (played && owner) BP.Deck.discard(state, owner, release0(dc.card));
+      else if (owner) { owner.exhausted = (owner.exhausted || []).concat(release0(dc.card)); }
+    });
     return release0(card);
   }
 
@@ -303,15 +323,15 @@ BP.Wide = (function () {
     if (card.perBone) out.push(`+${card.perBone} урона за каждую Кость`);
     if (card.chain) out.push(`цепь: ${card.chain === 1 ? "прыжок" : card.chain + " прыжка"} по ${(card.chainDmg || (dmgOf(card) || {}).amount || 0) + (card.chainBonus || 0)} на соседа с наименьшим ХП`);
     if (card.ricochet) out.push(`рикошет${card.ricochet > 1 ? " ×" + card.ricochet : ""}: сосед цели по выбранному направлению ${(card.ricoDmg || (dmgOf(card) || {}).amount || 0) + (card.ricoBonus || 0)}`);
-    if (card.donor) out.push(`вмерджена «${card.donor.name}»`);
+    if (card.donor) out.push(`вмерджены ${donorNames(card)}`);
     const kw = [];
     if (card.power) kw.push("Power"); if (card.ex) kw.push("Exhaust"); if (card.innate) kw.push("Innate"); if (card.retain) kw.push("Удержание");
     if (kw.length) out.push(kw.join(", "));
     (card.mfx || []).forEach((f) => { if (f && f.text) out.push(`${SIDE[f.side] || ""} ${f.text}`); }); // эффекты мерджа (видно на странице «Карты»)
     return out;
   }
-  const SIDE = { in: "🟩", out: "🟥", both: "🟩🟥" };
-  const SIDE_LONG = { in: "срабатывает, когда в эту карту вмерджили", out: "срабатывает, когда эту карту отдают союзнику", both: "срабатывает и когда в неё вмерджили, и когда её отдают" };
+  const SIDE = { in: "🟩", out: "🟥", both: "🟪" };
+  const SIDE_LONG = { in: "только когда в эту карту вмерджили", out: "только когда эту карту отдаёшь союзнику", both: "и когда отдаёшь карту, и когда в неё вмерджили; бонус герою — владельцу этой карты" };
 
   // Подсказки карты (js/ui-cardtip.js)
   function tipParts(state, hero, c, add) {
@@ -333,7 +353,7 @@ BP.Wide = (function () {
     if (c.innate) add({ icon: "☝", face: true, short: "Innate", long: "Всегда в первой руке боя." });
     if (c.noMerge && !c.power) add({ icon: "⛔", face: true, short: "не мерджится", long: "Эту карту нельзя отдать и в неё нельзя вмерджить." });
     (c.mfx || []).forEach((fx) => add({ icon: SIDE[fx.side] || "🟩", face: true, cls: "mfx-" + fx.side, short: fx.text, long: `Эффект мерджа (${SIDE[fx.side]} ${SIDE_LONG[fx.side]}): ${fx.text}.` }));
-    if (c.donor) add({ icon: "★", short: `вмерджена «${c.donor.name}»`, long: `В карту вмерджили «${c.donor.name}»: её урон и эффекты уже прибавлены. После розыгрыша карты распадутся.${(c.fired || []).length ? " Сработало: " + c.fired.map((f) => f.text).join("; ") + "." : ""}` });
+    if (c.donor) add({ icon: "★", value: c.merged > 1 ? "×" + c.merged : "", short: `вмерджены ${donorNames(c)}`, long: `В карту вмерджили ${donorNames(c)}: урон и эффекты уже прибавлены. После розыгрыша карты распадутся.${(c.fired || []).length ? " Сработало: " + firedText(c) + "." : ""}` });
   }
 
   // Эффекты мерджа, которые можно предложить карте наградой: её пул + общий пул (с весами по стоимости)
@@ -349,5 +369,5 @@ BP.Wide = (function () {
   }
 
   return { on, initCard, addFx, mergeable, mergeBlock, mergeInto, rebuild, release, release0, afterMerge, exhaustPlayed, applyEffect, blockFirst,
-    turnStart, turnEnd, fightStart, handRoom, effText, textExtra, tipParts, rewardFx, kindOf, addStr, SIDE };
+    turnStart, turnEnd, fightStart, handRoom, effText, textExtra, tipParts, rewardFx, kindOf, addStr, SIDE, multi, firedText, donorNames };
 })();

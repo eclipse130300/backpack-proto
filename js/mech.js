@@ -187,13 +187,16 @@ BP.Mech = (function () {
   }
 
   // Блок от карт героя с учётом Стойкости
-  const blockOf = (hero, amount) => amount + (hero.blockBuff || 0);
+  // + Стойкость героя; правки 26.11: Хрупкость (дебафф врага) — броня с карт −25%
+  const blockOf = (hero, amount) => { const v = amount + (hero.blockBuff || 0); return BP.Foes && BP.Foes.has(hero, "frail") ? Math.floor(v * 0.75) : v; };
 
   // ---------- враги ----------
   const armorAct = (a) => a.type === "block" || (a.type === "attack" && a.armor > 0);
   // Какое действие враг выберет сейчас: по кругу; раненый (≤50% ХП) — действие с бронёй (но не два раза подряд)
   function pickAction(state, e) {
-    const n = e.actions.length, idx = e.actionIndex % n;
+    const n = e.actions.length, used = e.used || {};
+    let idx = e.actionIndex % n;
+    for (let g = 0; g < n && e.actions[idx].once && used[idx]; g++) idx = (idx + 1) % n; // правки 26.11: «один раз за бой» — пропускаем
     if (e.lastAct >= 0 && (e.actions[e.lastAct] || {}).type === "charge") return idx; // после замаха — удар по плану (js/foes.js)
     if (e.hp * 2 <= e.maxHp && !armorAct(e.actions[idx])) {
       const ai = e.actions.findIndex(armorAct);

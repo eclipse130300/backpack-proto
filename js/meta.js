@@ -2,9 +2,9 @@
 // Колода забега — список «описаний» карт: { uid, id, weapon, ups: {...} }. В начале каждого боя из них заново
 // собираются карты (engine.makeCard + apply), поэтому мердж и эволюция живут только до конца боя, а улучшения — весь забег.
 // Улучшения (config.meta.upgrades):
-//   на карту: up (урон/блок +50% или +3), gift (постоянный дар), draw, inspire, feed, armorbreak, cheaper, retain, innate,
+//   на карту: up (урон/блок +50% или +3), gift (постоянный дар), draw, inspire, feed, guardup (вместо armorbreak, 26.11), fury, cheaper, retain, innate,
 //             sharp, freemerge, killenergy, echo, awaken, ignorecover, generous;
-//   герою:    maxhp, startblock, strength, fortitude (h.perm);  пати: partymerge (state.run.relics).
+//   герою:    maxhp, startblock, strength, fortitude (h.perm; 26.11 — +2, но −8 макс. ХП);  пати: partymerge (state.run.relics).
 // Где срабатывают: engine.playCard (draw, inspire, killenergy, echo), engine.mergeCard (feed), cards.mergeCost (freemerge,
 //   partymerge), cards.computeHits (inspire, sharp), gifts.incoming (generous), deck.buildFight (innate), engine.startFight (герой).
 window.BP = window.BP || {};
@@ -82,7 +82,9 @@ BP.Meta = (function () {
     if (u.sharp) card.sharpPerm = u.sharp;
     if (u.freemerge) card.freeMerge = true;
     if (u.killenergy) card.upKillEnergy = u.killenergy;
-    if (u.echo) card.echo = true;
+    if (u.echo) { card.echo = true; card.echoCost = 3; } // правки 26.11: «Кровавое эхо» — возврат стоит 3 ХП
+    if (u.fury) { (card.effects || []).forEach((e) => { if (e.type === "damage") e.amount *= 2; }); card.ex = true; } // «Вспышка»: урон ×2, но Exhaust
+    if (u.guardup) card.upBlock = 3 * u.guardup; // «Щиток»
     if (u.awaken && state.config.cards[u.awaken]) card.evolve = u.awaken;
     if (u.ignorecover) card.ignoreCover = true;
     if (u.generous) card.generous = true;
@@ -124,6 +126,8 @@ BP.Meta = (function () {
       case "draw": case "inspire": case "killenergy": case "echo": return !u[id] && (id === "inspire" || id === "killenergy" ? hasDmg(c) : true);
       case "feed": case "freemerge": case "generous": return !u[id] && !!c.gift;
       case "armorbreak": return hasDmg(c) && !c.armorBreak;
+      case "fury": return hasDmg(c) && !u.fury && !c.power && !c.ex; // правки 26.11
+      case "guardup": return !u.guardup && !c.power;
       case "cheaper": return c.cost > 0;
       case "retain": return !c.retain;
       case "innate": { // wide-range: не больше meta.innateMax Innate-карт в колоде героя
@@ -193,6 +197,13 @@ BP.Meta = (function () {
     for (let i = TIERS.indexOf(tier); i >= 0 && !list.length; i--) list = all.filter((c) => rarityOf(state, c) === TIERS[i]);
     if (list.length < 2) list = list.concat(all.filter((c) => rarityOf(state, c) === "uncommon")); // бедный пул (маг) — не крутить одну карту
     if (!list.length) list = all;
+    // правки 26.11: хорошая защита в наградах — если в колоде меньше 2 небазовых карт с бронёй, часто предлагаем защиту
+    const cards = state.config.cards, no = new Set(m.noReward || []);
+    const isDef = (id) => (cards[id].effects || []).some((e) => /^block/.test(e.type) || e.type === "barrier");
+    const defs = deck.filter((sp) => !no.has(sp.id) && cards[sp.id] && isDef(sp.id)).length;
+    if (defs < 2 && Math.random() < 0.5) { const d = list.filter(isDef); if (d.length) list = d; else { const d2 = all.filter((c) => isDef(c) && rarityOf(state, c) !== "rare"); if (d2.length) list = d2; } }
+    // в первых боях — чаще карты с эффектами мерджа (мердж нужен с начала забега)
+    else if (state.run.fights < 4 && Math.random() < 0.6) { const mf = list.filter((id) => (cards[id].mfx || []).length); if (mf.length) list = mf; }
     const cid = rand(list);
     return { type: "card", card: cid, rarity: rarityOf(state, cid) };
   }
@@ -281,8 +292,10 @@ BP.Meta = (function () {
       const p = hero.perm;
       if (o.up === "maxhp") { p.maxHp += 8; hero.maxHp += 8; hero.hp += 8; }
       if (o.up === "startblock") { p.startBlock += 2; hero.startBlockMax += 2; }
-      if (o.up === "strength") p.dmg += 1;
-      if (o.up === "fortitude") p.block += 1;
+      // правки 26.11 (риск / награда): +2 навсегда, но −8 макс. ХП
+      if (o.up === "strength" || o.up === "fortitude") { hero.maxHp = Math.max(10, hero.maxHp - 8); p.maxHp -= 8; hero.hp = Math.min(hero.hp, hero.maxHp); }
+      if (o.up === "strength") p.dmg += 2;
+      if (o.up === "fortitude") p.block += 2;
       return `${u.name}`;
     }
     if (u.on === "party") { state.run.relics[o.up] = true; return `${u.name} (всей пати)`; }
@@ -360,7 +373,7 @@ BP.Meta = (function () {
     if (o.up === "gift") return `постоянный дар «${(state.config.gifts[o.gift] || {}).name}»: ${(state.config.gifts[o.gift] || {}).text}`;
     if (o.up === "awaken") return `эволюционирует в «${(state.config.cards[o.evo] || {}).name}»`;
     if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `карта получает эффект мерджа: ${f.text || o.mfx}`; }
-    return u.text;
+    return u.text + (u.risk ? `. Минус: ${u.risk}` : "");
   }
 
   return { isOn, createRun, build, apply, refreshView, makeReward, pick, forge, canForgeUp, camp, offerTitle, offerText, specOf, pool, rarityOf, TIERS };

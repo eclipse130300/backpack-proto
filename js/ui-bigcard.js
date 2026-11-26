@@ -11,13 +11,14 @@ BP.BigCard = (function () {
   const KIND = { attack: "Атака", block: "Защита", skill: "Умение", aoe: "Массовка", power: "Power" };
   const ATTACK = { melee: "мили — бьёт только открытых врагов", ranged: "дальняя — бьёт любого врага", aoe: "массовка — по фигуре клеток" };
   const SIDE = {
-    in: { icon: "🟩", label: "Когда в эту карту вмерджили" },
-    out: { icon: "🟥", label: "Когда эту карту отдаёшь союзнику" },
-    both: { icon: "🟩🟥", label: "И когда вмерджили, и когда отдаёшь" }
+    in: { icon: "🟩", label: "Только когда в эту карту вмерджили" },
+    out: { icon: "🟥", label: "Только когда эту карту отдаёшь" },
+    both: { icon: "🟪", label: "Мердж (отдал или вмерджили) — бонус герою получаешь ты" }
   };
 
   // Основной текст словами: «Наносит 5 урона, даёт себе 5 блока» (без эффектов мерджа и ключевых слов — они отдельно)
   function body(card) {
+    if (card.junk) return "Мусорная карта от врага. Сыграть нельзя.";
     const plain = Object.assign({}, card, { mfx: [], power: false, ex: false, innate: false, retain: false, donor: null });
     let t = BP.Cards.text(plain);
     t = t.replace(/^(\d+) урона/, "Наносит $1 урона")
@@ -51,22 +52,24 @@ BP.BigCard = (function () {
     if (card.armorBreak) k("По броне ×2", "урон по броне врага удваивается.");
     if ((card.effects || []).some((e) => e.type === "push")) k("Толчок", "толкнутый враг меняет цель; врезался в другого врага — оба получают Уязвимость.");
     if ((card.effects || []).some((e) => e.type === "trap")) k("Ловушка", "ставится на клетку, срабатывает, когда туда бьёт лучник, толкают врага или он там появляется.");
-    if (card.noMerge && !card.power) k("Не мерджится", "эту карту нельзя отдать и в неё нельзя вмерджить.");
+    if (card.ignoreCover) k("Сквозь прикрытие", "мили, но бьёт и врага, которого прикрывают спереди.");
+    if (card.unplayable) k("Мусор", "сыграть нельзя; если осталась в руке в конце хода — исчезает до конца боя.");
+    if (card.noMerge && !card.power && !card.unplayable) k("Не мерджится", "эту карту нельзя отдать и в неё нельзя вмерджить.");
     return out.join("");
   }
 
   function mergeField(state, card) {
     const mfx = card.mfx || [];
     let rows = mfx.map((f) => { const S = SIDE[f.side] || SIDE.in; return `<div class="bc-mfx ${f.side}"><span>${S.icon}</span><div><small>${esc(S.label)}</small>${esc(f.text)}</div></div>`; }).join("");
-    if (card.donor) rows += `<div class="bc-mfx donor"><span>★</span><div><small>Уже вмерджена</small>«${esc(card.donor.name)}»: её урон и эффекты прибавлены. После розыгрыша карты распадутся.</div></div>`;
+    if (card.donor) rows += `<div class="bc-mfx donor"><span>★</span><div><small>Уже вмерджено: ${card.merged || 1}</small>${esc(BP.Wide.donorNames(card))}: урон и эффекты прибавлены. После розыгрыша карты распадутся.${(card.fired || []).length ? " Сработало: " + esc(BP.Wide.firedText(card)) + "." : ""}</div></div>`;
     const mergeable = BP.Wide && BP.Wide.mergeable(card);
     if (!rows) rows = `<div class="bc-mfx none">${mergeable ? "Эффекта мерджа нет. Мердж просто складывает урон и эффекты карт." : "Эту карту нельзя мерджить."}</div>`;
     return `<div class="bc-merge"><div class="bc-sec">При мердже</div>${rows}</div>`;
   }
 
-  function ups(state, card) {
+  function ups(state, card, skip) {
     const U = (state.config.meta || {}).upgrades || {}, u = card.ups || {};
-    return Object.keys(u).filter((id) => U[id] && u[id]).map((id) => `<div class="bc-up">${esc(U[id].icon || "")} <b>${esc(U[id].name)}</b> — ${esc(U[id].text)}</div>`).join("");
+    return Object.keys(u).filter((id) => U[id] && u[id] && id !== skip).map((id) => `<div class="bc-up">${esc(U[id].icon || "")} <b>${esc(U[id].name)}</b> — ${esc(U[id].text)}${U[id].risk ? ` <span class="bc-riskt">(минус: ${esc(U[id].risk)})</span>` : ""}</div>`).join("");
   }
 
   // Полная крупная карта. opts.highlight — html плашки «что добавится» (награда «Улучшение карты»)
@@ -85,7 +88,7 @@ BP.BigCard = (function () {
       ${nd !== null ? `<div class="bc-now">Сейчас с учётом Силы и Слабости: <b>${nd} урона</b></div>` : ""}
       ${ci && !ci.always ? `<div class="bc-now">${ci.willCrit ? "<b>💥 Эта карта критует!</b>" : `💥 Крит ×${state.config.rules.critMultiplier} через ${ci.left} уд. этим оружием`}</div>` : ""}
       ${opts.highlight || ""}
-      ${ups(state, card)}
+      ${ups(state, card, opts.skipUp)}
       ${mergeField(state, card)}
       ${keywords(state, hero, card) ? `<div class="bc-kws">${keywords(state, hero, card)}</div>` : ""}
     </div>`;
