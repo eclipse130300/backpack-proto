@@ -121,6 +121,7 @@ BP.CardTip = (function () {
 
   // Иконки на лице карты
   function faceHtml(state, hero, c) {
+    if (BP.CardFx && BP.Wide && BP.Wide.on(state)) return BP.CardFx.frames(state, hero, c); // 27.11: две рамки значков (js/ui-cardfx.js)
     const ps = parts(state, hero, c).filter((p) => p.face);
     if (!ps.length) return "";
     return `<div class="cbadges">${ps.map((p) => `<span class="cbadge${p.cls ? " " + p.cls : ""}"${p.color ? ` style="--bc:${p.color}"` : ""}>${esc(p.icon)}${p.value !== undefined && p.value !== "" ? `<b>${esc(p.value)}</b>` : ""}</span>`).join("")}</div>`;
@@ -174,6 +175,21 @@ BP.CardTip = (function () {
     box.innerHTML = html; box.style.display = "block"; rowKey = null;
     box.classList.toggle("big", !!BP.BigCard);
     place();
+    if (BP.BigCard && BP.CardFx) { clearTimeout(t2); t2 = setTimeout(showDetails, DELAY2); } // 27.11: подробности сбоку
+  }
+
+  // 27.11: держишь мышь на карте ещё секунду — сбоку раскрывается каждый значок подробно
+  function showDetails() {
+    const s = st(), h = s && cur && s.heroes.find((x) => x.id === cur.hero), c = h && h.hand.find((x) => x.uid === cur.uid);
+    if (!c || box.style.display === "none") return;
+    const list = BP.CardFx.details(s, h, c);
+    if (!list.length) return;
+    side.className = "ctip2 fxdet";
+    side.innerHTML = list.map((x) => `<div class="fxd ${x.kind}"><span class="fxchip${x.kind === "pot" ? " p" : ""}">${x.cond ? `<i>${esc(x.cond)}→</i>` : ""}${esc(x.icon)}${x.val !== undefined && x.val !== "" ? `<b>${esc(x.val)}</b>` : ""}</span><div>${esc(x.long)}</div></div>`).join("");
+    side.style.display = "block";
+    const br = box.getBoundingClientRect(), w = side.offsetWidth, hh = side.offsetHeight;
+    const x = br.right + 8 + w < innerWidth ? br.right + 8 : br.left - w - 8;
+    side.style.left = Math.max(8, x) + "px"; side.style.top = Math.max(8, Math.min(br.top, innerHeight - hh - 8)) + "px";
   }
 
   function showSide(row) {

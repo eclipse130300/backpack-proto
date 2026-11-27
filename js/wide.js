@@ -90,7 +90,7 @@ BP.Wide = (function () {
     dst.donorUids = (dst.donorUids || []).concat(src.uid); dst.donorOwners = (dst.donorOwners || []).concat(giverId);
     dst.wMods = dst.wMods || []; dst.wPending = []; dst.fired = dst.fired || [];
     const fire = (fx, side, owner) => {
-      dst.fired.push({ side, text: fx.text });
+      dst.fired.push({ side, text: fx.text, id: fx.id });
       const mod = {}, now = {};
       Object.keys(fx.do || {}).forEach((k) => { if (k === "flat") return; if (CARD_MODS.includes(k)) mod[k] = fx.do[k]; else now[k] = fx.do[k]; });
       if (Object.keys(mod).length) dst.wMods.push(mod);
@@ -127,22 +127,25 @@ BP.Wide = (function () {
       else mods[k] = m[k];
     }));
     // массовка / мультиудар: мердж прибавляет ровно flat урона за донора (плашка самой карты, fixed)
-    const hostFlat = ((dst.mfx || []).find((f) => f.do && f.do.flat) || { do: {} }).do.flat;
+    const hostFx = ((dst.mfx || []).find((f) => f.do && f.do.flat) || { do: {} }).do, hostFlat = hostFx.flat, hostFlatTotal = !!hostFx.total;
     donors.forEach((d) => {
       const db = d.wBase || d, dd = (db.effects || []).find((e) => e.type === "damage");
       let hd = dmgOf(dst);
       if (dd) {
-        const add = dd.amount * (dd.hits || 1);
-        if (hd) hd.amount += hostFlat !== undefined ? hostFlat : add;
+        // 27.11: множители не передаются — мультиудар донора отдаёт урон одного удара (Двойной выстрел 3×2 → +3)
+        const add = dd.amount;
+        // flat у хозяина: «total» — на все удары вместе (2 удара и +2 → по +1 на удар), иначе на каждый удар
+        const ft = hostFlatTotal && (hd && hd.hits > 1) ? Math.max(1, Math.round(hostFlat / hd.hits)) : hostFlat;
+        if (hd) hd.amount += hostFlat !== undefined ? ft : add;
         else { // атака в защиту/навык: хозяин бьёт цель донора, своя броня — своему герою
           ["target", "attack", "area", "shape", "fixedShape", "fixed", "shapeSteps", "shapeName", "rays"].forEach((k) => { if (db[k] !== undefined) dst[k] = clone(db[k]); else delete dst[k]; });
           dst.effects.forEach((e) => { if (e.type === "block") e.type = "blockSelf"; });
           dst.effects.unshift(clone(dd));
-          ["strMult", "critMult", "dmgFromBlock", "chain", "chainDmg", "ricochet", "ricoDmg"].forEach((k) => { if (db[k] !== undefined && dst[k] === undefined) dst[k] = db[k]; });
+          ["dmgFromBlock", "chain", "chainDmg", "ricochet", "ricoDmg"].forEach((k) => { if (db[k] !== undefined && dst[k] === undefined) dst[k] = db[k]; });
         }
       }
       (db.effects || []).forEach((e) => {
-        if (e.type === "damage" || POSITIONAL.includes(e.type)) return;
+        if (e.type === "damage" || e.type === "arcane" || POSITIONAL.includes(e.type)) return; // Чародейство — только у мага
         const ee = clone(e);
         if (e.type === "block") ee.type = dst.target === "hero" || dst.target === "ally" || dst.target === "self" ? "block" : "blockSelf";
         const same = dst.effects.find((x) => x.type === ee.type && x.dur === ee.dur && !!x.party === !!ee.party && x.amount !== undefined);
@@ -234,6 +237,7 @@ BP.Wide = (function () {
       case "str": who.forEach((h) => addStr(h, ef.amount, ef.dur)); return `${ef.party ? "всем" : to.name} +${ef.amount} Силы ${ef.dur === "fight" ? "на бой" : "на ход"}`;
       case "tough": who.forEach((h) => addTough(h, ef.amount, ef.dur)); return `${ef.party ? "всем" : to.name} +${ef.amount} Стойкости ${ef.dur === "fight" ? "на бой" : "на ход"}`;
       case "critReady": hero.critReady = true; return `${hero.name}: следующий удар — крит`;
+      case "arcane": hero.arcane = (hero.arcane || 0) + ef.amount; return `${hero.name}: следующая Магическая стрела +${hero.arcane}`; // 27.11
       case "mark": if (primary && primary.alive) { primary.mark = true; return `${primary.name}: Метка (следующий удар +50%)`; } return "";
       case "missEnemy": if (primary && primary.alive) { primary.missAll = true; return `${primary.name} промахивается всеми ударами в этот ход`; } return "";
       case "barrier": to.barrier = (to.barrier || 0) + ef.amount; return `${to.name}: Барьер ${to.barrier}`;
@@ -276,13 +280,13 @@ BP.Wide = (function () {
   function turnEnd(state, h) {
     if (h.strTurn) { h.dmgBuff -= h.strTurn; h.strTurn = 0; }
     if (h.toughTurn) { h.blockBuff -= h.toughTurn; h.toughTurn = 0; }
-    h.fadeSkip = false;
+    h.fadeSkip = false; h.arcane = 0;
   }
   // Начало боя: сброс статусов
   function fightStart(state, h) {
     if (BP.Wide2) BP.Wide2.fightStart(state, h);
     state.traps = []; state.costDown = 0;
-    Object.assign(h, { strTurn: 0, toughTurn: 0, critReady: false, barrier: 0, thorns: 0, keepBlock: false, mergeStr: 0, aoeBonus: 0, fade: null, fadeSkip: false, exhausted: [] });
+    Object.assign(h, { arcane: 0, strTurn: 0, toughTurn: 0, critReady: false, barrier: 0, thorns: 0, keepBlock: false, mergeStr: 0, aoeBonus: 0, fade: null, fadeSkip: false, exhausted: [] });
     if (state.config.tests.startBlock && state.config.tests.startBlock.enabled === false) { h.startBlock = 0; }
   }
 
@@ -300,6 +304,7 @@ BP.Wide = (function () {
       case "str": return `${e.party ? "всем героям " : ""}+${e.amount} Силы ${d}`;
       case "tough": return `${e.party ? "всем героям " : ""}+${e.amount} Стойкости ${d}`;
       case "critReady": return "следующий удар героя — крит";
+      case "arcane": return `следующая Магическая стрела в этот ход +${e.amount} урона`;
       case "mark": return "Метка на цель: следующий удар по ней +50%";
       case "missEnemy": return "враг-цель промахивается всеми ударами в этот ход";
       case "barrier": return `Барьер ${e.amount}: блокирует ${e.amount === 1 ? "1 удар" : e.amount + " удара"} любого врага`;

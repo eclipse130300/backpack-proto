@@ -182,7 +182,7 @@ BP.UIGame = (function () {
     // merge-7: мерджимые карты цветные (цвет дара; без дара — общий фиолетовый), немерджимые — обычные
     const gc = BP.Gifts.mergeable(c) ? (c.gift && (state.config.gifts[c.gift] || {}).color) || "#7a6aa8" : "";
     return `<div class="${cls}${gc ? " gifted" : ""}" data-card="${c.uid}" data-hero="${hero.id}" data-drop="merge" data-tip="card" style="--kc:${kc};${gc ? `--gc:${gc};` : ""}${ml ? `margin-left:${ml}px` : ""}">
-      ${BP.Icons.costHtml(c)}${BP.Icons.statsHtml(c)}${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
+      ${BP.Icons.costHtml(c)}${BP.Icons.statsHtml(c, state, hero)}${owner}${c.questCard ? `<div class="qbadge" title="Квестовая: одноразовая, не сгорает в конце хода">?</div>` : ""}
       <div class="cart" title="${esc(BP.Icons.KIND_LABEL[kind])}">${icon(c.icon)}${shapeMini(c)}${crit}</div>
       <div class="cname">${esc(c.name)}</div>
       ${BP.CardTip.faceHtml(state, hero, c)}

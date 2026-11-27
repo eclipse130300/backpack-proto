@@ -85,7 +85,7 @@ BP.UIMeta = (function () {
     return `<div class="bigcard herocard"><div class="bc-head"><span class="bc-name">${esc(u.icon || "")} ${esc(u.name)}</span></div>
       <div class="bc-type">${u.on === "party" ? "Всей пати" : "Усиление героя · " + esc(h.name)}</div>
       <div class="hc-portrait">${portrait(s, h)}</div><div class="rhero-big">${esc(big)}</div>
-      <div class="bc-text">${esc(u.text || "")}</div>${u.risk ? `<div class="bc-risk">Минус: ${esc(u.risk)}</div>` : ""}</div>`;
+      ${u.text && u.text !== big ? `<div class="bc-text">${esc(u.text)}</div>` : ""}${u.risk ? `<div class="bc-risk">Минус: ${esc(u.risk)}</div>` : ""}</div>`;
   }
   function tileHtml(s, h, o) {
     const u = o.type === "up" ? s.config.meta.upgrades[o.up] || {} : null, pv = o.preview;

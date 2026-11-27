@@ -201,7 +201,8 @@ BP.Meta = (function () {
     const cards = state.config.cards, no = new Set(m.noReward || []);
     const isDef = (id) => (cards[id].effects || []).some((e) => /^block/.test(e.type) || e.type === "barrier");
     const defs = deck.filter((sp) => !no.has(sp.id) && cards[sp.id] && isDef(sp.id)).length;
-    if (defs < 2 && Math.random() < 0.5) { const d = list.filter(isDef); if (d.length) list = d; else { const d2 = all.filter((c) => isDef(c) && rarityOf(state, c) !== "rare"); if (d2.length) list = d2; } }
+    // 27.11: защиты и так много — подкидываем реже (было: меньше 2 — в половине случаев)
+    if (defs < 1 && Math.random() < 0.3) { const d = list.filter(isDef); if (d.length) list = d; else { const d2 = all.filter((c) => isDef(c) && rarityOf(state, c) !== "rare"); if (d2.length) list = d2; } }
     // в первых боях — чаще карты с эффектами мерджа (мердж нужен с начала забега)
     else if (state.run.fights < 4 && Math.random() < 0.6) { const mf = list.filter((id) => (cards[id].mfx || []).length); if (mf.length) list = mf; }
     const cid = rand(list);
@@ -362,18 +363,18 @@ BP.Meta = (function () {
     if (o.type === "card") return "Новая карта";
     if (o.type === "dupe") return "Копия карты";
     const u = M(state).upgrades[o.up];
-    if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `${BP.Wide.SIDE[f.side] || "🟩"} Эффект мерджа`; }
+    if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `${BP.CardFx ? BP.CardFx.mfxItem(f).icon : "✦"} Эффект мерджа`; }
     return `${u.icon} ${u.name}${o.up === "gift" ? ": " + ((state.config.gifts[o.gift] || {}).name || o.gift) : ""}`;
   }
   function offerText(state, o) {
     if (o.type === "card") return "карта добавится в колоду";
     if (o.type === "dupe") return "ещё одна такая же карта (со всеми её улучшениями)";
     const u = M(state).upgrades[o.up];
-    if (o.up === "up") return M(state).upgradeMode === "flat" ? `+${M(state).upFlat} урона или блока карте` : `+${Math.round(M(state).upPercent * 100)}% урона или блока карте`;
+    if (o.up === "up") return M(state).upgradeMode === "flat" ? `+${M(state).upFlat} урона или брони` : `+${Math.round(M(state).upPercent * 100)}% урона или брони`;
     if (o.up === "gift") return `постоянный дар «${(state.config.gifts[o.gift] || {}).name}»: ${(state.config.gifts[o.gift] || {}).text}`;
     if (o.up === "awaken") return `эволюционирует в «${(state.config.cards[o.evo] || {}).name}»`;
-    if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `карта получает эффект мерджа: ${f.text || o.mfx}`; }
-    return u.text + (u.risk ? `. Минус: ${u.risk}` : "");
+    if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `Мердж: ${String(f.text || o.mfx).replace(/^Мердж:\s*/, "")}`; }
+    return u.text + (u.risk ? `, ${u.risk}` : ""); // 27.11: коротко — «урон карты ×2, Экзост»
   }
 
   return { isOn, createRun, build, apply, refreshView, makeReward, pick, forge, canForgeUp, camp, offerTitle, offerText, specOf, pool, rarityOf, TIERS };

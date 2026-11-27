@@ -35,12 +35,18 @@ BP.Foes = (function () {
   }
 
   // Подготовка намерения (engine.computeIntent): Сила врага к урону, цель защиты, сила удара после замаха
+  // 27.11: рост урона с ходами (rules.enemyRamp): с хода from +per за ход, складывается. 0 — нет роста
+  function ramp(state, ahead) {
+    const r = state.config.rules.enemyRamp;
+    return r && r.per ? Math.max(0, state.turn + (ahead || 0) - r.from + 1) * r.per : 0;
+  }
+  const rampDmg = (state, d, ahead) => Math.ceil(d * (1 + ramp(state, ahead)) - 1e-9);
   function prepare(state, e, a, it) {
-    if (it.damage) it.damage += e.str || 0;
+    if (it.damage) it.damage = rampDmg(state, it.damage + (e.str || 0));
     if (a.type === "guard") it.ally = guardTarget(state, e).uid;
     if (a.type === "charge") {
       const n = e.actions[(e.intentIdx + 1) % e.actions.length];
-      if (n && n.damage) { it.next = n.damage + (e.str || 0); it.nextHits = n.hits || 1; }
+      if (n && n.damage) { it.next = rampDmg(state, n.damage + (e.str || 0), 1); it.nextHits = n.hits || 1; }
     }
     if (BP.Foes2) BP.Foes2.prepare(state, e, a, it);
   }
@@ -99,7 +105,7 @@ BP.Foes = (function () {
       case "buff": return `<div class="intent buff">📯 Сила +${it.str} всем</div>`;
       case "guard": { const t = s.enemies.find((x) => x.uid === it.ally); return `<div class="intent def">⬢+${it.armor} → ${esc(t && t !== e ? t.name : "себе")}</div>`; }
       case "charge": return `<div class="intent charge">⏳ замах → ⚔${it.next || "?"}${it.nextHits > 1 ? "×" + it.nextHits : ""}</div>`;
-      case "debuff": { const D = DEBUFF[it.status] || {}; return `<div class="intent curse">${D.icon || ""} ${esc(D.name || it.status)}${esc(tgt(s, it))}</div>`; }
+      case "debuff": { const D = DEBUFF[it.status] || {}; return `<div class="intent curse">${D.icon || ""}${esc(tgt(s, it))}</div>`; } // 27.11: коротко (название — в подсказке), чтобы не закрывать ХП
     }
     return BP.Foes2 ? BP.Foes2.badge(s, e, it) : null;
   }
@@ -125,5 +131,5 @@ BP.Foes = (function () {
     return BP.Foes2 ? BP.Foes2.short(a) : null;
   }
 
-  return { DEBUFF, heroDmg, has, prepare, needsTargets, act, applyDebuff, badge, long, short, guardTarget };
+  return { DEBUFF, heroDmg, has, ramp, prepare, needsTargets, act, applyDebuff, badge, long, short, guardTarget };
 })();

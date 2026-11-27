@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 22,   // wide-range, правки 26.11: враги как в StS, правило эффектов мерджа, несколько доноров
+  version: 23,   // wide-range, правки 27.11: рост урона врагов с ходами, спайки, маг без брони, Огненное кольцо, Магическая стрела
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -31,6 +31,9 @@ window.GAME_CONFIG = {
     partyHand: 15,               // wide-range (24.11): максимум карт в руках всей пати; добор сверх лимита сгорает (уходит в сброс)
     markBonus: 0.5,              // Метка: следующий удар по врагу +50%
     weakFactor: 0.5,             // Слабость врага: его ближайшая атака ×0.5
+    // 27.11: урон врагов растёт с ходами — бой нельзя тянуть. С хода from каждый ход +per к урону ударов (складывается):
+    //   ход 4 — +25%, ход 5 — +50%, ход 6 — +75%… Видно на враге значком «Ярость боя». per: 0 — выключено.
+    enemyRamp: { from: 4, per: 0.25 },
     // РЕШЕНО: мили (и герои, и враги) бьют только ОТКРЫТЫХ — тех, кого никто не прикрывает спереди.
     // РЕШЕНО (17.10): хексы смотрят на героев ровной стороной, задний враг стоит прямо за передним в своей колонке
     // и закрыт, только если клетка прямо перед ним занята. Соседние колонки сдвинуты на полхекса (0, 2, 4 ближе к героям).
@@ -186,7 +189,7 @@ window.GAME_CONFIG = {
     draw1:         { side: "both",                            do: { draw: 1 },              text: "→ Возьми карту", pool: true, w: [1, 1, 2, 4] },
     cheaper:       { side: "both",                            do: { cheaper: 1 },           text: "→ Карта стоит на 1 меньше", pool: true, w: [0, 1, 2, 2] },
     retain_both:   { side: "both",                            do: { retain: true },         text: "→ Удержание", pool: true, w: [2, 2, 2, 1] },
-    copy_out:      { side: "out",                             do: { copy: true },           text: "Отдал → копия этой карты тебе в руку (на 1 дешевле)", pool: true, w: [2, 1, 1, 1] },
+    copy_out:      { side: "out",                             do: { copy: true },           text: "Отдал → копия тебе в руку, −1⚡", pool: true, w: [0, 2, 1, 1] }, // 27.11: на карты за 0 не выпадает (бесполезно)
     // 26.11: эффекты мерджа на энергию (энергию получает владелец карты с плашкой)
     energy1:       { side: "both",                            do: { energy: 1 },            text: "→ +1 энергии", pool: true, w: [0, 1, 2, 3] },
     cost2_energy1: { side: "both", cond: { costMin: 2 },      do: { energy: 1 },            text: "Карта стоит 2+ → +1 энергии" },
@@ -202,7 +205,7 @@ window.GAME_CONFIG = {
     fade_hold:     { side: "both",                            do: { fadeHold: true },       text: "→ Угасание в этот ход не тикает" },
     // 26.11: массовки и мультиудары — мердж даёт ровно N урона (вместо «максимум +2»)
     flat4:         { side: "in",                              do: { flat: 4 },              text: "Мердж: карта получает только +4 урона", fixed: true },
-    flat2hit:      { side: "in",                              do: { flat: 2 },              text: "Мердж: каждый удар получает только +2 урона", fixed: true },
+    flat2hit:      { side: "in",                              do: { flat: 2, total: true }, text: "Мердж: максимум +2 урона", fixed: true }, // 27.11: +2 на все удары вместе (2 удара — по +1)
     cost1_rico2:   { side: "both", cond: { cost: 1 },         do: { ricoDmg: 2 },           text: "Карта стоит 1 → +2 урона рикошета" },
     atk_rico1:     { side: "both", cond: { kind: "attack" },  do: { rico: 1 },              text: "Атака → +1 рикошет" },
     crit_move:     { side: "out",  cond: { critReady: true }, do: { critMove: true },       text: "Отдал при «Крит готов» → он переходит союзнику" },
@@ -280,13 +283,13 @@ window.GAME_CONFIG = {
     // ===== Лучник: Крит (этап 1) + клей. Накопитель и Ловушки — этап 2 =====
     a_shot:     { name: "Выстрел",            cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", rarity: "common", effects: [{ type: "damage", amount: 4 }] },
     // 26.11: базовая защита лучника отличается от мага — «Уворот» с Удержанием при мердже
-    a_defend:   { name: "Уворот",             cost: 1, icon: "cover",  target: "self", rarity: "common", mfx: ["retain_both"], effects: [{ type: "block", amount: 5 }] },
+    a_defend:   { name: "Уворот",             cost: 1, icon: "cover",  target: "self", rarity: "common", mfx: ["retain_both"], effects: [{ type: "block", amount: 4 }] }, // 27.11: лучнику меньше брони (5 → 4)
     a_heavy:    { name: "Тяжёлая стрела",     cost: 2, icon: "arrow",  target: "enemy", attack: "ranged", rarity: "common", mfx: ["cost2_energy1"], isNew: true, added: "26.11", effects: [{ type: "damage", amount: 11 }] },
-    a_retreat:  { name: "Отходной выстрел",   cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", rarity: "common", build: ["crit"], mfx: ["def_block3"], isNew: true, added: "26.11", effects: [{ type: "damage", amount: 4 }, { type: "blockSelf", amount: 5 }] },
-    a_cloak:    { name: "Плащ теней",         cost: 2, icon: "cover",  target: "self", rarity: "uncommon", mfx: ["energy1"], isNew: true, added: "26.11", effects: [{ type: "block", amount: 11 }, { type: "draw", amount: 1 }] },
+    a_retreat:  { name: "Отходной выстрел",   cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", rarity: "common", build: ["crit"], mfx: ["def_block3"], isNew: true, added: "26.11", effects: [{ type: "damage", amount: 4 }, { type: "blockSelf", amount: 3 }] },
+    a_cloak:    { name: "Плащ теней",         cost: 2, icon: "cover",  target: "self", rarity: "uncommon", mfx: ["energy1"], isNew: true, added: "26.11", effects: [{ type: "block", amount: 8 }, { type: "draw", amount: 1 }] },
     a_bounce:   { name: "Отскок",             cost: 1, icon: "knock",  target: "enemy", attack: "ranged", rarity: "common", build: ["trap"], mfx: ["draw1"], effects: [{ type: "damage", amount: 3 }, { type: "push" }] },
     a_aimed:    { name: "Прицельный выстрел", cost: 1, icon: "aim",    target: "enemy", attack: "ranged", rarity: "common", build: ["crit"], mfx: ["atk_dmg2"], effects: [{ type: "damage", amount: 6 }, { type: "mark" }] },
-    a_quick:    { name: "Быстрый выстрел",    cost: 0, icon: "arrow",  target: "enemy", attack: "ranged", rarity: "common", build: ["acc"], mfx: ["copy_out"], effects: [{ type: "damage", amount: 3 }, { type: "draw", amount: 1 }] },
+    a_quick:    { name: "Быстрый выстрел",    cost: 0, icon: "arrow",  target: "enemy", attack: "ranged", rarity: "common", build: ["acc"], mfx: ["atk_dmg2"], effects: [{ type: "damage", amount: 3 }, { type: "draw", amount: 1 }] }, // 27.11: копия на −1⚡ у карты за 0 бесполезна
     a_rico:     { name: "Рикошетная стрела",  cost: 1, icon: "pierce", target: "enemy", attack: "ranged", ricochet: 1, rarity: "common", mfx: ["cost1_rico2", "atk_rico1"], effects: [{ type: "damage", amount: 4 }] },
     a_roll:     { name: "Перекат",            cost: 1, icon: "cover",  target: "self", rarity: "common", mfx: ["retain_both"], effects: [{ type: "block", amount: 7 }] },
     a_double:   { name: "Двойной выстрел",    cost: 1, icon: "arrows", target: "enemy", attack: "ranged", rarity: "common", build: ["crit"], mfx: ["flat2hit"], effects: [{ type: "damage", amount: 3, hits: 2 }] },
@@ -297,7 +300,7 @@ window.GAME_CONFIG = {
     a_rain:     { name: "Град стрел",         cost: 2, icon: "rain",   target: "cell", attack: "aoe", area: "row", rarity: "uncommon", build: ["crit", "trap"], mfx: ["flat4"], effects: [{ type: "damage", amount: 4 }] },
     // этап 2: Накопитель — в лучника мерджат, он копит
     a_quiver:   { name: "Колчан накопителя",  cost: 2, icon: "arrows", target: "none", power: true, rarity: "uncommon", build: ["acc"], effects: [{ type: "quiver", amount: 1 }] },
-    a_patience: { name: "Терпение",           cost: 1, icon: "cover",  target: "self", rarity: "common", build: ["acc"], mfx: ["other_str1t"], effects: [{ type: "block", amount: 5 }, { type: "retainHand" }] },
+    a_patience: { name: "Терпение",           cost: 1, icon: "cover",  target: "self", rarity: "common", build: ["acc"], mfx: ["other_str1t"], effects: [{ type: "block", amount: 3 }, { type: "retainHand" }] },
     a_string:   { name: "Тетива",             cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", retain: true, rarity: "common", build: ["acc"], mfx: ["cost2_sharpen"], effects: [{ type: "damage", amount: 5 }] },
     a_volley:   { name: "Разряд колчана",     cost: 2, icon: "rain",   target: "enemy", attack: "ranged", perHand: true, rarity: "rare", build: ["acc"], mfx: ["flat4"], effects: [{ type: "damage", amount: 3 }] },
     // этап 2: Ловушки — ставятся на любую клетку поля; срабатывают от выстрела лучника по клетке, когда врага туда толкнули или он там появился
@@ -305,17 +308,19 @@ window.GAME_CONFIG = {
     a_wire:     { name: "Растяжка",           cost: 1, icon: "nova",   target: "cell", noMerge: true, rarity: "common", build: ["trap"], effects: [{ type: "trap", trap: "wire", amount: 8 }] },
     a_smoketrap:{ name: "Дымовая ловушка",    cost: 2, icon: "cover",  target: "cell", noMerge: true, rarity: "rare", build: ["trap"], effects: [{ type: "trap", trap: "smoke" }] },
     a_detonate: { name: "Детонация",          cost: 1, icon: "nova",   target: "enemy", attack: "ranged", rarity: "uncommon", build: ["trap"], mfx: ["draw1"], effects: [{ type: "damage", amount: 3 }, { type: "detonate" }] },
-    a_smoke:    { name: "Дымовая завеса",     cost: 1, icon: "cover",  target: "enemy", ex: true, noMerge: true, rarity: "uncommon", effects: [{ type: "missEnemy" }] },
+    a_smoke:    { name: "Дымовая завеса",     cost: 1, icon: "cover",  target: "enemy", ex: true, noMerge: true, rarity: "uncommon", effects: [{ type: "missEnemy" }] }, // 27.11: в стартовой колоде лучника — снять спайк врага
 
     // ===== Маг: Массовки (этап 1) + клей. Кровь и Кости — этап 2 =====
     // 26.11: базовые карты мага — поддержка: стрела вешает Метку, защита — на любого героя
-    m_bolt:     { name: "Магическая стрела",  cost: 1, icon: "bolt",    target: "enemy", attack: "ranged", rarity: "common", effects: [{ type: "damage", amount: 3 }, { type: "mark" }] },
+    // 27.11: Магическая стрела — каждая следующая за ход бьёт на +1 (статус мага «Чародейство», сгорает в конце хода)
+    m_bolt:     { name: "Магическая стрела",  cost: 1, icon: "bolt",    target: "enemy", attack: "ranged", arcane: true, rarity: "common", isNew: true, added: "27.11", effects: [{ type: "damage", amount: 3 }, { type: "arcane", amount: 1 }] },
+    // 27.11: Оберег, Эгида, Чародейский щит и Костяной щит убраны из колод и наград (магу без брони) — описания оставлены
     m_defend:   { name: "Оберег",             cost: 1, icon: "barrier", target: "hero", rarity: "common", effects: [{ type: "block", amount: 5 }] },
-    m_frost:    { name: "Ледяная стрела",     cost: 1, icon: "bolt",    target: "enemy", attack: "ranged", rarity: "common", mfx: ["cost1_block3"], isNew: true, added: "26.11", effects: [{ type: "damage", amount: 4 }, { type: "blockSelf", amount: 4 }] },
+    m_frost:    { name: "Ледяная стрела",     cost: 1, icon: "bolt",    target: "enemy", attack: "ranged", rarity: "common", mfx: ["cost1_block3"], isNew: true, added: "26.11", effects: [{ type: "damage", amount: 6 }] }, // 27.11: магу без брони (было 4 урона + 4 брони)
     m_aegis:    { name: "Эгида",              cost: 2, icon: "barrier", target: "none", rarity: "uncommon", build: ["def"], mfx: ["def_block3"], isNew: true, added: "26.11", effects: [{ type: "blockParty", amount: 6 }] },
-    m_arc:      { name: "Огненная дуга",      cost: 2, icon: "fire",    target: "cell", attack: "aoe", area: "shape", fixedShape: "chevUp", rarity: "common", build: ["aoe"], mfx: ["flat4"], effects: [{ type: "damage", amount: 5 }] },
+    m_arc:      { name: "Огненное кольцо",    cost: 2, icon: "fire",    target: "cell", attack: "aoe", area: "shape", fixedShape: "tri", isNew: true, added: "27.11", rarity: "common", build: ["aoe"], mfx: ["flat4"], effects: [{ type: "damage", amount: 5 }] },
     m_focus:    { name: "Сосредоточение",     cost: 1, icon: "purify",  target: "none", rarity: "common", mfx: ["cheaper"], effects: [{ type: "draw", amount: 2 }] },
-    m_spark:    { name: "Разряд",             cost: 1, icon: "bolt",    target: "enemy", attack: "ranged", chain: 1, chainDmg: 3, rarity: "common", mfx: ["atk_chain2"], effects: [{ type: "damage", amount: 5 }] },
+    m_spark:    { name: "Разряд",             cost: 1, icon: "bolt",    target: "enemy", attack: "ranged", chain: 1, chainDmg: 7, rarity: "common", mfx: ["atk_chain2"], effects: [{ type: "damage", amount: 7 }] }, // 27.11: 5 → 7, прыжок 3 → 7
     m_barrier:  { name: "Барьер",             cost: 1, icon: "barrier", target: "hero", rarity: "uncommon", mfx: ["cost2_barrier"], effects: [{ type: "barrier", amount: 1 }] },
     m_ward:     { name: "Чародейский щит",    cost: 1, icon: "barrier", target: "self", rarity: "common", mfx: ["draw1"], effects: [{ type: "block", amount: 6 }] },
     m_wedge:    { name: "Огненный клин",      cost: 2, icon: "flames",  target: "cell", attack: "aoe", area: "shape", fixedShape: "deep3", rarity: "common", build: ["aoe"], mfx: ["flat4"], effects: [{ type: "damage", amount: 6 }] },
@@ -333,7 +338,7 @@ window.GAME_CONFIG = {
     m_boneshield:{ name: "Костяной щит",      cost: 1, icon: "barrier", target: "self", rarity: "common", build: ["bone"], mfx: ["block3_both"], effects: [{ type: "boneBlock", base: 3, per: 3 }] },
     m_bonestorm:{ name: "Костяной шторм",     cost: 2, icon: "nova",    target: "cell", attack: "aoe", area: "shape", fixedShape: "tri", perBone: 2, rarity: "rare", build: ["bone", "aoe"], mfx: ["flat4"], effects: [{ type: "damage", amount: 4 }, { type: "spendBones" }] },
     m_necro:    { name: "Некромантия",        cost: 2, icon: "purify",  target: "none", power: true, rarity: "rare", build: ["bone"], effects: [{ type: "necro", amount: 1 }] },
-    m_meteor:   { name: "Метеор",             cost: 3, icon: "fire",    target: "cell", attack: "aoe", area: "shape", fixedShape: "chevDown", ex: true, rarity: "rare", build: ["aoe"], mfx: ["flat4"], effects: [{ type: "damage", amount: 12 }] },
+    m_meteor:   { name: "Метеор",             cost: 3, icon: "fire",    target: "cell", attack: "aoe", area: "shape", fixedShape: "tri", ex: true, rarity: "rare", build: ["aoe"], mfx: ["flat4"], effects: [{ type: "damage", amount: 12 }] }, // 27.11: без «галочек» — 3 клетки
 
     // ===== Общие карты (этап 2): Залп и Жертва — в пуле наград всех героев (meta.extraPool) =====
     n_order:    { name: "Приказ полководца",  cost: 3, icon: "taunt",   target: "none", ex: true, noMerge: true, rarity: "rare", build: ["volley"], effects: [{ type: "costDownTurn", amount: 1 }] },
@@ -352,8 +357,8 @@ window.GAME_CONFIG = {
   // cards — все карты героя (пул наград и колода). Стартовая колода — meta.start.
   weapons: {
     sword: { name: "Меч",   kind: "weapon", icon: "w_sword", critEvery: 4, cards: { w_strike: 1, w_defend: 1, w_ram: 1, w_cleave: 1, w_swordshield: 1, w_cover: 1, w_warcry: 1, w_wall: 1, w_guard: 1, w_bash: 1, w_unbreak: 1, w_spikes: 1, w_stance: 1, w_temper: 1, w_comrades: 1, w_heavy: 1, w_feed: 1, w_frenzy: 1, w_dash: 1, w_flurry: 1, w_second: 1, w_anger: 1 } },
-    bow:   { name: "Лук",   kind: "weapon", icon: "w_bow",   critEvery: 3, cards: { a_shot: 1, a_defend: 1, a_heavy: 1, a_retreat: 1, a_cloak: 1, a_bounce: 1, a_aimed: 1, a_quick: 1, a_rico: 1, a_roll: 1, a_double: 1, a_hone: 1, a_cold: 1, a_pass: 1, a_heart: 1, a_rain: 1, a_smoke: 1, a_quiver: 1, a_patience: 1, a_string: 1, a_volley: 1, a_snare: 1, a_wire: 1, a_smoketrap: 1, a_detonate: 1 } },
-    staff: { name: "Посох", kind: "weapon", icon: "w_staff", critEvery: 4, cards: { m_bolt: 1, m_defend: 1, m_frost: 1, m_aegis: 1, m_arc: 1, m_focus: 1, m_spark: 1, m_barrier: 1, m_ward: 1, m_wedge: 1, m_blast: 1, m_elements: 1, m_power: 1, m_meteor: 1, m_bleed: 1, m_bloodbolt: 1, m_pact: 1, m_harvest: 1, m_bonespear: 1, m_deathmark: 1, m_boneshield: 1, m_bonestorm: 1, m_necro: 1 } }
+    bow:   { name: "Лук",   kind: "weapon", icon: "w_bow",   critEvery: 3, cards: { a_shot: 1, a_defend: 1, a_heavy: 1, a_retreat: 1, a_cloak: 1, a_bounce: 1, a_aimed: 1, a_quick: 1, a_rico: 1, a_double: 1, a_hone: 1, a_cold: 1, a_pass: 1, a_heart: 1, a_rain: 1, a_smoke: 1, a_quiver: 1, a_patience: 1, a_string: 1, a_volley: 1, a_snare: 1, a_wire: 1, a_smoketrap: 1, a_detonate: 1 } },
+    staff: { name: "Посох", kind: "weapon", icon: "w_staff", critEvery: 4, cards: { m_bolt: 1, m_frost: 1, m_arc: 1, m_focus: 1, m_spark: 1, m_barrier: 1, m_wedge: 1, m_blast: 1, m_elements: 1, m_power: 1, m_meteor: 1, m_bleed: 1, m_bloodbolt: 1, m_pact: 1, m_harvest: 1, m_bonespear: 1, m_deathmark: 1, m_bonestorm: 1, m_necro: 1 } }
   },
 
   // ---------- Герои ----------
@@ -416,23 +421,25 @@ window.GAME_CONFIG = {
     ghoul:   { name: "Упырь",        hp: 38, armor: 0,  melee: true,  actions: [{ type: "attack", damage: 8 }, { type: "attack", damage: 5, armor: 5 }] },
     hound:   { name: "Гончая",       hp: 20, armor: 0,  melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "attack", damage: 6 }] },
     archer:  { name: "Костяной лучник", hp: 24, armor: 0, melee: false, actions: [{ type: "attack", damage: 6 }, { type: "attack", damage: 3, hits: 2 }] },
-    brute:   { name: "Громила",      hp: 56, armor: 10, melee: true,  actions: [{ type: "attack", damage: 7, armor: 6 }, { type: "charge" }, { type: "attack", damage: 18 }] },
+    // 27.11 (спайки как в StS): одни враги бьют ровно (Гончая, Упырь, лучник), другие замахиваются и бьют очень больно.
+    //   Числа — база, в забеге ×enemyDmg (0.75): замах Громилы 40 → ~30 по герою.
+    brute:   { name: "Громила",      hp: 56, armor: 10, melee: true,  actions: [{ type: "attack", damage: 7, armor: 6 }, { type: "charge" }, { type: "attack", damage: 40 }] },
     cultist: { name: "Культист",     hp: 32, armor: 0,  melee: false, role: "special", actions: [{ type: "ritual", str: 2, once: true }, { type: "attack", damage: 6 }] },
     hexer:   { name: "Ведьма",       hp: 28, armor: 0,  melee: false, role: "special", actions: [{ type: "debuff", status: "weak", amount: 3, turns: 2 }, { type: "attack", damage: 7 }, { type: "debuff", status: "entangle", turns: 1 }, { type: "attack", damage: 7 }, { type: "debuff", status: "frail", turns: 2, targets: 2 }] },
     warden:  { name: "Страж",        hp: 40, armor: 8,  melee: true,  role: "special", actions: [{ type: "guard", armor: 10 }, { type: "attack", damage: 7 }] },
     beetle:  { name: "Жук-панцирник", hp: 22, armor: 0, melee: true,  role: "special", passive: { curl: 7 }, actions: [{ type: "attack", damage: 6 }, { type: "grow", str: 2 }, { type: "attack", damage: 6 }] },
     spiker:  { name: "Колючник",     hp: 28, armor: 0,  melee: true,  role: "special", passive: { thorns: 3 }, actions: [{ type: "attack", damage: 7 }, { type: "block", amount: 8 }] },
-    slime:   { name: "Большой слизень", hp: 64, armor: 0, melee: true, role: "special", passive: { split: "slime_s" }, actions: [{ type: "attack", damage: 9 }, { type: "attack", damage: 13 }] },
+    slime:   { name: "Большой слизень", hp: 64, armor: 0, melee: true, role: "special", passive: { split: "slime_s" }, actions: [{ type: "attack", damage: 9 }, { type: "charge" }, { type: "attack", damage: 26 }] },
     slime_s: { name: "Малый слизень", hp: 20, armor: 0, melee: true,  actions: [{ type: "attack", damage: 5 }, { type: "debuff", status: "weak", amount: 2, turns: 1 }] },
     fungus:  { name: "Споровик",     hp: 24, armor: 0,  melee: true,  role: "special", passive: { spores: { status: "hvuln", turns: 2 } }, actions: [{ type: "attack", damage: 6 }, { type: "grow", str: 3 }] },
     shaman:  { name: "Шаман",        hp: 28, armor: 0,  melee: false, role: "special", actions: [{ type: "heal", amount: 10 }, { type: "attack", damage: 5 }] },
     eye:     { name: "Око",          hp: 30, armor: 0,  melee: false, role: "special", passive: { stagger: true }, actions: [{ type: "junk", card: "junk_daze", n: 2, targets: 1 }, { type: "attack", damage: 9 }] },
     // элиты
-    nob:     { name: "Бешеный гнолл", hp: 90, armor: 0, melee: true,  role: "special", passive: { enrage: 2 }, actions: [{ type: "attack", damage: 13 }, { type: "attack", damage: 5, hits: 2 }, { type: "debuff", status: "hvuln", turns: 2 }] },
+    nob:     { name: "Бешеный гнолл", hp: 90, armor: 0, melee: true,  role: "special", passive: { enrage: 2 }, actions: [{ type: "attack", damage: 13 }, { type: "debuff", status: "hvuln", turns: 2 }, { type: "attack", damage: 7, hits: 4 }] },
     sleeper: { name: "Спящий страж", hp: 95, armor: 0,  melee: true,  role: "special", passive: { sleep: 3, metal: 8 }, actions: [{ type: "attack", damage: 17 }, { type: "attack", damage: 17 }, { type: "debuff", status: "weak", amount: 2, turns: 2, targets: 3 }] },
-    golem:   { name: "Каменный голем", hp: 130, armor: 12, melee: false, role: "special", actions: [{ type: "attack", damage: 6, targets: 3 }, { type: "charge" }, { type: "attack", damage: 24 }, { type: "block", amount: 14 }] },
+    golem:   { name: "Каменный голем", hp: 130, armor: 12, melee: false, role: "special", actions: [{ type: "attack", damage: 6, targets: 3 }, { type: "charge" }, { type: "attack", damage: 44 }, { type: "block", amount: 14 }] },
     // Жрец (финальный босс): выводит героя из игры на ход, призывает гончих, бьёт по нескольким героям.
-    priest:  { name: "Падший жрец",  hp: 66, armor: 10, melee: false, role: "special", actions: [{ type: "attack", damage: 12 }, { type: "disable", targets: 1 }, { type: "summon", enemy: "hound", n: 1 }, { type: "attack", damage: 7, targets: 3, armor: 10 }, { type: "buff", str: 2 }] }
+    priest:  { name: "Падший жрец",  hp: 66, armor: 10, melee: false, role: "special", actions: [{ type: "attack", damage: 12 }, { type: "disable", targets: 1 }, { type: "summon", enemy: "hound", n: 1 }, { type: "attack", damage: 7, targets: 3, armor: 10 }, { type: "buff", str: 2 }, { type: "charge" }, { type: "attack", damage: 22, targets: 2 }] }
   },
 
 
@@ -446,9 +453,10 @@ window.GAME_CONFIG = {
     start: {
       // правки 26.11: как в Slay the Spire, но разнообразнее — в основном карты за 1 и 1–2 за 2, защиты чуть меньше (3 базовых),
       //   у лучника мультиудар, у мага добор («Сосредоточение»), у каждого героя 2–3 карты с эффектами мерджа с первого боя
+      // 27.11: у мага брони нет совсем (броню ему дают мерджем и «Прикрыть» союзники), у лучника меньше брони + Дымовая завеса
       melee:  { w_strike: 4, w_defend: 3, w_swordshield: 1, w_ram: 1 },
-      mage:   { m_bolt: 3, m_defend: 3, m_spark: 1, m_focus: 1, m_arc: 1 },
-      ranger: { a_shot: 3, a_defend: 3, a_double: 1, a_bounce: 1, a_heavy: 1 }
+      mage:   { m_bolt: 4, m_spark: 1, m_focus: 1, m_arc: 1, m_frost: 1, m_barrier: 1 },
+      ranger: { a_shot: 3, a_defend: 2, a_smoke: 1, a_double: 1, a_bounce: 1, a_heavy: 1 }
     },
     // Пул новых карт героя = карты его оружия + его доп. карты (heroes.*.cards) + extra ниже.
     // wide-range этап 2: общие карты (Залп, Жертва) — в пуле наград каждого героя
@@ -483,34 +491,35 @@ window.GAME_CONFIG = {
     },
     // id: tier (common | uncommon | rare), on: card — на конкретную карту, hero — герою, party — всей пати.
     // Тексты — для экрана наград и окна «Улучшения». Поведение — js/meta.js (apply) и engine.js.
+    // 27.11: тексты короткие (как на карте: «урон карты ×2, Экзост»), подробности — в подсказках
     upgrades: {
-      up:          { tier: "common",   on: "card",  icon: "⬆", name: "Усиление",      text: "+50% урона (или блока) карте — или +3, по переключателю upgradeMode" },
+      up:          { tier: "common",   on: "card",  icon: "⬆", name: "Усиление",      text: "+50% урона или брони — или +3, по переключателю upgradeMode" },
       gift:        { tier: "common",   on: "card",  icon: "🎁", name: "Дар",           text: "карта получает постоянный дар; при мердже он уходит вместе с остальными дарами" },
-      draw:        { tier: "common",   on: "card",  icon: "🂠", name: "Добор",         text: "сыграл карту — возьми ещё одну" },
-      inspire:     { tier: "common",   on: "card",  icon: "✨", name: "Воодушевление", text: "следующая атака любого героя пати бьёт на +50%" },
-      feed:        { tier: "common",   on: "card",  icon: "🔋", name: "Подпитка",      text: "отдал эту карту мерджем — союзник получает +1 энергии" },
+      draw:        { tier: "common",   on: "card",  icon: "🂠", name: "Добор",         text: "сыграл — возьми карту" },
+      inspire:     { tier: "common",   on: "card",  icon: "✨", name: "Воодушевление", text: "следующая атака пати +50%" },
+      feed:        { tier: "common",   on: "card",  icon: "🔋", name: "Подпитка",      text: "отдал мерджем — союзнику +1⚡" },
       // правки 26.11: Бронебой убран (слабый и падал постоянно). Вместо него — «Щиток» (слабее эффектов мерджа)
-      guardup:     { tier: "common",   on: "card",  icon: "⛉", name: "Щиток",         text: "сыграл карту — +3 брони себе" },
-      maxhp:       { tier: "common",   on: "hero",  icon: "❤", name: "Здоровье",      text: "+8 к макс. ХП героя (и сразу +8 ХП)" },
-      startblock:  { tier: "common",   on: "hero",  icon: "⛨", name: "Закалка",       text: "+2 к стартовому блоку героя в каждом бою" },
-      cheaper:     { tier: "uncommon", on: "card",  icon: "⚡", name: "Удешевление",   text: "карта стоит на 1 энергию меньше (не меньше 0)" },
-      retain:      { tier: "uncommon", on: "card",  icon: "📌", name: "Удержание",     text: "карта не сбрасывается в конце хода" },
+      guardup:     { tier: "common",   on: "card",  icon: "⛉", name: "Щиток",         text: "сыграл — +3 брони" },
+      maxhp:       { tier: "common",   on: "hero",  icon: "❤", name: "Здоровье",      text: "+8 макс. ХП" },
+      startblock:  { tier: "common",   on: "hero",  icon: "⛨", name: "Закалка",       text: "+2 брони в начале боя" },
+      cheaper:     { tier: "uncommon", on: "card",  icon: "⚡", name: "Удешевление",   text: "−1⚡" },
+      retain:      { tier: "uncommon", on: "card",  icon: "📌", name: "Удержание",     text: "Удержание" },
       // wide-range: w — вес в «ведре» (по умолчанию 2): Innate редкий, но за цикл ведра выпадет точно; чаще — на Power
-      innate:      { tier: "uncommon", on: "card",  icon: "☝", name: "Первая в руке", text: "карта всегда приходит в первую руку боя", w: 1 },
-      sharp:       { tier: "uncommon", on: "card",  icon: "🗡", name: "Острота",       text: "крит этой картой на 1 удар раньше (раз в 3 вместо 4)" },
-      freemerge:   { tier: "uncommon", on: "card",  icon: "🤲", name: "Лёгкая передача", text: "мердж этой картой бесплатный" },
-      killenergy:  { tier: "uncommon", on: "card",  icon: "💀", name: "Добивающая",    text: "убила врага — +1 энергии" },
+      innate:      { tier: "uncommon", on: "card",  icon: "☝", name: "Первая в руке", text: "всегда в первой руке", w: 1 },
+      sharp:       { tier: "uncommon", on: "card",  icon: "🗡", name: "Острота",       text: "крит на 1 удар раньше" },
+      freemerge:   { tier: "uncommon", on: "card",  icon: "🤲", name: "Лёгкая передача", text: "мердж бесплатный" },
+      killenergy:  { tier: "uncommon", on: "card",  icon: "💀", name: "Добивающая",    text: "убила врага — +1⚡" },
       // правки 26.11 (тест): самые сильные улучшения — с минусом (риск / награда), поле risk — текст минуса
-      echo:        { tier: "rare",     on: "card",  icon: "🔁", name: "Кровавое эхо",  text: "раз за бой: после первого розыгрыша карта возвращается в руку", risk: "возврат стоит герою 3 ХП" },
-      fury:        { tier: "rare",     on: "card",  icon: "🔥", name: "Вспышка",       text: "урон карты ×2", risk: "после розыгрыша карта уходит до конца боя (Exhaust)" },
-      awaken:      { tier: "rare",     on: "card",  icon: "🌟", name: "Пробуждение",   text: "карта становится эволюционной (золотая рамка)" },
-      strength:    { tier: "rare",     on: "hero",  icon: "💪", name: "Сила навсегда", text: "+2 к урону всех атак героя до конца забега", risk: "−8 макс. ХП" },
-      fortitude:   { tier: "rare",     on: "hero",  icon: "🛡", name: "Стойкость навсегда", text: "+2 к блоку всех карт героя до конца забега", risk: "−8 макс. ХП" },
-      ignorecover: { tier: "rare",     on: "card",  icon: "👻", name: "Сквозная",      text: "мили-карта бьёт и закрытых врагов" },
-      generous:    { tier: "rare",     on: "card",  icon: "💞", name: "Щедрая",        text: "при мердже передаёт дары дважды" },
-      partymerge:  { tier: "rare",     on: "party", icon: "🤝", name: "На всю пати",   text: "первый мердж каждого хода бесплатный для всех", eliteOnly: true },
+      echo:        { tier: "rare",     on: "card",  icon: "🔁", name: "Кровавое эхо",  text: "раз за бой возвращается в руку", risk: "−3 ХП" },
+      fury:        { tier: "rare",     on: "card",  icon: "🔥", name: "Вспышка",       text: "урон карты ×2", risk: "Экзост" },
+      awaken:      { tier: "rare",     on: "card",  icon: "🌟", name: "Пробуждение",   text: "становится эволюционной" },
+      strength:    { tier: "rare",     on: "hero",  icon: "💪", name: "Сила навсегда", text: "+2 урона всем атакам героя", risk: "−8 макс. ХП" },
+      fortitude:   { tier: "rare",     on: "hero",  icon: "🛡", name: "Стойкость навсегда", text: "+2 брони всем картам героя", risk: "−8 макс. ХП" },
+      ignorecover: { tier: "rare",     on: "card",  icon: "👻", name: "Сквозная",      text: "мили бьёт и закрытых" },
+      generous:    { tier: "rare",     on: "card",  icon: "💞", name: "Щедрая",        text: "мердж передаёт дары дважды" },
+      partymerge:  { tier: "rare",     on: "party", icon: "🤝", name: "На всю пати",   text: "первый мердж хода бесплатный всем", eliteOnly: true },
       // wide-range (24.11): эффект мерджа на карту — из пула этой карты (её mfx) и общего пула (mergeFx.*.pool)
-      mfx:         { tier: "common",   on: "card",  icon: "🟩", name: "Эффект мерджа", text: "карта получает эффект мерджа (цветная плашка)" }
+      mfx:         { tier: "common",   on: "card",  icon: "🟩", name: "Эффект мерджа", text: "эффект мерджа" }
     },
 
     // ---------- Карта похода (генерируется каждый забег) ----------
@@ -537,7 +546,9 @@ window.GAME_CONFIG = {
     //   (стычка ~4 хода, бой ~5.5, элита ~6), ХП/бой ~10%; Жрец ХП 80 → 66, призыв 1 гончей (босс тянулся 13 ходов).
     enemyHp: 1.55,            // множитель ХП и брони всех врагов в забеге
     hpPerFloor: 0.05,         // + к ХП и броне врагов за каждый этаж
-    enemyDmg: 0.75,           // множитель урона всех врагов в забеге
+    // правки 27.11 (рост урона с ходами, спайки, меньше брони у героев): урон 0.75 → 0.72. Боты medium: 0.75 — ~62% побед (28 забегов,
+    //   шумно: 50% / 83% / 33%), 0.71 — 83% (12), 0.67 — 100% (12). ХП/бой ~9–11%, ходов: стычка ~3.5, бой ~5, элита ~5.5–6, босс ~8.
+    enemyDmg: 0.72,           // множитель урона всех врагов в забеге
     dmgPerFloor: 0.04,        // + к урону врагов за каждый этаж
     // wide-range, правки 25.11: волн больше нет — бой = одна расстановка врагов на ~5–7 ходов, сразу награда.
     // first — из какого списка ниже брать расстановку. В расстановке максимум 1–2 хитрых врага (role: "special").
@@ -561,7 +572,7 @@ window.GAME_CONFIG = {
     waves: {
       small: [["cultist", "ghoul"], ["beetle", "beetle", "hound"], ["fungus", "hound", "hound"], ["slime"], ["spiker", "archer"], ["ghoul", "hound", "shaman"]],
       first: [["ghoul", "hound", "archer", "cultist"], ["ghoul", "ghoul", "hexer"], ["warden", "ghoul", "archer", "hound"], ["slime", "archer"],
-              ["beetle", "ghoul", "fungus"], ["spiker", "ghoul", "shaman"], ["hound", "hound", "ghoul", "hexer"], ["eye", "ghoul", "ghoul"]],
+              ["beetle", "ghoul", "fungus"], ["spiker", "ghoul", "shaman"], ["hound", "hound", "ghoul", "hexer"], ["eye", "ghoul", "ghoul"], ["brute", "archer"]],
       thick: [["brute", "ghoul"], ["brute", "shaman"], ["brute", "hound", "hound"], ["slime", "slime"]],
       swarm: [["hound", "hound", "hound", "hound", "hound"], ["hound", "hound", "hound", "hound", "archer"], ["hound", "hound", "hound", "archer", "archer"], ["fungus", "hound", "hound", "hound", "hound"]],
       elite: [["nob"], ["nob", "hound"], ["sleeper", "archer"], ["golem"], ["eye", "eye", "eye"], ["brute", "warden", "cultist"], ["brute", "ghoul", "hexer"]],

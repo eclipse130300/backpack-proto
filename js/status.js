@@ -17,6 +17,7 @@ BP.Status = (function () {
     if (h.dmgBuff) add("💪", `Сила ${h.dmgBuff > 0 ? "+" : ""}${h.dmgBuff}`, `Каждая карта героя наносит на ${Math.abs(h.dmgBuff)} урона ${h.dmgBuff > 0 ? "больше" : "меньше"}.${h.strTurn ? ` Из них ${h.strTurn} — только на этот ход.` : ""}`, h.dmgBuff < 0);
     if (h.blockBuff) add("🛡️", `Стойкость +${h.blockBuff}`, `Каждая карта защиты героя даёт на ${h.blockBuff} блока больше.${h.toughTurn ? ` Из них ${h.toughTurn} — только на этот ход.` : ""}`);
     if (h.miss) add("🌫", `Завеса${h.miss > 1 ? " " + h.miss : ""}`, `Следующ${h.miss > 1 ? "ие " + h.miss + " удара" : "ий удар"} врага по герою промахнётся.`);
+    if (h.arcane) add("✨", `Чародейство +${h.arcane}`, `Следующая Магическая стрела в этот ход бьёт на ${h.arcane} сильнее. Сгорает в конце хода.`);
     if (h.critReady) add("💥", "Крит готов", "Следующий удар героя — крит.");
     if (h.barrier) add("🔰", `Барьер ${h.barrier}`, `Блокирует ${h.barrier === 1 ? "1 удар" : h.barrier + " удара"} любого врага целиком.`);
     if (h.thorns) add("🌵", `Шипы ${h.thorns}`, `Враг, ударивший героя, получает ${h.thorns} урона.`);
@@ -33,6 +34,8 @@ BP.Status = (function () {
   function enemy(state, e) {
     const out = [], add = (icon, name, text, bad) => out.push({ icon, name, text, bad: !!bad });
     const vs = e.vuln === true ? 1 : e.vuln || 0;
+    const rp = BP.Foes.ramp ? BP.Foes.ramp(state) : 0; // 27.11: рост урона с ходами
+    if (rp > 0) add("⏫", `Ярость боя +${Math.round(rp * 100)}%`, `Бой затянулся: удары врагов сильнее на ${Math.round(rp * 100)}%. Каждый ход ещё +${Math.round(state.config.rules.enemyRamp.per * 100)}%.`, true);
     if (e.str) add("💪", `Сила ${e.str > 0 ? "+" : ""}${e.str}`, `Каждый удар врага ${e.str > 0 ? "сильнее" : "слабее"} на ${Math.abs(e.str)} до конца боя.`, e.str > 0);
     if (e.stunned) add("💫", "Оглушён", "Пропустит своё действие.");
     if (vs) add("💥", `Уязвимость +${vs * 50}%`, `Получает на ${vs * 50}% больше урона до конца хода.`);

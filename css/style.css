@@ -627,3 +627,37 @@ button.evo-btn { background: #6a3aa8; border-color: #b77cff; color: #fff; }
 .bigcard .bc-risk { margin: 8px 0; padding: 6px 9px; border: 2px solid #d84a4a; border-radius: 10px; background: #d84a4a22; color: #ffb0a8; font-size: 14px; font-weight: 700; }
 .bigcard .bc-riskt { color: #ff9a90; }
 .rstage .rskip.big { align-self: center; margin: 0; }
+
+/* ---------- правки 27.11: эффекты карты значками в двух рамках (js/ui-cardfx.js) ---------- */
+/* зелёная — активные эффекты, синяя — эффекты мерджа, которые сработают при мердже */
+.fxrow { display: flex; flex-wrap: wrap; justify-content: center; gap: 1px 3px; border-radius: 6px; padding: 0 3px; margin: 2px -4px 0; }
+.fxrow.act { border: 1.5px solid #3fbf5a; background: #1f5a2a66; }
+.fxrow.pot { border: 1.5px solid #4a8ad8; background: #1e3a6a66; }
+.fxchip { display: inline-flex; align-items: center; gap: 1px; font-size: 12px; line-height: 17px; white-space: nowrap; color: #f3ead8; }
+.fxchip b { font-weight: 900; font-size: 12px; }
+.fxchip i { font-style: normal; font-size: 9px; opacity: .75; margin-right: 1px; }
+.fxchip.m { color: #ffe39a; }
+.card:has(.fxrow) .cname { min-height: 0; justify-content: center; }
+@media (max-height: 820px) { .fxchip, .fxchip b { font-size: 10px; line-height: 14px; } }
+.card .cstats .st.atk.up b { color: #ff4a3a; text-shadow: 0 0 4px #ff2a1a88; }
+.card .cstats .st.atk.down b { color: #9a948a; }
+.bigcard .bc-frames { margin: 6px 0 2px; }
+.bigcard .bc-frames .fxrow { margin: 4px 0; padding: 2px 6px; gap: 2px 8px; }
+.bigcard .bc-frames .fxchip, .bigcard .bc-frames .fxchip b { font-size: 17px; line-height: 24px; }
+.bigcard .bc-frames .fxchip i { font-size: 12px; }
+.bigcard .bc-text { font-size: 18px; font-weight: 700; }
+.bigcard .dmg-up { color: #ff5a45; font-weight: 900; }
+.bigcard .dmg-down { color: #a8a094; }
+.bigcard .bc-merge { background: #1e3a6a55; border-color: #4a8ad8; }
+.bigcard .bc-sec { color: #9cc4ff; }
+.bigcard .bc-mfx { align-items: center; font-size: 15px; }
+.bigcard .bc-mfx i { font-style: normal; font-size: 12px; opacity: .75; }
+.bigcard .bc-mi { min-width: 34px; font-weight: 800; }
+.ctip2.fxdet { max-width: 330px; padding: 8px 10px; pointer-events: none; }
+.fxd { display: flex; gap: 9px; align-items: flex-start; margin: 5px 0; font-size: 13px; line-height: 1.35; }
+.fxd .fxchip { flex: none; min-width: 46px; justify-content: center; border: 1.5px solid #3fbf5a; border-radius: 6px; padding: 1px 3px; font-size: 14px; }
+.fxd .fxchip.p { border-color: #4a8ad8; }
+/* 27.11: намерение и имя врага в одну строку — не закрывают полоску ХП */
+.hex .ename { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.hex .intent { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112%; }
+.bigcard .bc-mi { white-space: nowrap; }

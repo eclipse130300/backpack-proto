@@ -84,11 +84,14 @@ BP.Icons = (function () {
   function costHtml(c) {
     return `<div class="cost" title="Стоимость в энергии"><i>⚡</i>${c.cost}</div>`;
   }
-  function statsHtml(c) {
+  // 27.11: с state и hero урон показывается «как сейчас» (Сила, мердж, улучшения): больше базового — красным, меньше — серым
+  function statsHtml(c, state, hero) {
     const ef = c.effects || [], d = ef.find((e) => e.type === "damage");
     const blk = ef.filter((e) => e.type === "block" || e.type === "blockSelf" || e.type === "blockHero").reduce((a, e) => a + e.amount, 0);
     const rows = [];
-    if (d) rows.push(`<div class="st atk" title="Урон">⚔️<b>${d.amount}${d.hits > 1 ? `<small>×${d.hits}</small>` : ""}</b></div>`);
+    const dn = d && state && BP.CardFx ? BP.CardFx.damageNow(state, hero, c) : null;
+    const dv = dn ? dn.v : d && d.amount, dc = dn ? (dn.v > dn.base ? " up" : dn.v < dn.base ? " down" : "") : "";
+    if (d) rows.push(`<div class="st atk${dc}" title="Урон">⚔️<b>${dv}${d.hits > 1 ? `<small>×${d.hits}</small>` : ""}</b></div>`);
     if (blk) rows.push(`<div class="st blk" title="Блок">🛡️<b>${blk}</b></div>`);
     return rows.length ? `<div class="cstats">${rows.join("")}</div>` : "";
   }
