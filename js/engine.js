@@ -156,7 +156,7 @@ BP.Engine = (function () {
       if (BP.Mech.heroTurnStart(h)) { h.energy = 0; h.bonusEnergy = 0; log(state, h.name, "выведен из игры на этот ход"); return; } // Жрец
       h.energy = state.config.rules.energy + h.bonusEnergy; h.bonusEnergy = 0;
       if (BP.Wide && BP.Wide.on(state)) { const n = BP.Wide.turnStart(state, h); if (n) log(state, h.name, n); } // Угасание
-      drawCards(state, h, state.config.rules.drawPerTurn); // фиксированный добор, не «до N»
+      state.startDraw = true; drawCards(state, h, state.config.rules.drawPerTurn); state.startDraw = false; // фиксированный добор, не «до N»; startDraw — для «Ловкости рук»
     });
     arrive(state, BP.Reinforce.onTurnStart(state, maker(state)));
     state.enemies.forEach((e) => { if (e.alive) { e.pushedThisTurn = false; e.vuln = false; e.deathMark = null; computeIntent(state, e); } });
@@ -372,6 +372,7 @@ BP.Engine = (function () {
     if (card.upInspire) { state.inspire = (state.inspire || 0) + card.upInspire; notes.push(`следующая атака пати +${state.inspire * 50}%`); }
     if (card.upKillEnergy && (state.playKills || []).length) { hero.energy += card.upKillEnergy; notes.push(`добивание: +${card.upKillEnergy} энергии`); }
     if (card.upDraw) { drawCards(state, hero, card.upDraw); notes.push(`добор +${card.upDraw}`); }
+    if (card.upCleanse && ((hero.debuffs || []).length || hero.disableNext)) { hero.debuffs = []; hero.disableNext = false; notes.push(`${hero.name} очищен от дебаффов`); } // 28.11
     if (card.upBlock) { const a = BO(card.upBlock); hero.block += a; notes.push(`щиток: +${a} брони`); } // правки 26.11
     // Палач (эволюция): убил цель — карта возвращается в руку; Эхо — раз за бой; иначе в сброс (квестовая — пропадает)
     if (card.returnOnKill && primary && !primary.alive) { hero.hand.push(realCard); notes.push(`«${card.name}» вернулась в руку`); }

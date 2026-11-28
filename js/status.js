@@ -34,8 +34,7 @@ BP.Status = (function () {
   function enemy(state, e) {
     const out = [], add = (icon, name, text, bad) => out.push({ icon, name, text, bad: !!bad });
     const vs = e.vuln === true ? 1 : e.vuln || 0;
-    const rp = BP.Foes.ramp ? BP.Foes.ramp(state) : 0; // 27.11: рост урона с ходами
-    if (rp > 0) add("⏫", `Ярость боя +${Math.round(rp * 100)}%`, `Бой затянулся: удары врагов сильнее на ${Math.round(rp * 100)}%. Каждый ход ещё +${Math.round(state.config.rules.enemyRamp.per * 100)}%.`, true);
+    // 28.11: рост урона врагов с ходами (rules.enemyRamp) работает, но статусом не показывается — видно по намерениям
     if (e.str) add("💪", `Сила ${e.str > 0 ? "+" : ""}${e.str}`, `Каждый удар врага ${e.str > 0 ? "сильнее" : "слабее"} на ${Math.abs(e.str)} до конца боя.`, e.str > 0);
     if (e.stunned) add("💫", "Оглушён", "Пропустит своё действие.");
     if (vs) add("💥", `Уязвимость +${vs * 50}%`, `Получает на ${vs * 50}% больше урона до конца хода.`);

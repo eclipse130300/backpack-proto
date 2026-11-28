@@ -91,9 +91,8 @@ BP.Wide2 = (function () {
   // ---------- «Приказ полководца» ----------
   function costDown(state, c) { if (state.costDown && c.cost > 0 && !c.tmpDown) { const d = Math.min(c.cost, state.costDown); c.cost -= d; c.tmpDown = d; } }
   function partyTurnEnd(state) {
-    if (!state.costDown) return;
-    state.costDown = 0;
-    state.heroes.forEach((h) => [h.hand, h.draw, h.discard, h.exhausted || []].forEach((pile) => pile.forEach((c) => { if (c.tmpDown) { c.cost += c.tmpDown; delete c.tmpDown; } })));
+    state.costDown = 0; // 28.11: tmpDown ставит и «Ловкость рук» — возвращаем стоимость всегда
+    state.heroes.forEach((h) => [h.hand, h.draw, h.discard, h.exhausted || []].forEach((pile) => pile.forEach((c) => { if (c.tmpDown) { c.cost += c.tmpDown; delete c.tmpDown; } delete c.freeNow; })));
   }
 
   // ---------- эффекты карт ----------

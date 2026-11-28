@@ -88,6 +88,10 @@ BP.Meta = (function () {
     if (u.awaken && state.config.cards[u.awaken]) card.evolve = u.awaken;
     if (u.ignorecover) card.ignoreCover = true;
     if (u.generous) card.generous = true;
+    if (u.capup) card.capUp = u.capup; // 28.11: «Размах» — кап мерджа (число, не счётчик)
+    if (u.extra) card.extraDmg = (card.extraDmg || 0) + 2 * u.extra; // 28.11: «Доп. урон»
+    if (u.cleanse) card.upCleanse = true;
+    if (u.drawfree) card.drawFree = true;
     if (u.mfx && u.mfx.length && BP.Wide) BP.Wide.addFx(state, card, u.mfx); // wide-range: эффекты мерджа из наград
     card.ups = clone(u);
     card.upgraded = Object.keys(u).length > 0;
@@ -116,6 +120,10 @@ BP.Meta = (function () {
   const hasDB = (c) => (c.effects || []).concat(c.alt ? c.alt.effects : []).some((e) => ["damage", "block", "blockSelf"].includes(e.type));
   const hasDmg = (c) => (c.effects || []).some((e) => e.type === "damage");
 
+  // Кап мерджа карты (плашка mergeFx с do.flat): число или null
+  function capFlat(c) { const f = (c.mfx || []).find((x) => x.do && x.do.flat !== undefined); return f ? Math.max(f.do.flat, c.capUp || 0) : null; }
+  const capValue = (state, kind) => (M(state).capByKind || {})[kind] || 4;
+
   // Подходит ли улучшение id готовой карте c (spec — её описание)
   function fits(state, id, c, spec) {
     const m = M(state), u = spec.ups || {};
@@ -137,6 +145,10 @@ BP.Meta = (function () {
       case "sharp": return hasDmg(c) && !!c.weapon && !c.alwaysCrit && (state.config.weapons[c.weapon] || {}).critEvery > (c.sharpPerm || 0) + 1;
       case "awaken": return !c.evolve && hasDmg(c) && evolutions(state, c).length > 0;
       case "ignorecover": return c.attack === "melee" && !c.ignoreCover && hasDmg(c);
+      case "capup": return !u.capup && capFlat(c) !== null && capFlat(c) < 4; // есть плашка «максимум +N» меньше +4
+      case "extra": return hasDmg(c) && !c.power;
+      case "cleanse": return !u.cleanse && !hasDmg(c) && !c.power && !c.unplayable;
+      case "drawfree": return !u.drawfree && c.cost > 0 && !c.innate;
       case "mfx": return !!BP.Wide && BP.Wide.rewardFx(state, c).length > 0;
     }
     return false;
@@ -216,7 +228,7 @@ BP.Meta = (function () {
     const heroUsed = [...used].some((id) => (m.upgrades[id] || {}).on === "hero");
     const ids0 = shuffle(Object.keys(m.upgrades).filter((id) => {
       const u = m.upgrades[id];
-      if (u.tier !== tier || used.has(id)) return false;
+      if ((u.tier !== tier && !(u.tiers || []).includes(tier)) || used.has(id)) return false; // 28.11: tiers — улучшение в нескольких редкостях
       if (id === "startblock" && !((state.config.tests || {}).startBlock || {}).enabled) return false; // правки 25.11: без стартовой брони — бесполезно
       if (u.on === "hero" && (heroUsed || Math.random() < 0.5)) return false;
       if (u.treasureOnly) return kind === "treasure" && !state.run.relics[id];
@@ -230,13 +242,14 @@ BP.Meta = (function () {
     for (const id of ids) {
       const u = m.upgrades[id];
       if (u.on === "hero" || u.on === "party") { used.add(id); return { type: "up", up: id, rarity: tier }; }
-      const fitting = shuffle(h.runCards.slice()).filter((c) => fits(state, id, c, specOf(state, hid, c.spec)));
+      const fitting = shuffle(h.runCards.slice()).filter((c) => fits(state, id, c, specOf(state, hid, c.spec)) && (id !== "capup" || capFlat(c) < capValue(state, kind)));
       // Innate — чаще на Power (их хочется иметь с начала боя)
       const cand = id === "innate" && Math.random() < 0.7 ? fitting.find((c) => c.power) || fitting[0] : fitting[0];
       if (!cand) continue;
       const o = { type: "up", up: id, spec: cand.spec, rarity: tier };
       if (id === "gift") o.gift = rand(giftOptions(state, cand));
       if (id === "awaken") o.evo = rand(evolutions(state, cand));
+      if (id === "capup") o.cap = capValue(state, kind);
       if (id === "mfx") o.mfx = bag(state, "mfx:" + cand.id, BP.Wide.rewardFx(state, cand));
       used.add(id);
       return o;
@@ -280,6 +293,7 @@ BP.Meta = (function () {
     if (o.up === "gift") ups.gift = (ups.gift || []).concat(o.gift);
     else if (o.up === "mfx") ups.mfx = (ups.mfx || []).concat(o.mfx);
     else if (o.up === "awaken") ups.awaken = o.evo;
+    else if (o.up === "capup") ups.capup = Math.max(ups.capup || 0, o.cap || 4);
     else ups[o.up] = (ups[o.up] || 0) + 1;
   }
 
@@ -372,6 +386,7 @@ BP.Meta = (function () {
     const u = M(state).upgrades[o.up];
     if (o.up === "up") return M(state).upgradeMode === "flat" ? `+${M(state).upFlat} урона или брони` : `+${Math.round(M(state).upPercent * 100)}% урона или брони`;
     if (o.up === "gift") return `постоянный дар «${(state.config.gifts[o.gift] || {}).name}»: ${(state.config.gifts[o.gift] || {}).text}`;
+    if (o.up === "capup") return `мердж в эту карту даёт до +${o.cap || 4} урона`;
     if (o.up === "awaken") return `эволюционирует в «${(state.config.cards[o.evo] || {}).name}»`;
     if (o.up === "mfx") { const f = (state.config.mergeFx || {})[o.mfx] || {}; return `Мердж: ${String(f.text || o.mfx).replace(/^Мердж:\s*/, "")}`; }
     return u.text + (u.risk ? `, ${u.risk}` : ""); // 27.11: коротко — «урон карты ×2, Экзост»

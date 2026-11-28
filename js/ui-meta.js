@@ -91,7 +91,9 @@ BP.UIMeta = (function () {
     const u = o.type === "up" ? s.config.meta.upgrades[o.up] || {} : null, pv = o.preview;
     if (o.type === "card" || o.type === "dupe") return { kind: o.type === "card" ? "🂠 Новая карта" : "🂠 Копия карты", html: pv ? BP.BigCard.html(s, h, pv) : "" };
     if (u && (u.on === "hero" || u.on === "party")) return { kind: u.on === "hero" ? "❤ Усиление героя" : "🤝 Всей пати", html: heroBoost(s, h, o) };
-    const hl = `<div class="bc-hl"><b>＋ ${esc(BP.Meta.offerTitle(s, o))}</b><br>${esc(BP.Meta.offerText(s, o))}</div>`;
+    // 28.11: что даёт улучшение — зелёным в описании карты; эффект мерджа — словами здесь (в синей рамке он не выделен)
+    const f = o.up === "mfx" && (s.config.mergeFx || {})[o.mfx];
+    const hl = `<div class="bc-hl"><b>＋ ${esc(BP.Meta.offerTitle(s, o))}</b>${f ? `<br>${BP.CardFx.fxSay(f, pv)}` : ""}</div>`;
     return { kind: "⬆ Улучшение карты", html: pv ? BP.BigCard.html(s, h, pv, { highlight: hl, skipUp: o.up }) : "" };
   }
   function toggleOpen(heroId) { if (s0 && s0.reward) tabs[s0.reward.id] = heroId; }

@@ -18,7 +18,7 @@ BP.Cards = (function () {
     (card.effects || []).forEach((e) => {
       switch (e.type) {
         case "damage": {
-          parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}`);
+          parts.push(`${e.amount} урона${e.hits > 1 ? ` ×${e.hits}` : ""}${areaLabel(card) ? " " + areaLabel(card) : ""}${card.extraDmg ? `, доп. урон ${card.extraDmg}` : ""}`);
           break;
         }
         case "block": parts.push(`${e.amount} блока${card.target === "hero" || card.target === "ally" ? " цели" : ""}`); break;
@@ -212,7 +212,7 @@ BP.Cards = (function () {
     const targets = areaTargets(state, hero, card, target);
     // + Сила (js/mech.js). wide-range: Сила ×strMult (Тяжёлый удар), урон = броня героя (Удар щитом), массовки + Сила стихий
     const per = card.perHand ? hero.hand.filter((c) => c.uid !== card.uid).length : 1; // Разряд колчана: × карт в руке
-    const base = Math.max(0, dmgEff.amount * per + (card.perBone ? (hero.bones || 0) * card.perBone : 0) + (card.dmgFromBlock ? hero.block || 0 : 0) - weakness(hero) + (hero.dmgBuff || 0) * (card.strMult || 1) + (card.attack === "aoe" ? hero.aoeBonus || 0 : 0) + (card.arcane ? hero.arcane || 0 : 0)); // 27.11: Чародейство (Магическая стрела)
+    const base = Math.max(0, dmgEff.amount * per + (card.perBone ? (hero.bones || 0) * card.perBone : 0) + (card.dmgFromBlock ? hero.block || 0 : 0) - weakness(hero) + (hero.dmgBuff || 0) * (card.strMult || 1) + (card.attack === "aoe" ? hero.aoeBonus || 0 : 0) + (card.arcane ? hero.arcane || 0 : 0) + (card.extraDmg || 0)); // 28.11: Доп. урон; 27.11: Чародейство (Магическая стрела)
     const areaHits = targets.map((t) => ({ enemy: t.e.uid, amount: Math.ceil(base * t.f - 1e-9) })); // до крита — для Повтора
     const crit = card.weapon && !card.weak ? hero.crit[card.weapon] : null; // слабые удары не двигают крит и не критуют (18.10)
     const every = crit ? Math.max(1, crit.every - (card.sharpPerm || 0)) : 0; // beta-meta: «Острота» — крит этой картой на N ударов раньше

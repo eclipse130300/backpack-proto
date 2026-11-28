@@ -8,7 +8,7 @@
 // =====================================================================
 window.GAME_CONFIG = {
   // Версия конфига. Если поменялась, старые «Настройки» хоста из браузера не применяются (иначе в них нет новых полей).
-  version: 23,   // wide-range, правки 27.11: рост урона врагов с ходами, спайки, маг без брони, Огненное кольцо, Магическая стрела
+  version: 24,   // wide-range, правки 28.11: новые улучшения (Размах, Доп. урон, Очищение, Ловкость рук), карта «Зазубренная стрела»
 
   // ---------- Базовые правила боя ----------
   rules: {
@@ -295,6 +295,9 @@ window.GAME_CONFIG = {
     a_double:   { name: "Двойной выстрел",    cost: 1, icon: "arrows", target: "enemy", attack: "ranged", rarity: "common", build: ["crit"], mfx: ["flat2hit"], effects: [{ type: "damage", amount: 3, hits: 2 }] },
     a_hone:     { name: "Заточка стрел",      cost: 1, icon: "aim",    target: "none", power: true, rarity: "uncommon", build: ["crit"], effects: [{ type: "critShift", amount: 1 }] },
     a_cold:     { name: "Хладнокровие",       cost: 1, icon: "aim",    target: "none", rarity: "common", build: ["crit"], mfx: ["atk_dmg2"], effects: [{ type: "critReady" }] },
+    // 28.11: Доп. урон (extraDmg) — эффект карты: +N к каждому удару (массовка — каждой цели). В мердже переходит целиком,
+    //   кап массовок/мультиударов на него НЕ действует (Зазубренная стрела в Шквал ударов → каждый из 4 ударов +2)
+    a_barbed:   { name: "Зазубренная стрела", cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", extraDmg: 2, rarity: "uncommon", build: ["crit"], isNew: true, added: "28.11", effects: [{ type: "damage", amount: 3 }] },
     a_pass:     { name: "Передача прицела",   cost: 1, icon: "arrow",  target: "enemy", attack: "ranged", rarity: "uncommon", build: ["crit"], mfx: ["crit_move"], effects: [{ type: "damage", amount: 4 }] },
     a_heart:    { name: "Выстрел в сердце",   cost: 3, icon: "aim",    target: "enemy", attack: "ranged", critMult: 3, rarity: "rare", build: ["crit"], mfx: ["cost1_crit"], effects: [{ type: "damage", amount: 14 }] },
     a_rain:     { name: "Град стрел",         cost: 2, icon: "rain",   target: "cell", attack: "aoe", area: "row", rarity: "uncommon", build: ["crit", "trap"], mfx: ["flat4"], effects: [{ type: "damage", amount: 4 }] },
@@ -357,7 +360,7 @@ window.GAME_CONFIG = {
   // cards — все карты героя (пул наград и колода). Стартовая колода — meta.start.
   weapons: {
     sword: { name: "Меч",   kind: "weapon", icon: "w_sword", critEvery: 4, cards: { w_strike: 1, w_defend: 1, w_ram: 1, w_cleave: 1, w_swordshield: 1, w_cover: 1, w_warcry: 1, w_wall: 1, w_guard: 1, w_bash: 1, w_unbreak: 1, w_spikes: 1, w_stance: 1, w_temper: 1, w_comrades: 1, w_heavy: 1, w_feed: 1, w_frenzy: 1, w_dash: 1, w_flurry: 1, w_second: 1, w_anger: 1 } },
-    bow:   { name: "Лук",   kind: "weapon", icon: "w_bow",   critEvery: 3, cards: { a_shot: 1, a_defend: 1, a_heavy: 1, a_retreat: 1, a_cloak: 1, a_bounce: 1, a_aimed: 1, a_quick: 1, a_rico: 1, a_double: 1, a_hone: 1, a_cold: 1, a_pass: 1, a_heart: 1, a_rain: 1, a_smoke: 1, a_quiver: 1, a_patience: 1, a_string: 1, a_volley: 1, a_snare: 1, a_wire: 1, a_smoketrap: 1, a_detonate: 1 } },
+    bow:   { name: "Лук",   kind: "weapon", icon: "w_bow",   critEvery: 3, cards: { a_shot: 1, a_defend: 1, a_heavy: 1, a_retreat: 1, a_cloak: 1, a_bounce: 1, a_aimed: 1, a_quick: 1, a_rico: 1, a_double: 1, a_hone: 1, a_cold: 1, a_pass: 1, a_barbed: 1, a_heart: 1, a_rain: 1, a_smoke: 1, a_quiver: 1, a_patience: 1, a_string: 1, a_volley: 1, a_snare: 1, a_wire: 1, a_smoketrap: 1, a_detonate: 1 } },
     staff: { name: "Посох", kind: "weapon", icon: "w_staff", critEvery: 4, cards: { m_bolt: 1, m_frost: 1, m_arc: 1, m_focus: 1, m_spark: 1, m_barrier: 1, m_wedge: 1, m_blast: 1, m_elements: 1, m_power: 1, m_meteor: 1, m_bleed: 1, m_bloodbolt: 1, m_pact: 1, m_harvest: 1, m_bonespear: 1, m_deathmark: 1, m_bonestorm: 1, m_necro: 1 } }
   },
 
@@ -489,7 +492,9 @@ window.GAME_CONFIG = {
       elite:    { card: [20, 50, 30], dupe: 0.2, ups: 1 },
       treasure: { card: [0, 40, 60],  dupe: 0 }   // сокровища на карте сейчас нет (11.11 → мердж-кузни), оставлено на будущее
     },
-    // id: tier (common | uncommon | rare), on: card — на конкретную карту, hero — герою, party — всей пати.
+    // правки 28.11: улучшение «Размах» — до какого урона поднимается кап мерджа по типу боя (босс сейчас награды не даёт — конец забега)
+    capByKind: { fight: 4, elite: 6, treasure: 6, boss: 8 },
+    // id: tier (common | uncommon | rare), tiers: [...] — ещё в каких редкостях выпадает, on: card — на конкретную карту, hero — герою, party — всей пати.
     // Тексты — для экрана наград и окна «Улучшения». Поведение — js/meta.js (apply) и engine.js.
     // 27.11: тексты короткие (как на карте: «урон карты ×2, Экзост»), подробности — в подсказках
     upgrades: {
@@ -518,6 +523,14 @@ window.GAME_CONFIG = {
       ignorecover: { tier: "rare",     on: "card",  icon: "👻", name: "Сквозная",      text: "мили бьёт и закрытых" },
       generous:    { tier: "rare",     on: "card",  icon: "💞", name: "Щедрая",        text: "мердж передаёт дары дважды" },
       partymerge:  { tier: "rare",     on: "party", icon: "🤝", name: "На всю пати",   text: "первый мердж хода бесплатный всем", eliteOnly: true },
+      // правки 28.11: «Размах» — кап мерджа массовки / мультиудара (плашка «максимум +N») поднимается до +4 / +6 / +8
+      //   по типу боя, в котором выпало (capByKind). Не складывается — остаётся лучшее
+      capup:       { tier: "uncommon", tiers: ["rare"], on: "card",  icon: "📈", name: "Размах",        text: "мердж в эту карту даёт до +N урона" },
+      // правки 28.11: «Доп. урон» — эффект карты: +2 к каждому удару, в мердже переходит целиком (кап массовок не режет)
+      extra:       { tier: "common",   on: "card",  icon: "➕", name: "Доп. урон",     text: "+2 урона каждым ударом" },
+      // правки 28.11: редкие — «Очищение» (карты без урона, не Power) и «Ловкость рук»
+      cleanse:     { tier: "rare",     on: "card",  icon: "✚", name: "Очищение",      text: "сыграл — с героя снимаются все дебаффы" },
+      drawfree:    { tier: "rare",     on: "card",  icon: "🎴", name: "Ловкость рук",  text: "пришла добором посреди хода — стоит 0⚡" },
       // wide-range (24.11): эффект мерджа на карту — из пула этой карты (её mfx) и общего пула (mergeFx.*.pool)
       mfx:         { tier: "common",   on: "card",  icon: "🟩", name: "Эффект мерджа", text: "эффект мерджа" }
     },

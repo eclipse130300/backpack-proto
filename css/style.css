@@ -661,3 +661,10 @@ button.evo-btn { background: #6a3aa8; border-color: #b77cff; color: #fff; }
 .hex .ename { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .hex .intent { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112%; }
 .bigcard .bc-mi { white-space: nowrap; }
+/* правки 28.11: условие эффекта мерджа на миниатюре — красный «!»; крупная карта словами, полученное зелёным */
+.fxchip i.cnd { color: #ff4a3a; font-weight: 900; font-size: 13px; opacity: 1; margin-right: 2px; }
+.fxd .fxchip i.cnd { font-size: 15px; }
+.bigcard .bc-text { font-size: 17px; font-weight: 600; line-height: 1.35; }
+.bigcard .bc-gain { color: #6fe08a; }
+.bigcard .bc-mfx { display: block; font-size: 15px; font-weight: 600; }
+.bigcard .bc-mfx .mi { font-size: 14px; }

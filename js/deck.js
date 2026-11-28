@@ -72,6 +72,8 @@ BP.Deck = (function () {
         if (BP.Wide && !BP.Wide.handRoom(state)) { const c = hero.draw.pop(); hero.discard.push(c); BP.Engine.log(state, hero.name, `рука пати полна — «${c.name}» сгорела`); continue; }
         hero.hand.push(hero.draw.pop());
         if (BP.Wide2) BP.Wide2.costDown(state, hero.hand[hero.hand.length - 1]); // «Приказ полководца»
+        { const c = hero.hand[hero.hand.length - 1]; // 28.11: «Ловкость рук» — пришла добором посреди хода → 0⚡ до конца хода
+          if (c.drawFree && !state.startDraw && state.phase === "players" && c.cost > 0) { c.tmpDown = (c.tmpDown || 0) + c.cost; c.cost = 0; c.freeNow = true; } }
         continue;
       }
       if (!hero.draw.length && !sh.draw.length) {

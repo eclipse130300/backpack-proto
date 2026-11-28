@@ -185,7 +185,7 @@ BP.CardTip = (function () {
     const list = BP.CardFx.details(s, h, c);
     if (!list.length) return;
     side.className = "ctip2 fxdet";
-    side.innerHTML = list.map((x) => `<div class="fxd ${x.kind}"><span class="fxchip${x.kind === "pot" ? " p" : ""}">${x.cond ? `<i>${esc(x.cond)}→</i>` : ""}${esc(x.icon)}${x.val !== undefined && x.val !== "" ? `<b>${esc(x.val)}</b>` : ""}</span><div>${esc(x.long)}</div></div>`).join("");
+    side.innerHTML = list.map((x) => `<div class="fxd ${x.kind}"><span class="fxchip${x.kind === "pot" ? " p" : ""}">${x.cond ? `<i class="cnd">!</i>` : ""}${esc(x.icon)}${x.val !== undefined && x.val !== "" ? `<b>${esc(x.val)}</b>` : ""}</span><div>${esc(x.long)}</div></div>`).join("");
     side.style.display = "block";
     const br = box.getBoundingClientRect(), w = side.offsetWidth, hh = side.offsetHeight;
     const x = br.right + 8 + w < innerWidth ? br.right + 8 : br.left - w - 8;
@@ -205,13 +205,38 @@ BP.CardTip = (function () {
 
   function hide() {
     clearTimeout(t1); clearTimeout(t2); clearTimeout(hideT);
-    cur = null; rowKey = null;
+    cur = null; rowKey = null; rwKey = null; clearTimeout(rwT);
     if (box) { box.style.display = "none"; side.style.display = "none"; }
+  }
+
+  // 28.11: экран наград — навёл на карту, через 0.6 с сбоку подсказки по каждому эффекту (что значат значки и слова)
+  let rwKey = null, rwT = null;
+  function rewardTip(e, s) {
+    const el = s && s.phase === "reward" && e.target.closest && e.target.closest(".rpick[data-hero][data-idx]");
+    const k = el ? el.dataset.hero + ":" + el.dataset.idx : null;
+    if (k === rwKey) return !!el;
+    rwKey = k; clearTimeout(rwT); if (side) side.style.display = "none";
+    if (!el) return false;
+    rwT = setTimeout(() => {
+      const o = ((s.reward && s.reward.offers[el.dataset.hero]) || [])[+el.dataset.idx], h = s.heroes.find((x) => x.id === el.dataset.hero);
+      if (!o || !o.preview || !h || !document.body.contains(el)) return;
+      const list = BP.CardFx.details(s, h, o.preview);
+      if (!list.length) return;
+      ensure();
+      side.className = "ctip2 fxdet";
+      side.innerHTML = list.map((x) => `<div class="fxd ${x.kind}"><span class="fxchip${x.kind === "pot" ? " p" : ""}">${x.cond ? `<i class="cnd">!</i>` : ""}${esc(x.icon)}${x.val !== undefined && x.val !== "" ? `<b>${esc(x.val)}</b>` : ""}</span><div>${esc(x.long)}</div></div>`).join("");
+      side.style.display = "block";
+      const br = el.getBoundingClientRect(), w = side.offsetWidth, hh = side.offsetHeight;
+      const x = br.right + 8 + w < innerWidth ? br.right + 8 : br.left - w - 8;
+      side.style.left = Math.max(8, x) + "px"; side.style.top = Math.max(8, Math.min(br.top, innerHeight - hh - 8)) + "px";
+    }, 600);
+    return true;
   }
 
   function onMove(e) {
     mx = e.clientX; my = e.clientY;
     const s = st();
+    if (BP.CardFx && (rewardTip(e, s) || rwKey)) return;
     if (!s || s.phase === "lobby" || (BP.Drag && BP.Drag.isDragging())) { hide(); return; }
     const overTip = e.target.closest && (e.target.closest(".ctip") || e.target.closest(".ctip2"));
     const cardEl = e.target.closest && e.target.closest(".hand .card[data-card]");

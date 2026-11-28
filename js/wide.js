@@ -25,7 +25,7 @@ BP.Wide = (function () {
   const dmgOf = (card) => (card.effects || []).find((e) => e.type === "damage");
   const POSITIONAL = ["push", "pull", "pushOut"];
   const SNAP = ["effects", "target", "attack", "area", "shape", "fixedShape", "fixed", "shapeSteps", "shapeName", "rays",
-    "chain", "chainDmg", "ricochet", "ricoDmg", "cost", "retain", "ex", "alwaysCrit", "strMult", "dmgFromBlock", "critMult"];
+    "chain", "chainDmg", "ricochet", "ricoDmg", "cost", "retain", "ex", "alwaysCrit", "strMult", "dmgFromBlock", "critMult", "extraDmg"];
 
   // ---------- карты ----------
   // Описания эффектов мерджа по id (из конфига). fromRewards — на карту ставятся только ограничения (fixed)
@@ -127,7 +127,7 @@ BP.Wide = (function () {
       else mods[k] = m[k];
     }));
     // массовка / мультиудар: мердж прибавляет ровно flat урона за донора (плашка самой карты, fixed)
-    const hostFx = ((dst.mfx || []).find((f) => f.do && f.do.flat) || { do: {} }).do, hostFlat = hostFx.flat, hostFlatTotal = !!hostFx.total;
+    const hostFx = ((dst.mfx || []).find((f) => f.do && f.do.flat) || { do: {} }).do, hostFlat = hostFx.flat !== undefined ? Math.max(hostFx.flat, dst.capUp || 0) : undefined, hostFlatTotal = !!hostFx.total;
     donors.forEach((d) => {
       const db = d.wBase || d, dd = (db.effects || []).find((e) => e.type === "damage");
       let hd = dmgOf(dst);
@@ -151,6 +151,7 @@ BP.Wide = (function () {
         const same = dst.effects.find((x) => x.type === ee.type && x.dur === ee.dur && !!x.party === !!ee.party && x.amount !== undefined);
         if (same && ee.amount !== undefined) same.amount += ee.amount; else if (!same || ee.amount !== undefined) dst.effects.push(ee);
       });
+      if (db.extraDmg) dst.extraDmg = (dst.extraDmg || 0) + db.extraDmg; // 28.11: Доп. урон переходит целиком, кап на него не действует
       if (db.ex) dst.ex = true;
       if (db.retain) dst.retain = true;
       if (db.chain) { dst.chain = (dst.chain || 0) + db.chain; if (!dst.chainDmg && db.chainDmg) dst.chainDmg = db.chainDmg; }
@@ -373,6 +374,6 @@ BP.Wide = (function () {
     return mergeable(card) ? out : [];
   }
 
-  return { on, initCard, addFx, mergeable, mergeBlock, mergeInto, rebuild, release, release0, afterMerge, exhaustPlayed, applyEffect, blockFirst,
+  return { SNAP, on, initCard, addFx, mergeable, mergeBlock, mergeInto, rebuild, release, release0, afterMerge, exhaustPlayed, applyEffect, blockFirst,
     turnStart, turnEnd, fightStart, handRoom, effText, textExtra, tipParts, rewardFx, kindOf, addStr, SIDE, multi, firedText, donorNames };
 })();
